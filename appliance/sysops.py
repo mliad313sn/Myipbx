@@ -352,12 +352,26 @@ class PrivilegedOperations:
             _LOG.warning(
                 "the privileged operation named %s failed with status %d", verb, status
             )
+
+        # A status the daemon itself reports carries a sentence explaining what
+        # the daemon decided, and that sentence is the answer. Replacing it with
+        # "the helper reported a failure" -- which is what happened, and which
+        # says nothing -- hides the one useful thing in the reply. The helper's
+        # own non zero exits keep the generic wording, because their detail is
+        # whatever the script printed and that is already in the output.
+        if succeeded:
+            detail = ""
+        elif status < 0 and output:
+            detail = output
+        else:
+            detail = "the helper reported a failure"
+
         return OperationOutcome(
             verb=verb,
             succeeded=succeeded,
             exit_status=status,
             output=output,
-            detail="" if succeeded else "the helper reported a failure",
+            detail=detail,
             duration_seconds=duration,
         )
 

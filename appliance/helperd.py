@@ -193,13 +193,39 @@ class _RequestHandler(socketserver.BaseRequestHandler):
             pass
 
 
+#: How many requests the daemon will have in flight at once.
+#:
+#: There was no limit, and the comment that stood here justified its absence by
+#: saying the vocabulary is small enough that the number of threads cannot get
+#: out of hand. That does not follow: the thread count tracks connections, not
+#: verbs. A control plane that had been taken over -- which is the thing this
+#: privilege boundary exists to contain -- could open thousands of connections
+#: and make the root daemon spawn a thread and a subprocess for each, on a
+#: machine that is carrying telephone calls.
+#:
+#: Eight is chosen against what the operations are, not against a throughput
+#: figure. Almost all of them are a service query answered in milliseconds;
+#: the slow ones -- rebuilding the interface card drivers -- take minutes and
+#: are asked for one at a time by one person. Eight lets a burst of quick
+#: requests drain immediately while keeping the expensive ones from being run
+#: in parallel with each other.
+MAXIMUM_CONCURRENT_REQUESTS = 8
+
+#: How long a request waits for a slot before being turned away. A hundred
+#: dashboards asking at once is a described condition of this appliance, and
+#: the quick operations clear in milliseconds, so waiting serves them all;
+#: waiting for ever would let one wedged caller hold the daemon shut.
+SLOT_WAIT_SECONDS = 20.0
+
+
 class _Server(socketserver.ThreadingUnixStreamServer):
-    """A thread per connection, because operations are long and few.
+    """A thread per connection, up to a limit, because operations are long.
 
     Rebuilding the interface card drivers takes minutes.  Serving that on a
     thread keeps a second operator's request for something quick from waiting
-    behind it, and the vocabulary is small enough that the number of threads
-    cannot get out of hand.
+    behind it. The number of threads is capped rather than left to the number
+    of callers, so a caller that has reached the socket cannot make a root
+    process allocate without bound.
     """
 
     daemon_threads = True
@@ -220,7 +246,77 @@ class _Server(socketserver.ThreadingUnixStreamServer):
         self.daemon_reference = daemon
         self.permitted_users = daemon.permitted_users
         self.vocabulary = daemon
+        self._slots = threading.BoundedSemaphore(MAXIMUM_CONCURRENT_REQUESTS)
+        self.turned_away = 0
         super().__init__(path, _RequestHandler)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        """Take a slot before spawning anything.
+
+        The check is here rather than inside the handler because the handler
+        already runs on a thread by then, and a thread is the resource being
+        protected. A caller that cannot be served is answered on this thread,
+        which costs one small write.
+        """
+        if not self._slots.acquire(timeout=SLOT_WAIT_SECONDS):
+            self.turned_away += 1
+            _LOG.warning(
+                "a privileged request was turned away because %d were already "
+                "in flight; the appliance runs no more than that at once",
+                MAXIMUM_CONCURRENT_REQUESTS,
+            )
+            self._turn_away(request)
+            self.shutdown_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
+
+    @staticmethod
+    def _turn_away(request: Any) -> None:
+        """Say so, rather than closing without a word.
+
+        A connection dropped without an answer reaches the operator as "the
+        connection was lost", which is true and tells them nothing they can
+        act on.
+
+        The caller's request is read and discarded first. Closing a socket
+        while the peer's bytes are still sitting unread in the receive buffer
+        makes the kernel send a reset, and a reset throws away whatever this
+        end had written -- so the sentence was composed, handed to the kernel,
+        and destroyed by the close that followed it. Draining first costs one
+        bounded read and is the difference between the operator being told why
+        and being told nothing.
+        """
+        try:
+            request.settimeout(1.0)
+            read_frame(request)
+        except (OSError, ValueError, ConnectionError):
+            # Nothing readable, which only means the reply may not land. It is
+            # still worth attempting.
+            pass
+
+        try:
+            write_frame(
+                request,
+                json.dumps(
+                    {
+                        "status": STATUS_REFUSED,
+                        "output": "",
+                        "detail": (
+                            "this appliance is already performing as many "
+                            "privileged operations as it will run at once; "
+                            "wait for one to finish and ask again"
+                        ),
+                    }
+                ).encode("utf-8"),
+            )
+        except OSError:
+            pass
 
     def perform(self, vector: list[str]) -> tuple[int, str]:
         return self.daemon_reference.perform(vector)

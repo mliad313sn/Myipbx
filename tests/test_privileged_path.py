@@ -21,6 +21,7 @@ import os
 import socket
 import struct
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -322,6 +323,95 @@ class BurstTests(_RealHelperFixture):
             "requests were dropped under a burst: "
             + "; ".join(str(getattr(f, "detail", f)) for f in failed[:3]),
         )
+
+    def test_the_daemon_will_not_allocate_a_thread_for_every_caller(self) -> None:
+        """The root process must not scale with the number of connections.
+
+        There was no limit, and the reasoning written beside its absence was
+        that the vocabulary is small enough that the number of threads cannot
+        get out of hand. That does not follow: the thread count tracks
+        connections, not verbs. A control plane that had been taken over --
+        which is precisely what this privilege boundary exists to contain --
+        could open thousands of connections and make a root process spawn a
+        thread and a subprocess for each, on a machine carrying calls.
+        """
+        import appliance.helperd as helperd
+
+        server = self.daemon._server
+        assert server is not None
+
+        in_flight = 0
+        highest = 0
+        guard = threading.Lock()
+        original = helperd.HelperDaemon.perform
+
+        def counting(daemon_self, vector):
+            nonlocal in_flight, highest
+            with guard:
+                in_flight += 1
+                highest = max(highest, in_flight)
+            try:
+                time.sleep(0.15)
+                return original(daemon_self, vector)
+            finally:
+                with guard:
+                    in_flight -= 1
+
+        helperd.HelperDaemon.perform = counting
+        self.addCleanup(setattr, helperd.HelperDaemon, "perform", original)
+
+        async def burst() -> list:
+            return await asyncio.gather(
+                *[self.operations.run("firewall-status") for _ in range(60)],
+                return_exceptions=True,
+            )
+
+        outcomes = asyncio.run(burst())
+
+        self.assertLessEqual(
+            highest, helperd.MAXIMUM_CONCURRENT_REQUESTS,
+            f"{highest} privileged operations ran at once against a limit of "
+            f"{helperd.MAXIMUM_CONCURRENT_REQUESTS}",
+        )
+        self.assertGreater(
+            highest, 1, "nothing ran concurrently, so the limit proved nothing"
+        )
+        # And every one of them was still served: the limit paces, it does not
+        # refuse work an operator legitimately asked for.
+        refused = [
+            outcome for outcome in outcomes
+            if isinstance(outcome, BaseException) or not outcome.succeeded
+        ]
+        self.assertEqual(
+            refused, [],
+            "the limit turned away requests instead of pacing them: "
+            + "; ".join(str(getattr(item, "detail", item)) for item in refused[:3]),
+        )
+
+    def test_a_caller_turned_away_is_told_why(self) -> None:
+        """A connection closed without a word reaches the operator as "the
+        connection was lost", which is true and useless."""
+        import appliance.helperd as helperd
+
+        server = self.daemon._server
+        assert server is not None
+
+        # Hold every slot, so the next caller cannot have one.
+        held = [server._slots.acquire(timeout=1.0)
+                for _ in range(helperd.MAXIMUM_CONCURRENT_REQUESTS)]
+        self.assertTrue(all(held), "the slots could not be taken for the test")
+        original_wait = helperd.SLOT_WAIT_SECONDS
+        helperd.SLOT_WAIT_SECONDS = 0.2
+        try:
+            outcome = self.run_operation("firewall-status")
+        finally:
+            helperd.SLOT_WAIT_SECONDS = original_wait
+            for _ in held:
+                server._slots.release()
+
+        self.assertFalse(outcome.succeeded)
+        self.assertIn("as many privileged operations", outcome.detail)
+        self.assertIn("ask again", outcome.detail)
 
     def test_a_slow_operation_does_not_block_a_quick_one(self) -> None:
         """Rebuilding drivers takes minutes and must not hold up a status read."""
