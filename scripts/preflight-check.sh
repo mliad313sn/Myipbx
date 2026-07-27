@@ -206,6 +206,7 @@ digium_card_catalogue() {
         "${MYIPBX_CARD_CATALOGUE:-}" \
         "${here}/../share/digium-cards.tsv" \
         "${here}/../../share/digium-cards.tsv" \
+        "${APPLIANCE_PREFIX:-/opt/myipbx}/share/digium-cards.tsv" \
         "/usr/share/myipbx/digium-cards.tsv"
     do
         if [[ -n "${candidate}" && -f "${candidate}" ]]; then

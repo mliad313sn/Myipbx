@@ -25,8 +25,10 @@ be re-checked here, because the driver source is not in this repository.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -153,6 +155,64 @@ class WhatTheRowsSayTests(unittest.TestCase):
         for invented in ("8002", "8005", "8006", "0800"):
             with self.subTest(device=invented):
                 self.assertNotIn(invented, devices)
+
+
+class TheInstalledAppliancePathTests(unittest.TestCase):
+    """The catalogue has to be on the machine, not only in the repository.
+
+    The first draft resolved one path relative to the module, which found the
+    file here -- where every test runs -- and would have found nothing on a
+    real appliance, because the installer copies the modules and nothing
+    beside them. Every fitted card would have read "an unrecognised Digium
+    interface card" in service while this suite stayed green. These two tests
+    are the ones that would have caught it.
+    """
+
+    INSTALLER = REPOSITORY_ROOT / "scripts" / "stage-five-appliance-service.sh"
+
+    def test_the_installer_lays_the_catalogue_down_beside_the_package(self) -> None:
+        """Run the installer's own function against a temporary prefix.
+
+        Reading the script's text would pass on a script that names the right
+        path in a branch that never runs. This lays the package down and looks
+        at what is on disk afterwards.
+        """
+        with tempfile.TemporaryDirectory(prefix="myipbx-prefix-") as name:
+            prefix = Path(name)
+            result = subprocess.run(
+                ["bash", "-c",
+                 f'source "{self.INSTALLER}" >/dev/null 2>&1 || true; '
+                 f'install_control_plane'],
+                capture_output=True, text=True, cwd=str(REPOSITORY_ROOT),
+                env={**os.environ, "APPLIANCE_PREFIX": str(prefix)},
+            )
+            self.assertEqual(
+                result.returncode, 0,
+                f"laying the package down failed:\n{result.stdout}\n{result.stderr}",
+            )
+            self.assertTrue(
+                (prefix / "appliance" / "hardware.py").is_file(),
+                "the modules were not installed, so this test proved nothing",
+            )
+            laid_down = prefix / "share" / "digium-cards.tsv"
+            self.assertTrue(
+                laid_down.is_file(),
+                "the interface card catalogue was not installed, so a real "
+                "appliance would report every fitted card as unrecognised",
+            )
+            self.assertEqual(
+                laid_down.read_text(encoding="utf-8"),
+                CATALOGUE.read_text(encoding="utf-8"),
+            )
+
+    def test_the_module_looks_where_the_installer_puts_it(self) -> None:
+        """The two halves have to name the same place."""
+        looked_in = {str(path) for path in hardware._CATALOGUE_LOCATIONS}
+        self.assertIn("/opt/myipbx/share/digium-cards.tsv", looked_in)
+
+    def test_the_preflight_script_looks_there_too(self) -> None:
+        text = PREFLIGHT.read_text(encoding="utf-8")
+        self.assertIn("APPLIANCE_PREFIX:-/opt/myipbx}/share/digium-cards.tsv", text)
 
 
 class BothConsumersReadTheSameFileTests(unittest.TestCase):

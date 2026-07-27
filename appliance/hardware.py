@@ -41,7 +41,29 @@ DIGIUM_VENDOR_IDENTIFIER = 0xD161
 #: and they disagreed on ten of the eleven identifiers they shared. The file
 #: records which driver source its rows were read out of; see the note at the
 #: top of it.
-_CATALOGUE_FILE = Path(__file__).resolve().parent.parent / "share" / "digium-cards.tsv"
+#:
+#: Looked for in more than one place, because the repository and the installed
+#: appliance are laid out differently. The first draft resolved one path
+#: relative to this module and so found the file in the repository, where every
+#: test runs, and found nothing on a real machine -- where the installer copies
+#: the modules and nothing beside them. Every card would have read "an
+#: unrecognised Digium interface card" in service while the suite stayed green.
+_CATALOGUE_LOCATIONS: tuple[Path, ...] = (
+    Path(__file__).resolve().parent.parent / "share" / "digium-cards.tsv",
+    Path(__file__).resolve().parent / "share" / "digium-cards.tsv",
+    Path("/opt/myipbx/share/digium-cards.tsv"),
+    Path("/usr/share/myipbx/digium-cards.tsv"),
+)
+
+
+def _catalogue_file() -> Path:
+    for candidate in _CATALOGUE_LOCATIONS:
+        if candidate.is_file():
+            return candidate
+    return _CATALOGUE_LOCATIONS[0]
+
+
+_CATALOGUE_FILE = _catalogue_file()
 
 
 def _load_catalogue(path: Path) -> dict[int, tuple[str, str, str]]:

@@ -48,6 +48,18 @@ install_control_plane() {
         install_file "${module}" "${APPLIANCE_PREFIX}/appliance/$(basename "${module}")" 0644
     done
 
+    # The data the package reads, which is not a module and so is not caught by
+    # the loop above. It was missed once: the interface card catalogue stayed
+    # in the repository, the appliance found nothing, and every fitted card
+    # would have been reported as unrecognised on a real machine while the
+    # suite -- which runs from the repository -- stayed green.
+    ensure_directory "${APPLIANCE_PREFIX}/share" 0755
+    local datum
+    for datum in "${REPOSITORY_ROOT}"/share/*; do
+        [[ -f "${datum}" ]] || continue
+        install_file "${datum}" "${APPLIANCE_PREFIX}/share/$(basename "${datum}")" 0644
+    done
+
     log_info "the control plane package was installed to ${APPLIANCE_PREFIX}"
 }
 
@@ -317,4 +329,10 @@ main() {
     log_info "stage five is complete"
 }
 
-main "$@"
+# Dispatch when run, stay quiet when sourced, by the ordinary shell idiom. The
+# suite reaches one function of this stage that way -- laying the package down
+# in a temporary prefix -- without a service manager, a certificate, or an
+# appliance to start.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
