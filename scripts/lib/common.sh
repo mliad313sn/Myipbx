@@ -106,15 +106,34 @@ spell_integer() {
 #
 # Held identical to the lists in the control plane and in the browser; a test
 # asserts all three agree.
+#
+# ORDER MATTERS HERE, and it does not in the other two.
+#
+# The control plane and the browser collect every match, merge the overlapping
+# spans and keep the longest, so their lists can be written in any order. This
+# one holds each shape aside as it goes, so a shape that matches part of a
+# longer identifier consumes it first and leaves a fragment behind. Written in
+# the other two's order, the general address shape ate the front of a
+# peripheral bus identifier and left "0000:02:0a.zero", and the plain address
+# shape ate the address out of a socket pair so the pair no longer matched
+# itself. Most specific first, and each entry below sits where it does for a
+# reason.
 _IDENTIFIER_SHAPES=(
+    # A socket address pair, before the address inside it.
+    "\\('[^']*'[[:space:]]*,[[:space:]]*[0-9]{1,5}\\)"
+    # A peripheral bus identifier and a hardware address, before the general
+    # colon separated shape that would eat the front of either.
+    '[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]'
+    '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
+    # Addresses, longest form first.
     '([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}'
     '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{1,5}'
     '([0-9]{1,3}\.){3}[0-9]{1,3}'
-    '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
-    '[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]'
+    '([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}'
+    # A date, a time, and the two joined.
     '[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}(:[0-9]{2})?)?'
     '[0-9]{2}:[0-9]{2}(:[0-9]{2})?'
-    'v?[0-9]+\.[0-9]+(\.[0-9]+)*'
+    'v?[0-9]+\.[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.]+)?'
     '(eth|en[a-z0-9]*|wl[a-z0-9]*|lo|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)[0-9]+'
     '(/[A-Za-z0-9._-]*[0-9][A-Za-z0-9._-]*)+'
     '(SIP|HTTP|status|code|error)[[:space:]]+[0-9]{3}'
@@ -194,12 +213,27 @@ _spell_every_run() {
             leading+="zero "
         done
 
+        local spelled
         if [[ -n "${stripped}" ]]; then
-            rendered+="${prefix}${leading}$(spell_integer "${stripped}")"
+            spelled="${leading}$(spell_integer "${stripped}")"
         else
             # The run was entirely zeros; the leading words already cover it.
-            rendered+="${prefix}${leading% }"
+            spelled="${leading% }"
         fi
+
+        # Keep the words from fusing with the letters beside them. Without
+        # this, "abc123def" came out as "abcone hundred twenty-threedef" here
+        # while the control plane and the browser both wrote "abc one hundred
+        # twenty-three def". Three implementations meant to be identical were
+        # not, and the agreement test did not sample a string that showed it.
+        if [[ "${prefix}" =~ [A-Za-z]$ ]]; then
+            spelled=" ${spelled}"
+        fi
+        if [[ "${remainder}" =~ ^[A-Za-z] ]]; then
+            spelled="${spelled} "
+        fi
+
+        rendered+="${prefix}${spelled}"
         text="${remainder}"
     done
 

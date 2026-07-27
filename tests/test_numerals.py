@@ -339,6 +339,20 @@ class CrossImplementationAgreementTests(unittest.TestCase):
         )
         self.assertEqual(produced, expected)
 
+    def test_the_sanitiser_agrees_across_every_shape_it_knows(self) -> None:
+        """One corpus, not a sample somebody chose.
+
+        Two divergences survived for as long as this pattern existed because
+        each suite picked its own handful of strings and both happened to miss
+        the shapes that disagreed.
+        """
+        expected = [numerals.sanitize(sample) for sample in AGREEMENT_CORPUS]
+        produced = self._run_browser_side(
+            f"const samples = {json.dumps(list(AGREEMENT_CORPUS))};\n"
+            "console.log(samples.map(function (s) { return numerals.sanitize(s); }).join('\\n'));"
+        )
+        self.assertEqual(produced, expected)
+
     def test_the_sanitiser_agrees_on_realistic_operator_text(self) -> None:
         samples = [
             "192.168.1.10", "port 5038", "abc123def", "007", "0", "x9y",
@@ -369,6 +383,44 @@ class CrossImplementationAgreementTests(unittest.TestCase):
         self.assertEqual(produced, expected)
 
 
+#: One corpus, run through all three implementations. Each entry is a shape the
+#: appliance actually emits somewhere -- an address, a version, a card model, a
+#: path, a socket pair -- plus the plain quantities that must be spelled.
+#:
+#: This list is the answer to how two divergences survived: the samples each
+#: suite chose happened to avoid the shapes that disagreed. It is now one list,
+#: it covers every shape in the identifier table, and every implementation is
+#: measured against the same rows.
+AGREEMENT_CORPUS: tuple[str, ...] = (
+    # Addresses, in each form the appliance prints.
+    "192.0.2.10", "192.0.2.0/24", "192.0.2.10:5060", "2001:db8::1",
+    "aa:bb:cc:dd:ee:ff", "0000:02:0a.0",
+    # A moment, and a moment with seconds.
+    "2026-07-27", "2026-07-27T11:07:00Z", "11:07", "11:07:42",
+    # A version, including the pre-release form the driver source carries.
+    "v3.4.0", "3.4.0-rc1",
+    # Device and interface names.
+    "eth0", "lo0", "enp3s0", "wlan0", "ttyS0", "sda1", "nvme0",
+    "dahdi1", "span2", "zap3",
+    # A path, a response code, a mode, an error number, a socket pair, a port.
+    "/var/log/myipbx/appliance.log", "SIP 403", "HTTP 500", "status 404",
+    "chmod 0750", "mode 644", "Errno 111", "error number 2",
+    "('127.0.0.1', 15038)", "port 8088", "port number 5060", "extension 0450",
+    # Every family of interface card model.
+    "Wildcard TDM2400P", "Wildcard TE410P", "Wildcard TE435", "Wildcard AEX2400",
+    "Wildcard A4A", "Wildcard A8B", "Wildcard B410P", "HA8-0000", "HB8-0000",
+    "Wildcard TCE400P",
+    # Quantities, which must be spelled.
+    "3 of 5 stages", "300 seconds", "call 1 of 100", "007", "0",
+    "stage 3 of 5 complete", "span 1 channel 24",
+    # Digits fused to letters, where the three disagreed on spacing.
+    "x9y", "abc123def",
+    # And the shapes together in one line, the way a real message carries them.
+    "a legacy card is fitted: Wildcard A4A in 0000:02:0a.0",
+    "the appliance bound port 8088 on 192.0.2.10 at 2026-07-27T11:07:00Z",
+)
+
+
 class ShellImplementationAgreementTests(unittest.TestCase):
     """The staging scripts carry a third implementation, which must also agree.
 
@@ -397,6 +449,27 @@ class ShellImplementationAgreementTests(unittest.TestCase):
         produced = self._run_shell(
             "for value in " + " ".join(str(value) for value in values) + "; do\n"
             '    spell_integer "${value}"; printf "\\n"\n'
+            "done"
+        )
+        self.assertEqual(produced, expected)
+
+    def test_the_shell_sanitiser_agrees_across_every_shape_it_knows(self) -> None:
+        """The same corpus, through the installer's own implementation.
+
+        This one is order sensitive where the other two are not: it holds each
+        shape aside as it goes, so a general shape that matches part of a
+        longer identifier consumes it and leaves a fragment. Written in the
+        other two's order it produced "0000:02:0a.zero" for a peripheral bus
+        identifier, and ate the address out of a socket pair so the pair no
+        longer matched itself.
+        """
+        expected = [numerals.sanitize(sample) for sample in AGREEMENT_CORPUS]
+        quoted = " ".join(
+            "'" + sample.replace("'", "'\\''") + "'" for sample in AGREEMENT_CORPUS
+        )
+        produced = self._run_shell(
+            f"for sample in {quoted}; do\n"
+            '    spell_all "${sample}"; printf "\\n"\n'
             "done"
         )
         self.assertEqual(produced, expected)
