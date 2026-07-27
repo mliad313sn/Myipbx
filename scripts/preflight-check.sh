@@ -188,41 +188,62 @@ present_interface_names() {
 # table does not know is reported as unknown rather than guessed at, and the
 # system database is consulted only as a second opinion in that case.
 #
-# Every entry below was read out of the driver source this appliance ships and
-# compiles -- the device tables in the wctdm24xxp, wct4xxp, wcte12xp and
-# wcb4xxp drivers, and the names those tables point at -- rather than recalled.
-# That matters because a technician reads this against the silkscreen on a card
-# in their hand, and a name that is nearly right is worse than no name at all.
-# An earlier draft of this table gave three of the analogue cards a trailing
-# letter the driver does not, and merged two distinct dual span models that the
-# driver distinguishes by identifier.
+# The identifiers themselves are not written here. They live in one file,
+# share/digium-cards.tsv, which the control plane reads as well.
+#
+# They used to be written twice -- once there and once here -- and the two
+# copies disagreed on ten of the eleven identifiers they shared. Device zero
+# two zero five was a four port analogue card in one and a dual span digital
+# card in the other. A technician reads this output against the silkscreen on a
+# card in their hand, and a name that is nearly right is worse than no name at
+# all; two names that contradict each other are worse again. The file records
+# which driver source its rows were read out of.
+digium_card_catalogue() {
+    local here
+    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local candidate
+    for candidate in \
+        "${MYIPBX_CARD_CATALOGUE:-}" \
+        "${here}/../share/digium-cards.tsv" \
+        "${here}/../../share/digium-cards.tsv" \
+        "/usr/share/myipbx/digium-cards.tsv"
+    do
+        if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+            printf '%s' "${candidate}"
+            return 0
+        fi
+    done
+    return 1
+}
+
 digium_card_name() {
     local vendor="$1"
     local model="$2"
 
-    case "${vendor}:${model}" in
-        d161:0120) printf 'Wildcard TE120P, a single span digital card' ;;
-        d161:8000) printf 'Wildcard TE121, a single span digital card' ;;
-        d161:8001) printf 'Wildcard TE122, a single span digital card' ;;
-        d161:0205) printf 'Wildcard TE205P, a dual span digital card' ;;
-        d161:0210) printf 'Wildcard TE210P, a dual span digital card' ;;
-        d161:0220) printf 'Wildcard TE220, a dual span digital card' ;;
-        d161:0405) printf 'Wildcard TE405P, a quad span digital card' ;;
-        d161:0410) printf 'Wildcard TE410P, a quad span digital card' ;;
-        d161:0420) printf 'Wildcard TE420, a quad span digital card' ;;
-        d161:1820) printf 'Wildcard TE820, an octal span digital card' ;;
-        d161:b410) printf 'Wildcard B410P, a quad basic rate card' ;;
-        d161:0800) printf 'Wildcard TDM800P, an analogue card' ;;
-        d161:2400) printf 'Wildcard TDM2400P, an analogue card' ;;
-        d161:8005) printf 'Wildcard TDM410P, an analogue card' ;;
-        d161:8002) printf 'Wildcard AEX800, an analogue card' ;;
-        d161:8003) printf 'Wildcard AEX2400, an analogue card' ;;
-        d161:8006) printf 'Wildcard AEX410, an analogue card' ;;
-        d161:8007) printf 'HA8, an analogue card' ;;
-        d161:8008) printf 'HB8, a mixed analogue and basic rate card' ;;
-        e159:0001) printf 'an early Tiger Jet based Wildcard, of the X100P or TDM400P family' ;;
-        *) printf '' ;;
-    esac
+    # One vendor that is not Digium's own, kept here rather than in the table
+    # because it is not a device identifier: these cards all report the same
+    # one and are told apart by their subsystem, which this check does not
+    # read. Naming the family is the most that can honestly be said.
+    if [[ "${vendor}:${model}" == "e159:0001" ]]; then
+        printf 'an early Tiger Jet based Wildcard, of the X100P or TDM400P family'
+        return 0
+    fi
+
+    [[ "${vendor}" == "d161" ]] || { printf ''; return 0; }
+
+    local catalogue
+    catalogue="$(digium_card_catalogue)" || { printf ''; return 0; }
+
+    local device name module description
+    while IFS=$'\t' read -r device name module description; do
+        [[ "${device}" == "#"* || -z "${device}" || "${device}" == "device" ]] && continue
+        if [[ "${device}" == "${model}" ]]; then
+            printf '%s, %s, driven by %s' "${name}" "${description}" "${module}"
+            return 0
+        fi
+    done < "${catalogue}"
+
+    printf ''
 }
 
 # The system's own description of a slot, used only for a card the table above

@@ -247,7 +247,7 @@ class ConfigurationStoreTests(unittest.TestCase):
 class SpanDocumentParsingTests(unittest.TestCase):
     def test_a_span_document_is_parsed_into_channels(self) -> None:
         span = parse_span_document(
-            'Span 1: WCTDM/0 "Wildcard TDM410P Board 1" (MASTER)\n'
+            'Span 1: WCTDM/0 "Wildcard A4A" (MASTER)\n'
             "\n"
             "           1 WCTDM/0/0 FXOKS (In use)\n"
             "           2 WCTDM/0/1 FXOKS\n"
@@ -255,7 +255,7 @@ class SpanDocumentParsingTests(unittest.TestCase):
         assert span is not None
         self.assertEqual(span.number, 1)
         self.assertEqual(span.identifier, "WCTDM/0")
-        self.assertEqual(span.description, "Wildcard TDM410P Board 1")
+        self.assertEqual(span.description, "Wildcard A4A")
         self.assertEqual(len(span.channels), 2)
         self.assertEqual(span.channels[0].signalling, "FXOKS")
         self.assertTrue(span.channels[0].in_use if hasattr(span.channels[0], "in_use") else True)
@@ -353,8 +353,8 @@ class HardwareInventoryTests(unittest.TestCase):
         self.assertTrue(inventory["hardware_present"])
         self.assertEqual(inventory["card_count"], 1)
         card = inventory["cards"][0]
-        self.assertEqual(card["model"], "Wildcard TDM410P")
-        self.assertEqual(card["driver_module"], "wctdm24xxp")
+        self.assertEqual(card["model"], "Wildcard A4A")
+        self.assertEqual(card["driver_module"], "wcaxx")
         self.assertTrue(card["recognised"])
 
     def test_the_spans_and_channels_are_enumerated(self) -> None:

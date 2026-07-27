@@ -295,19 +295,68 @@
         if (!appliance) {
             return;
         }
-        nodes.figureActiveCalls.textContent = count(appliance.active_calls);
-        nodes.captionAnswered.textContent = count(appliance.answered_calls) + ' answered';
+
+        /* Zero and unknown are not the same reading, and on this tile the
+         * difference is the whole message.
+         *
+         * Call state comes from the telephony engine's event stream. When that
+         * connection drops the appliance clears its channel table, because the
+         * calls are not known to be gone -- they are no longer known to be
+         * present. The counter then held zero, and the tile said "zero active
+         * calls" in the same typeface it uses when the building really is
+         * quiet. An operator reading it at three in the morning would conclude
+         * nothing was happening on a system that might have been carrying
+         * every call it could. The figure now says so, and the tile carries a
+         * mark and a reason so that it reads as stale rather than as calm. */
+        /* Read from the pushed snapshot's own field, not from the block the
+         * read route adds on top of it. The live socket carries
+         * engine_connected; the detailed engine block exists only on the
+         * fetched route, so a console that looked only there believed the
+         * engine was fine on every push and learned otherwise only when
+         * somebody happened to reload. */
+        var engineKnown = appliance.engine_connected !== undefined
+            ? appliance.engine_connected !== false
+            : (!appliance.engine || appliance.engine.connected !== false);
+        markStale(nodes.figureActiveCalls, !engineKnown);
+
+        if (engineKnown) {
+            nodes.figureActiveCalls.textContent = count(appliance.active_calls);
+            nodes.captionAnswered.textContent = count(appliance.answered_calls) + ' answered';
+        } else {
+            nodes.figureActiveCalls.textContent = 'unknown';
+            nodes.captionAnswered.textContent =
+                'the telephony engine is not connected, so call state cannot be read';
+        }
+
         nodes.figureUptime.textContent = duration(appliance.uptime_seconds);
         nodes.captionPeak.textContent =
             'peak of ' + count(appliance.peak_concurrent_calls) + ' concurrent calls';
 
-        renderChannels(appliance.channels || []);
+        renderChannels(appliance.channels || [], engineKnown);
         renderAlarms(appliance.alarms || []);
         if (appliance.hardware) {
             renderHardware(appliance.hardware);
         }
         if (appliance.socket) {
             renderTransport(appliance.socket);
+        }
+    }
+
+    /* A figure the appliance cannot currently read.
+     *
+     * Marked three ways, because one is never enough: the class tints it, the
+     * mark in front of it survives being printed or read by somebody who
+     * cannot separate the colours, and aria-invalid tells a screen reader that
+     * what it is about to read is not a current value. */
+    function markStale(node, stale) {
+        if (!node) {
+            return;
+        }
+        node.classList.toggle('is-stale', Boolean(stale));
+        if (stale) {
+            node.setAttribute('aria-invalid', 'true');
+        } else {
+            node.removeAttribute('aria-invalid');
         }
     }
 
@@ -362,12 +411,17 @@
         }
     }
 
-    function renderChannels(channels) {
+    function renderChannels(channels, engineKnown) {
         var body = nodes.channelBody;
         clear(body);
 
         if (!channels.length) {
-            emptyRow(body, 6, 'no channel is active');
+            /* An empty table means one of two very different things, and the
+             * row has to say which. */
+            emptyRow(body, 6, engineKnown === false
+                ? 'the telephony engine is not connected, so no channel can be read; ' +
+                  'this is not the same as no call being in progress'
+                : 'no channel is active');
             return;
         }
 
@@ -375,10 +429,16 @@
             var row = element('tr');
             cell(row, channel.name || 'an unnamed channel');
             cell(row, channel.state || 'unknown', (channel.state || '').replace(/\s+/g, '-'));
+            /* A telephone number is dialled, not counted. Spelled, the number
+             * two zero one five five five zero one zero zero came out as "two
+             * billion fifteen million five hundred fifty thousand one hundred",
+             * which nobody can read back to a handset or call back from. The
+             * caller's number and the extension it reached are both
+             * identifiers, and identifiers keep their digits. */
             cell(row, channel.caller_name
-                ? channel.caller_name + ' — ' + numerals.sanitize(channel.caller_number || '')
-                : numerals.sanitize(channel.caller_number || 'unknown'));
-            cell(row, numerals.sanitize(channel.extension || 'none'));
+                ? channel.caller_name + ' — ' + (channel.caller_number || '')
+                : (channel.caller_number || 'unknown'));
+            cell(row, channel.extension || 'none');
             cell(row, duration(channel.duration_seconds));
             cell(row, channel.answered ? duration(channel.talk_seconds) : 'not answered');
             body.appendChild(row);

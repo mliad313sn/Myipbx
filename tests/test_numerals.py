@@ -344,6 +344,22 @@ class CrossImplementationAgreementTests(unittest.TestCase):
             "192.168.1.10", "port 5038", "abc123def", "007", "0", "x9y",
             "call 1 of 100", "2026-07-27 11:07:00", "span 1 channel 24",
             "the ceiling is 300 seconds with 25 percent jitter",
+            # Every family of card model in share/digium-cards.tsv. The three
+            # implementations disagreed here for as long as this shape existed:
+            # the server side wrote its escapes twice over, so it spelled every
+            # model while the other two kept the digits, and this list did not
+            # sample one. A technician reads these against the silkscreen on a
+            # card in their hand.
+            "the Wildcard TDM2400P is fitted",
+            "the Wildcard TE410P is fitted",
+            "the Wildcard TE435 is fitted",
+            "the Wildcard AEX2400 is fitted",
+            "the Wildcard B410P is fitted",
+            "the Wildcard A4A is fitted",
+            "the Wildcard A8B is fitted",
+            "the Wildcard TCE400P is fitted",
+            "HA8-0000 is fitted",
+            "HB8-0000 is fitted",
         ]
         expected = [numerals.sanitize(sample) for sample in samples]
         produced = self._run_browser_side(
@@ -392,6 +408,14 @@ class ShellImplementationAgreementTests(unittest.TestCase):
             "span 1 channel 24",
             "007",
             "stage 3 of 5 complete",
+            # The pre-flight check names the fitted card, and it runs from this
+            # library rather than from the control plane. A technician holding
+            # the card reads what this prints against the silkscreen.
+            "a legacy interface card is fitted: Wildcard A4A",
+            "a legacy interface card is fitted: Wildcard TDM2400P",
+            "a legacy interface card is fitted: Wildcard B410P",
+            "a legacy interface card is fitted: HA8-0000",
+            "a legacy interface card is fitted: Wildcard TE435",
         ]
         expected = [numerals.sanitize(sample) for sample in samples]
 

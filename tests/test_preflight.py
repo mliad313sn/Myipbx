@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import REPOSITORY_ROOT
+from support import IDENTIFIER_SHAPES, REPOSITORY_ROOT
 
 PREFLIGHT = REPOSITORY_ROOT / "scripts/preflight-check.sh"
 INSTALLER = REPOSITORY_ROOT / "scripts/install-appliance.sh"
@@ -75,12 +75,13 @@ def build_satisfied_root(base: Path, with_card: bool = True) -> Path:
     devices = root / "sys/bus/pci/devices"
     devices.mkdir(parents=True, exist_ok=True)
     if with_card:
-        # The identifier the repository's own hardware fixture uses: an
-        # analogue four port card.
+        # The identifier the repository's own hardware fixture uses: the
+        # Wildcard A four A, a four port analogue card, which is what the
+        # analogue express driver claims for this identifier.
         slot = devices / "0000:02:0a.0"
         slot.mkdir(parents=True, exist_ok=True)
         (slot / "vendor").write_text("0xd161\n", encoding="utf-8")
-        (slot / "device").write_text("0x8005\n", encoding="utf-8")
+        (slot / "device").write_text("0x800f\n", encoding="utf-8")
     else:
         slot = devices / "0000:00:02.0"
         slot.mkdir(parents=True, exist_ok=True)
@@ -177,19 +178,13 @@ class NumeralSpellingTests(unittest.TestCase):
     #: a path against what is on disk. This is the rule the appliance follows
     #: everywhere; the preflight check is where its absence was noticed, since
     #: it once told a technician to configure an interface named "ethzero".
-    _IDENTIFIER_SHAPES = (
-        # Most specific first: a shorter shape must not eat part of a longer.
-        r"\b[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]\b",
-        r"\b([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b",
-        r"\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?",
-        r"\d{2}:\d{2}(:\d{2})?",
-        r"(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?",
-        r"v?\d+\.\d+(\.\d+)*",
-        r"\b(eth|en[a-z0-9]*|wl[a-z0-9]*|lo|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)\d+\b",
-        r"(/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+",
-        r"\bport(\s+number)?\s+\d{1,5}\b",
-        r"\b(TDM|TE|AEX|HA|HB|B)\d+[A-Z]?\b",
-    )
+    #: The shapes come from the suite's shared list rather than from a copy
+    #: kept here. There was a copy kept here, and it drifted: it did not know
+    #: the shapes for an error number, a socket address pair, or the analogue
+    #: express card family, so a card model printed by the pre-flight check
+    #: read as a quantity that had escaped spelling. Four copies of one rule is
+    #: three too many.
+    _IDENTIFIER_SHAPES = IDENTIFIER_SHAPES
 
     def _assert_no_digit(self, text: str) -> None:
         """Every quantity is spelled; identifiers keep their digits.
@@ -294,7 +289,7 @@ class OutcomeTests(unittest.TestCase):
         report = combined(completed)
         self.assertIn("a legacy interface card is fitted", report)
         # The model, spoken as a technician would read it off the card.
-        self.assertIn("Wildcard TDM410P", report)
+        self.assertIn("Wildcard A4A", report)
 
     def test_an_unknown_card_is_reported_as_unknown_rather_than_guessed(self) -> None:
         root = build_bare_root(self.base)

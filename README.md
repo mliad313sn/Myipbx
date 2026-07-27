@@ -230,6 +230,14 @@ designed to do and what has been demonstrated is real.
 - **No real interface card has ever been driven by this code.** Every hardware
   test uses a simulated fixture. The drivers are compiled into the image and
   the bring-up path is written, but no B410P or TDM410P has been brought up.
+- **Four analogue cards are named by the driver and bound by nothing.** The
+  driver source this product compiles still carries the descriptor strings for
+  the TDM410P, the TDM800P, the AEX410 and the AEX800, and no device table
+  points at any of them. A card reporting one of those identifiers will not be
+  claimed, so it will not come up. This was read out of the source, in both the
+  released archive and the development tree, which carry an identical set of
+  identifiers. What has not been established is why, or which earlier release
+  last bound them; see `docs/hardware-compatibility.md`.
 - **The console is served over a secured transport.** The listener, the
   handshake and a sign in over it are exercised by the suite, and the
   generator has been run and proved idempotent. On the finished image the

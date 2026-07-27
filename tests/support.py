@@ -360,15 +360,25 @@ def build_hardware_fixture(base: Path, with_card: bool = True) -> Path:
         (slot / "device").write_text("0x100e\n", encoding="utf-8")
         return root
 
+    # A four port analogue card, the shape of machine this product exists for.
+    #
+    # The identifier is eight zero zero f, which the analogue express driver
+    # claims for the Wildcard A four A. It used to be eight zero zero five,
+    # which no driver in the source this product compiles claims at all: the
+    # fixture described a card that does not exist, so the catalogue agreed
+    # with it and nothing noticed. The span text below is the shape that
+    # driver actually writes -- the span carries the model name with no board
+    # suffix, and the channels are named for the older analogue driver the
+    # card's family inherited its naming from.
     slot = devices / "0000:02:0a.0"
     slot.mkdir(parents=True, exist_ok=True)
     (slot / "vendor").write_text("0xd161\n", encoding="utf-8")
-    (slot / "device").write_text("0x8005\n", encoding="utf-8")
+    (slot / "device").write_text("0x800f\n", encoding="utf-8")
 
     dahdi = root / "proc/dahdi"
     dahdi.mkdir(parents=True, exist_ok=True)
     (dahdi / "1").write_text(
-        'Span 1: WCTDM/0 "Wildcard TDM410P Board 1" (MASTER)\n'
+        'Span 1: WCTDM/0 "Wildcard A4A" (MASTER)\n'
         "\n"
         "           1 WCTDM/0/0 FXOKS (In use)\n"
         "           2 WCTDM/0/1 FXOKS\n"
@@ -379,7 +389,7 @@ def build_hardware_fixture(base: Path, with_card: bool = True) -> Path:
     modules = root / "proc"
     modules.mkdir(parents=True, exist_ok=True)
     (modules / "modules").write_text(
-        "dahdi 245760 3 wctdm24xxp, Live 0x0000000000000000\n", encoding="utf-8"
+        "dahdi 245760 3 wcaxx, Live 0x0000000000000000\n", encoding="utf-8"
     )
     return root
 
@@ -401,14 +411,14 @@ IDENTIFIER_SHAPES: tuple[str, ...] = (
     r"\d{2}:\d{2}(:\d{2})?",
     r"(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?(/\d{1,2})?",
     r"\bv?\d+\.\d+(\.\d+)*\b",
-    r"\b(eth|en[a-z0-9]*|wl[a-z0-9]*|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)\d+\b",
+    r"\b(eth|en[a-z0-9]*|wl[a-z0-9]*|lo|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)\d+\b",
     r"(/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+",
     r"\b(SIP|HTTP|status|code|error)\s+\d{3}\b",
     r"\bport(\s+number)?\s+\d{1,5}\b",
     r"\b(chmod|mode|permissions)\s+[0-7]{3,4}\b",
     r"\b(errno|error\s+number)\s+\d+\b",
     r"\(\s*'[^']*'\s*,\s*\d{1,5}\s*\)",
-    r"\b(TDM|TE|AEX|HA|HB|B)\d+[A-Z]?\b",
+    r"\b(TDM|TCE|TC|TE|AEX|HA|HB|A|B)\d+(-\d+|[A-Z])?\b",
     r"\bextension\s+\d+\b",
 )
 

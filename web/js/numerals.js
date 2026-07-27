@@ -209,7 +209,7 @@
         /\b(?:errno|error\s+number)\s+\d+\b/gi,
         /\(\s*'[^']*'\s*,\s*\d{1,5}\s*\)/g,
         /\bport(?:\s+number)?\s+\d{1,5}\b/gi,
-        /\b(?:TDM|TE|AEX|HA|HB|B)\d+[A-Z]?\b/g,
+        /\b(?:TDM|TCE|TC|TE|AEX|HA|HB|A|B)\d+(?:-\d+|[A-Z])?\b/g,
         /\bextension\s+\d+\b/gi
     ];
 

@@ -36,22 +36,48 @@ _LOG = get_logger("hardware")
 #: The peripheral bus vendor identifier assigned to Digium.
 DIGIUM_VENDOR_IDENTIFIER = 0xD161
 
+#: Where the identifiers actually live. One file, read by this module and by
+#: the pre-flight script, because there were two hand-written tables before it
+#: and they disagreed on ten of the eleven identifiers they shared. The file
+#: records which driver source its rows were read out of; see the note at the
+#: top of it.
+_CATALOGUE_FILE = Path(__file__).resolve().parent.parent / "share" / "digium-cards.tsv"
+
+
+def _load_catalogue(path: Path) -> dict[int, tuple[str, str, str]]:
+    """Read the shared table.
+
+    A missing or damaged file degrades the description of a detected card; it
+    never stops one being detected. An appliance that refused to enumerate its
+    hardware because a text file was missing would be a worse appliance than
+    one that says "an unrecognised Digium interface card" and carries on.
+    """
+    catalogue: dict[int, tuple[str, str, str]] = {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        _LOG.warning("the interface card catalogue could not be read: %s", error)
+        return catalogue
+
+    for line in text.splitlines():
+        line = line.rstrip("\n")
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 4 or parts[0] == "device":
+            continue
+        try:
+            identifier = int(parts[0], 16)
+        except ValueError:
+            continue
+        catalogue[identifier] = (parts[1], parts[2], parts[3])
+    return catalogue
+
+
 #: Recognised interface cards, named in plain language for the dashboard.  An
 #: identifier absent from this table is still reported as a Digium card; the
 #: table improves the description, it does not gate detection.
-_CARD_CATALOGUE: dict[int, tuple[str, str, str]] = {
-    0x0205: ("Wildcard TDM400P", "wctdm", "a four port analogue interface card"),
-    0x8005: ("Wildcard TDM410P", "wctdm24xxp", "a four port analogue interface card"),
-    0x8002: ("Wildcard TDM800P", "wctdm24xxp", "an eight port analogue interface card"),
-    0x8003: ("Wildcard TDM2400P", "wctdm24xxp", "a twenty four port analogue interface card"),
-    0x8000: ("Wildcard TE110P", "wcte11xp", "a single span digital interface card"),
-    0x8001: ("Wildcard TE120P", "wcte12xp", "a single span digital interface card"),
-    0x0405: ("Wildcard TE405P", "wct4xxp", "a four span digital interface card"),
-    0x2400: ("Wildcard TE410P", "wct4xxp", "a four span digital interface card"),
-    0x800A: ("Wildcard TE220", "wct4xxp", "a two span digital interface card"),
-    0x800C: ("Wildcard TE420", "wct4xxp", "a four span digital interface card"),
-    0x1820: ("Wildcard AEX800", "wctdm24xxp", "an eight port analogue interface card"),
-}
+_CARD_CATALOGUE: dict[int, tuple[str, str, str]] = _load_catalogue(_CATALOGUE_FILE)
 
 _SPAN_HEADER = re.compile(
     r'^Span\s+(?P<number>\d+):\s*(?P<identifier>\S+)\s*"(?P<description>[^"]*)"(?P<trailer>.*)$'

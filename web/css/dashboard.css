@@ -174,6 +174,19 @@ main {
 
 .figure.small { font-size: 1.15rem; }
 
+/* A figure the appliance cannot currently read, as against one it has read and
+ * found to be zero. The mark in front of it is the part that survives being
+ * printed, and the part that reaches an operator who cannot separate this
+ * colour from the brand one beside it. */
+.figure.is-stale {
+  color: var(--mx-status-unknown-text);
+}
+
+.figure.is-stale::before {
+  content: var(--mx-status-unknown-mark) " ";
+  font-weight: 700;
+}
+
 .caption {
   margin: 0;
   font-size: 0.82rem;

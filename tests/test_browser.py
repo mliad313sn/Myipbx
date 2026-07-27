@@ -152,6 +152,19 @@ class BrowserDashboardTests(unittest.IsolatedAsyncioTestCase):
 
     async def _run_browser(self) -> dict:
         """Drive the browser while the appliance keeps serving."""
+        # The engine is connected first, and this is not decoration.
+        #
+        # Channel events only ever reach this appliance over the manager
+        # connection, so a state carrying channels while the manager is down
+        # cannot occur in service. This test used to arrange exactly that, and
+        # then asserted the overview read "two" -- which is the console
+        # reporting a call count it has no way to know. The console now says
+        # "unknown" in that condition, correctly, so the test has to set up the
+        # condition it actually means to test.
+        self.appliance._on_engine_event(
+            engine_event("ApplianceManagerConnected")
+        )
+
         # A call is already in progress when the page loads.
         self.appliance._on_engine_event(
             engine_event(

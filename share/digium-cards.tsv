@@ -1,0 +1,80 @@
+# Digium interface cards, by peripheral bus device identifier.
+#
+# THIS FILE IS THE ONE PLACE THESE IDENTIFIERS ARE WRITTEN DOWN. The control
+# plane reads it to name a detected card, and the pre-flight script reads it to
+# tell an installer what is in the machine before anything is installed. There
+# were two tables before this file, one in each of those places, and they
+# disagreed with each other on ten of the eleven identifiers they shared.
+#
+# The disagreement was not cosmetic. Device zero two zero five was named as a
+# four port analogue card by one table and as a dual span digital card by the
+# other. An operator installing a digital card was told they had an analogue
+# one; the wizard would then have offered them the wrong questions, and the
+# wrong driver module would have been named in the diagnosis when it did not
+# come up.
+#
+# PROVENANCE. Every row below was read out of the driver source that this
+# product compiles into its own image, at version:
+#
+#     DAHDI Linux v3.4.0-rc1-20-gd1c842a
+#
+# specifically the PCI device tables in drivers/dahdi/*/base.c and
+# drivers/dahdi/*-base.c. They were extracted mechanically rather than
+# transcribed, because transcribing thirty-five hexadecimal identifiers by hand
+# is how the two tables this file replaces came to be wrong. Nothing here is
+# from memory or from a vendor page.
+#
+# WHAT IS NOT CLAIMED. That an identifier is listed here means the driver
+# claims it. It does not mean this product has been run against that card: no
+# physical Digium card has been in a machine running this appliance. See
+# docs/hardware-compatibility.md, where every such row is marked UNVERIFIED.
+#
+# Four identifiers that the two previous tables carried are absent here --
+# eight zero zero two, eight zero zero five, eight zero zero six, and zero
+# eight zero zero. No driver in this source claims them. They were invented,
+# and a card that never existed cannot be diagnosed.
+#
+# Where the driver distinguishes generations of the same card by the subsystem
+# identifier, the generation is left off the model name: the appliance reads
+# only the vendor and device from the bus, so it cannot tell a fourth
+# generation card from a third and must not pretend to.
+#
+# Columns, separated by tabs:
+#   device	model	module	description
+#
+device	model	module	description
+0120	Wildcard TE120P	wcte12xp	a single span digital interface card
+0205	Wildcard TE205P	wct4xxp	a dual span digital interface card
+0210	Wildcard TE210P	wct4xxp	a dual span digital interface card
+0220	Wildcard TE220	wct4xxp	a dual span digital interface card
+0405	Wildcard TE405P	wct4xxp	a four span digital interface card
+0410	Wildcard TE410P	wct4xxp	a four span digital interface card
+0420	Wildcard TE420	wct4xxp	a four span digital interface card
+1205	Wildcard TE205P	wct4xxp	a dual span digital interface card
+1210	Wildcard TE210P	wct4xxp	a dual span digital interface card
+1220	Wildcard TE220	wct4xxp	a dual span digital interface card
+1405	Wildcard TE405P	wct4xxp	a four span digital interface card
+1410	Wildcard TE410P	wct4xxp	a four span digital interface card
+1420	Wildcard TE420	wct4xxp	a four span digital interface card
+1820	Wildcard TE820	wct4xxp	an eight span digital interface card
+2400	Wildcard TDM2400P	wctdm24xxp	a twenty four port analogue interface card
+3400	Wildcard TC400P	wctc4xxp	a transcoding card, which carries no telephone line
+8000	Wildcard TE121	wcte12xp	a single span digital interface card
+8001	Wildcard TE122	wcte12xp	a single span digital interface card
+8003	Wildcard AEX2400	wctdm24xxp	a twenty four port analogue interface card
+8004	Wildcard TCE400P	wctc4xxp	a transcoding card, which carries no telephone line
+8007	HA8-0000	wctdm24xxp	an eight port analogue interface card
+8008	HB8-0000	wctdm24xxp	an eight port mixed analogue and basic rate card
+800a	Wildcard TE131 or TE133	wcte13xp	a single span digital interface card
+800b	Wildcard TE132 or TE134	wcte13xp	a single span digital interface card
+800c	Wildcard A8A	wcaxx	an eight port analogue interface card
+800d	Wildcard A8B	wcaxx	an eight port analogue interface card
+800e	Wildcard TE435 or TE235	wcte43x	a digital interface card whose span count is read from its serial number
+800f	Wildcard A4A	wcaxx	a four port analogue interface card
+8010	Wildcard A4B	wcaxx	a four port analogue interface card
+8013	Wildcard TE436 or TE236	wcte43x	a digital interface card whose span count is read from its serial number
+8014	Wildcard B430P	wcb4xxp	a four port basic rate interface card
+8015	Wildcard B430P	wcb4xxp	a four port basic rate interface card
+8016	Wildcard B230P	wcb4xxp	a two port basic rate interface card
+8017	Wildcard B230P	wcb4xxp	a two port basic rate interface card
+b410	Wildcard B410P	wcb4xxp	a four port basic rate interface card

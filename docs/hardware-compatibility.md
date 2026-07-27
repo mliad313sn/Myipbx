@@ -61,6 +61,46 @@ twenty minutes. Record what you actually observed, not what you expected.
 | Digium TDM400P, analogue | `wctdm` | three point one point zero | six point eight | Ubuntu noble | `UNVERIFIED` | — | — | Driver present in the image; no bring-up attempted. |
 | Xorcom Astribank | `xpp`, `xpd_fxo`, `xpd_fxs`, `xpd_pri`, `xpd_bri` | three point one point zero | six point eight | Ubuntu noble | `UNVERIFIED` | — | — | Driver present in the image; no bring-up attempted. |
 
+## Four cards the driver names but no longer binds
+
+This section is verified, and it is bad news for two rows of the matrix above.
+
+The driver source this product compiles — both the released archive it uses on
+older kernels and the development tree it uses from kernel six point ten
+onward, which were compared and carry an identical set of thirty-five Digium
+device identifiers — still contains the descriptor strings for the following
+cards:
+
+- Wildcard TDM410P
+- Wildcard TDM800P
+- Wildcard AEX410
+- Wildcard AEX800
+
+Those strings are declared and then referenced nowhere. No entry in any device
+table points at them. A card reporting one of those identifiers will not be
+claimed by the driver, so it will not come up, and the appliance will report it
+as an unrecognised Digium card because there is nothing to recognise it as.
+
+What this means for the matrix: the TDM410P row is not merely unverified, it is
+expected not to work with the driver source currently selected. The TDM400P row
+is a different case — that card is claimed by the older `wctdm` driver through
+the Tiger Jet vendor identifier rather than Digium's own, and that driver is
+still present with its table intact.
+
+What has not been established, and should not be inferred from the above: why
+the bindings were removed, whether an older driver release still carries them,
+and whether an operator holding one of these cards has any supported path. That
+is a question for the driver project, and the answer is not in this repository.
+
+`UNVERIFIED — needs human confirmation`: whether an earlier release of the
+driver binds these four identifiers, and which release last did.
+
+The identifiers themselves, and the mapping from each to the card it names, are
+recorded once in `share/digium-cards.tsv`, which both the control plane and the
+pre-flight check read. They were extracted from the driver source mechanically.
+Before that file there were two hand-written tables, one in each of those
+places, and they disagreed on ten of the eleven identifiers they shared.
+
 ## What the image actually carries
 
 This part is verified, and it is a different claim from the one above: it says

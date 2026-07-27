@@ -284,6 +284,51 @@ const CONTRAST_HELPERS = `
         }
 
         // -- a form, got wrong on purpose --------------------------------
+        // -- what the tiles say when the engine is not there --------------
+        /* The appliance under test is deliberately pointed at an engine that
+         * is not listening, which is the condition an operator meets at three
+         * in the morning. What the overview says then is the whole point of
+         * this check: "zero active calls" and "call state cannot be read" are
+         * different sentences, and only one of them is true. */
+        report.stage = 'stale-state';
+        const overview = await page.$('.nav-item[data-view="overview"]');
+        if (overview) {
+            await overview.click();
+            await page.waitForTimeout(600);
+        }
+        const staleness = await page.evaluate(async function () {
+            var response = await fetch('/api/state', { credentials: 'same-origin' });
+            var state = await response.json();
+            var figure = document.querySelector('#figure-active-calls');
+            var caption = document.querySelector('#caption-answered');
+            return {
+                engineConnected: state.engine ? state.engine.connected : null,
+                figureText: figure ? (figure.textContent || '').trim() : null,
+                figureMarkedInvalid: figure ? figure.getAttribute('aria-invalid') : null,
+                figureClass: figure ? String(figure.className) : null,
+                captionText: caption ? (caption.textContent || '').trim() : null,
+            };
+        });
+        report.staleness = staleness;
+        if (staleness.engineConnected === false) {
+            if (/^zero\b/.test(staleness.figureText || '')) {
+                finding('critical', 'A count is reported as zero when it is unknown',
+                    'The telephony engine is not connected, so no channel can be read, and the ' +
+                    'overview reads "' + staleness.figureText + '". An operator is told the ' +
+                    'building is quiet on a system that may be carrying every call it can.');
+            }
+            if (staleness.figureMarkedInvalid !== 'true') {
+                finding('high', 'A figure that cannot be read is not marked as such',
+                    'The active call figure carries aria-invalid=' +
+                    String(staleness.figureMarkedInvalid) + ', so a screen reader reads it ' +
+                    'as a current value.');
+            }
+            if (!/engine/.test(staleness.captionText || '')) {
+                finding('medium', 'Nothing says why the figure cannot be read',
+                    'The caption reads "' + staleness.captionText + '".');
+            }
+        }
+
         report.stage = 'form-validation';
         await page.click('.nav-item[data-view="extensions"]');
         await page.waitForSelector('#view-extensions', { state: 'visible', timeout: 15000 });

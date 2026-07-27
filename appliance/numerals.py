@@ -133,7 +133,14 @@ _IDENTIFIER_SHAPES: tuple[re.Pattern[str], ...] = (
     # An interface card model, as printed on the card itself. A technician
     # holds the card and reads the silkscreen; "TDM four one zero P" is not
     # what it says.
-    re.compile(r"\\b(?:TDM|TE|AEX|HA|HB|B)\\d+[A-Z]?\\b"),
+    #
+    # This pattern was written with its escapes doubled and so had never
+    # matched anything: every card model this appliance logged came out spelled
+    # while the browser and the installer, whose copies were written correctly,
+    # kept the digits. Three implementations that are meant to be identical
+    # were not, and the test holding them together did not sample a card model.
+    # It does now.
+    re.compile(r"\b(?:TDM|TCE|TC|TE|AEX|HA|HB|A|B)\d+(?:-\d+|[A-Z])?\b"),
     # A telephone number the appliance routes to: an extension, a dial string.
     # These keep their leading zeros and are matched against a handset label.
     re.compile(r"\bextension\s+\d+\b", re.IGNORECASE),
