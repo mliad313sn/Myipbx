@@ -24,15 +24,48 @@ class ConfigError(ValueError):
     """Raised when the configuration document cannot be honoured."""
 
 
+#: The transport security versions this appliance will negotiate.  Everything
+#: older is excluded here rather than at the listener, so that a document
+#: asking for it is refused at load time with a reason an operator can read.
+_PERMITTED_TLS_VERSIONS = frozenset({"TLSv1.2", "TLSv1.3"})
+
+
 @dataclass
 class ApplianceConfig:
     """The complete runtime configuration of the appliance control plane."""
 
     # --- Presentation and control surface -------------------------------
-    listen_address: str = "0.0.0.0"
+    #: The address the console binds.  It is the loopback address rather than
+    #: every interface because an appliance that can reboot the machine and
+    #: rewrite its firewall should not appear on a network nobody chose.  The
+    #: installer writes the management address it was given here; when it was
+    #: given none it leaves this default in place and says so on the console,
+    #: so that an unreachable appliance is a stated decision rather than a
+    #: silent exposure discovered later by somebody else's scanner.
+    listen_address: str = "127.0.0.1"
     listen_port: int = 8088
     web_root: str = "/opt/myipbx/web"
     allowed_origins: tuple[str, ...] = ()
+
+    # --- Transport security -----------------------------------------------
+    #: The console carries the administrator's password and its session cookie,
+    #: and the operations it authorises reach as far as rebooting the machine
+    #: and recompiling kernel modules.  None of that may cross a site network
+    #: in the clear, so the secured listener is the shipped default and turning
+    #: it off is a deliberate act by somebody who has read this line.
+    tls_enabled: bool = True
+    tls_certificate: str = "/etc/myipbx/tls/appliance.crt"
+    tls_private_key: str = "/etc/myipbx/tls/appliance.key"
+    #: Everything below this version has a published attack against it.  The
+    #: setting exists so that a site may raise the floor, not lower it; the
+    #: validator refuses anything older.
+    tls_minimum_version: str = "TLSv1.2"
+    #: A second listener that serves nothing at all.  An operator who types the
+    #: appliance's address without a scheme reaches plain transport, and a port
+    #: that answers with a redirect sends them to the secured one instead of
+    #: leaving them at a refused connection wondering which of the two things
+    #: they typed was wrong.  It never returns content and never sets a cookie.
+    plain_http_redirect_port: int = 8080
 
     # --- Persistent state ------------------------------------------------
     state_directory: str = "/var/lib/myipbx"
@@ -80,10 +113,12 @@ class ApplianceConfig:
     login_attempt_limit: int = 5
     login_lockout_seconds: int = 300
     password_iterations: int = 240000
-    #: Set once the appliance is fronted by a transport secured listener.  It
-    #: is false by default because an appliance reached over plain transport on
-    #: a management network would otherwise silently discard its own cookie.
-    session_cookie_secure: bool = False
+    #: Withholds the session cookie from any request that is not carried over a
+    #: secured transport.  The appliance serves its console over one by default,
+    #: so the attribute costs nothing and removes the case where a single plain
+    #: request — a mistyped scheme, a bookmark from before this was true — hands
+    #: the session token to whatever is listening on the wire.
+    session_cookie_secure: bool = True
 
     # --- Automated task execution ----------------------------------------
     health_sweep_interval_seconds: float = 30.0
@@ -191,6 +226,30 @@ class ApplianceConfig:
             raise ConfigError("the listening port must be a valid port number")
         if not 1 <= self.manager_port <= 65535:
             raise ConfigError("the manager interface port must be a valid port number")
+        if self.tls_enabled and not (self.tls_certificate and self.tls_private_key):
+            raise ConfigError(
+                "a secured listener needs both a certificate and a private key; "
+                "name them, or set the transport security setting to false and "
+                "accept that the administrator password crosses the network in "
+                "the clear"
+            )
+        if self.tls_minimum_version not in _PERMITTED_TLS_VERSIONS:
+            raise ConfigError(
+                "the minimum transport security version must be one of "
+                + ", ".join(sorted(_PERMITTED_TLS_VERSIONS))
+            )
+        # A redirect port of zero asks for an ephemeral one, exactly as the
+        # console port does, which is what lets a test bind both without
+        # choosing numbers that might already be in use.
+        if not 0 <= self.plain_http_redirect_port <= 65535:
+            raise ConfigError("the redirect port must be a valid port number")
+        if (
+            self.plain_http_redirect_port
+            and self.plain_http_redirect_port == self.listen_port
+        ):
+            raise ConfigError(
+                "the redirect port cannot be the port the secured console binds"
+            )
         if self.heartbeat_interval_seconds <= 0:
             raise ConfigError("the heartbeat interval must be greater than zero")
         if self.heartbeat_missed_limit < 1:

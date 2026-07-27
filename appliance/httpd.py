@@ -8,6 +8,13 @@ dashboard is same origin with its own socket by construction.
 Request head parsing is a pure function so that malformed input — oversized
 headers, absent separators, a body length that disagrees with the body — is
 exercised by unit tests rather than discovered in production.
+
+The listener is secured.  Everything the console carries — the administrator's
+password on the way in, the session cookie on every request afterwards, and the
+telephone numbers of an entire site in between — would otherwise be readable by
+anything sharing the network with the appliance.  The secured listener is built
+from the standard library alone, because the appliances this runs on are old
+and air gapped and cannot be asked to acquire a package to be safe.
 """
 
 from __future__ import annotations
@@ -16,6 +23,7 @@ import asyncio
 import json
 import mimetypes
 import posixpath
+import ssl
 import time
 import urllib.parse
 from dataclasses import dataclass, field
@@ -30,9 +38,14 @@ __all__ = [
     "Response",
     "Router",
     "HttpServer",
+    "RedirectServer",
+    "build_tls_context",
+    "certificate_fingerprint",
+    "validate_certificate_pair",
     "parse_request_head",
     "RequestTooLarge",
     "MalformedRequest",
+    "TlsConfigurationError",
 ]
 
 _LOG = get_logger("httpd")
@@ -46,6 +59,7 @@ _STATUS_TEXT = {
     204: "No Content",
     301: "Moved Permanently",
     304: "Not Modified",
+    308: "Permanent Redirect",
     400: "Bad Request",
     401: "Unauthorized",
     403: "Forbidden",
@@ -80,6 +94,153 @@ class MalformedRequest(ValueError):
 
 class RequestTooLarge(ValueError):
     """The request head or body exceeded the permitted size."""
+
+
+class TlsConfigurationError(RuntimeError):
+    """The secured listener could not be built from what was configured."""
+
+
+#: The floor is a negotiated version, not a cipher list.  Naming ciphers here
+#: would freeze this appliance's idea of which ones are sound at the moment it
+#: shipped, and these machines are not updated often; the library's own default
+#: selection for the version floor ages better than a list written once.
+_TLS_VERSIONS = {
+    "TLSv1.2": ssl.TLSVersion.TLSv1_2,
+    "TLSv1.3": ssl.TLSVersion.TLSv1_3,
+}
+
+
+def build_tls_context(
+    certificate: str | Path,
+    private_key: str | Path,
+    minimum_version: str = "TLSv1.2",
+) -> ssl.SSLContext:
+    """Build the secured listener's context, or explain why it cannot be built.
+
+    Every refusal names the file it was looking at and what to do about it.  An
+    appliance that will not start is an appliance somebody is standing in front
+    of at an inconvenient hour, and "certificate error" would tell them nothing
+    they could act on.
+    """
+    certificate_path = Path(certificate)
+    key_path = Path(private_key)
+
+    if minimum_version not in _TLS_VERSIONS:
+        raise TlsConfigurationError(
+            f"the minimum transport security version {minimum_version} is not one "
+            "this appliance will negotiate; name either TLSv1.2 or TLSv1.3"
+        )
+
+    for description, path in (
+        ("certificate", certificate_path),
+        ("private key", key_path),
+    ):
+        if not path.exists():
+            raise TlsConfigurationError(
+                f"the transport security {description} at {path} does not exist; "
+                "generate one by running the script named "
+                "myipbx-generate-certificate.sh, or name an existing file in the "
+                "configuration document"
+            )
+        if not path.is_file():
+            raise TlsConfigurationError(
+                f"the transport security {description} at {path} is not a file"
+            )
+        try:
+            with path.open("rb"):
+                pass
+        except OSError as error:
+            raise TlsConfigurationError(
+                f"the transport security {description} at {path} could not be read "
+                f"by this appliance: {error}; the private key is expected to be "
+                "readable by the group named myipbx and by nobody else"
+            ) from error
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = _TLS_VERSIONS[minimum_version]
+    try:
+        context.load_cert_chain(certfile=str(certificate_path), keyfile=str(key_path))
+    except ssl.SSLError as error:
+        # This is the case where both files are present and readable but do not
+        # belong together, which is what a half finished manual installation
+        # leaves behind.
+        raise TlsConfigurationError(
+            f"the certificate at {certificate_path} and the private key at "
+            f"{key_path} could not be loaded together: {error}; they are most "
+            "likely from different generations and must be replaced as a pair"
+        ) from error
+    except OSError as error:
+        raise TlsConfigurationError(
+            f"the transport security material could not be read: {error}"
+        ) from error
+    return context
+
+
+def validate_certificate_pair(certificate_pem: str, private_key_pem: str) -> str:
+    """Check that a certificate and a private key belong together.
+
+    The check is a real load of the pair, because that is the only thing that
+    answers the question the appliance actually has: will the secured listener
+    come up on these two files?  Comparing them by inspection would accept
+    material that the library then refused, and the refusal would arrive after
+    the restart, with the console down and the operator holding a browser tab
+    that no longer answers.
+
+    Returns the certificate's fingerprint so that a caller can show an operator
+    what they have just installed.
+    """
+    import tempfile
+
+    if not certificate_pem.strip():
+        raise TlsConfigurationError("no certificate was supplied")
+    if not private_key_pem.strip():
+        raise TlsConfigurationError("no private key was supplied")
+
+    # Written with owner only permissions into a directory that is removed
+    # whatever happens, so an uploaded key is never left on disk by a
+    # validation that failed halfway.
+    with tempfile.TemporaryDirectory(prefix="myipbx-certificate-") as workspace:
+        directory = Path(workspace)
+        certificate_path = directory / "candidate.crt"
+        key_path = directory / "candidate.key"
+        certificate_path.write_text(certificate_pem, encoding="utf-8")
+        key_path.write_text(private_key_pem, encoding="utf-8")
+        key_path.chmod(0o600)
+
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        try:
+            context.load_cert_chain(certfile=str(certificate_path), keyfile=str(key_path))
+        except ssl.SSLError as error:
+            raise TlsConfigurationError(
+                "the certificate and the private key do not match, or one of "
+                f"them is not in the expected form: {error}"
+            ) from error
+        except OSError as error:
+            raise TlsConfigurationError(
+                f"the supplied material could not be read: {error}"
+            ) from error
+
+        return certificate_fingerprint(certificate_path)
+
+
+def certificate_fingerprint(certificate: str | Path) -> str:
+    """The certificate's own digest, in the form an operator can compare.
+
+    This is what a browser shows when somebody asks it to explain the warning
+    on an appliance that signed its own certificate, so it is what the console
+    prints and what the interface reports.
+    """
+    import hashlib
+
+    text = Path(certificate).read_text(encoding="utf-8")
+    try:
+        der = ssl.PEM_cert_to_DER_cert(text)
+    except ValueError as error:
+        raise TlsConfigurationError(
+            f"the file at {certificate} is not a certificate in the expected form"
+        ) from error
+    digest = hashlib.sha256(der).hexdigest().upper()
+    return ":".join(digest[index : index + 2] for index in range(0, len(digest), 2))
 
 
 @dataclass
@@ -390,11 +551,12 @@ class HttpServer:
     def __init__(
         self,
         router: Router,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 8088,
         upgrade_handler: UpgradeHandler | None = None,
         maximum_body_bytes: int = _MAXIMUM_BODY_BYTES,
         idle_timeout_seconds: float = 60.0,
+        tls_context: ssl.SSLContext | None = None,
     ) -> None:
         self.router = router
         self.host = host
@@ -402,16 +564,25 @@ class HttpServer:
         self.upgrade_handler = upgrade_handler
         self.maximum_body_bytes = maximum_body_bytes
         self.idle_timeout_seconds = idle_timeout_seconds
+        self.tls_context = tls_context
         self._server: asyncio.AbstractServer | None = None
         self.requests_served = 0
         self.upgrades_accepted = 0
 
+    @property
+    def secured(self) -> bool:
+        return self.tls_context is not None
+
     async def start(self) -> None:
-        self._server = await asyncio.start_server(self._handle, self.host, self.port)
+        self._server = await asyncio.start_server(
+            self._handle, self.host, self.port, ssl=self.tls_context
+        )
         _LOG.info(
-            "the appliance interface is listening on the address %s at port number %d",
+            "the appliance interface is listening on the address %s at port number %d, "
+            "over %s transport",
             self.host,
             self.port,
+            "secured" if self.secured else "plain",
         )
 
     async def stop(self) -> None:
@@ -518,6 +689,143 @@ class HttpServer:
                 "the handler for the path %s failed: %s", request.path, error, exc_info=True
             )
             return Response.error(500, "the appliance could not complete the request")
+
+
+class RedirectServer:
+    """A plain listener that answers every request with the secured address.
+
+    An operator who types this appliance's address without a scheme gets plain
+    transport, and a port that refuses the connection tells them only that
+    something is wrong.  So a second port answers, and it answers with one
+    thing: go to the secured listener instead.
+
+    It serves no content, consults no router, and reads no request body.  It
+    never issues a cookie, because a cookie issued here would be exactly the
+    plain transport disclosure the secured listener exists to prevent — and the
+    session cookie now carries the attribute that would make a browser discard
+    it anyway.
+    """
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        secure_port: int,
+        idle_timeout_seconds: float = 10.0,
+    ) -> None:
+        self.host = host
+        self.port = port
+        self.secure_port = secure_port
+        self.idle_timeout_seconds = idle_timeout_seconds
+        self._server: asyncio.AbstractServer | None = None
+        self.redirects_issued = 0
+
+    async def start(self) -> None:
+        self._server = await asyncio.start_server(self._handle, self.host, self.port)
+        _LOG.info(
+            "the plain listener on the address %s at port number %d answers only with "
+            "the secured address and serves nothing",
+            self.host,
+            self.bound_port,
+        )
+
+    async def stop(self) -> None:
+        if self._server is not None:
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+
+    @property
+    def bound_port(self) -> int:
+        if self._server is None or not self._server.sockets:
+            return 0
+        return int(self._server.sockets[0].getsockname()[1])
+
+    async def _handle(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        try:
+            buffer = bytearray()
+            while _HEAD_TERMINATOR not in buffer:
+                chunk = await asyncio.wait_for(
+                    reader.read(4096), timeout=self.idle_timeout_seconds
+                )
+                if not chunk:
+                    return
+                buffer.extend(chunk)
+                if len(buffer) > _MAXIMUM_HEAD_BYTES:
+                    # Even the refusal is a redirect, so that this port has no
+                    # second behaviour anybody could come to depend on.
+                    break
+
+            head, _, _ = bytes(buffer).partition(_HEAD_TERMINATOR)
+            response = self._redirect(head)
+            self.redirects_issued += 1
+            writer.write(response.serialise(keep_alive=False))
+            await writer.drain()
+        except (
+            asyncio.TimeoutError,
+            asyncio.IncompleteReadError,
+            ConnectionResetError,
+            BrokenPipeError,
+        ):
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:  # noqa: BLE001 - one connection must not kill the port
+            _LOG.error("the plain listener failed to answer a connection: %s", error)
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except (OSError, ConnectionError, RuntimeError):
+                pass
+
+    def _redirect(self, head: bytes) -> Response:
+        """Build the redirect for one request head.
+
+        A head that cannot be parsed still gets a redirect, to the root of the
+        secured listener.  There is nothing this port could usefully say about
+        a malformed request that would not amount to serving content.
+        """
+        target = "/"
+        host = self.host
+        try:
+            request = parse_request_head(head)
+        except (MalformedRequest, RequestTooLarge):
+            pass
+        else:
+            target = request.target or "/"
+            host = _host_without_port(request.header("host")) or self.host
+
+        location = f"https://{host}"
+        if self.secure_port and self.secure_port != 443:
+            location += f":{self.secure_port}"
+        location += target if target.startswith("/") else f"/{target}"
+
+        # Permanent rather than temporary, and the variant that keeps the
+        # method, so that a client repeating a write does not silently have it
+        # turned into a read.
+        return Response(
+            status=308,
+            body=b"",
+            content_type="text/plain; charset=utf-8",
+            headers={"Location": location},
+        )
+
+
+def _host_without_port(value: str) -> str:
+    """Strip the port from a host header, leaving bracketed literals intact."""
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if text.startswith("["):
+        closing = text.find("]")
+        return text[: closing + 1] if closing != -1 else ""
+    name, separator, port = text.rpartition(":")
+    if separator and port.isdigit():
+        return name
+    return text
 
 
 def build_handshake_response(request: Request) -> Response:

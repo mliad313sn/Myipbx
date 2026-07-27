@@ -290,6 +290,44 @@ class UnavailableDaemonTests(unittest.TestCase):
         self.assertIn("not running", outcome.detail)
 
 
+class RefusedCallerSeesAReasonTests(unittest.TestCase):
+    """A refused control plane must report why, not raise.
+
+    The daemon answers an unpermitted caller and closes without reading what
+    that caller sent, so the client can meet a reset connection midway through
+    its own request. That has to arrive at the operator as a sentence rather
+    than as a traceback.
+    """
+
+    def test_a_refused_caller_is_told_so_in_plain_language(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+
+        helper = root / "helper.sh"
+        helper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        helper.chmod(0o755)
+
+        daemon = HelperDaemon(
+            socket_path=root / "helper.sock",
+            helper_path=helper,
+            permitted_users=(os.getuid() + 4242,),
+        )
+        daemon.start()
+        self.addCleanup(daemon.stop)
+
+        operations = PrivilegedOperations(
+            helper_path=helper, socket_path=root / "helper.sock"
+        )
+        outcome = asyncio.run(operations.run("engine-reload"))
+
+        self.assertFalse(outcome.succeeded)
+        self.assertTrue(
+            outcome.output or outcome.detail,
+            "a refused operation told the operator nothing at all",
+        )
+
+
 class NoSudoAnywhereTests(unittest.TestCase):
     """The path must not reacquire the defect it was built to remove."""
 

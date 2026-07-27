@@ -132,15 +132,23 @@ def render_ruleset(
     rules: Iterable[Mapping[str, Any]],
     management_port: int,
     management_sources: Iterable[str] = ("0.0.0.0/0",),
+    redirect_port: int = 0,
 ) -> str:
     """Generate the complete ruleset.
 
     The management service is always emitted, from the sources given, before
     any declared rule. That ordering is deliberate: an administrator cannot
     write a ruleset that locks them out of the console they wrote it in.
+
+    Both console ports are emitted when the appliance runs a redirect listener.
+    The secured port is where the console lives; the plain port answers only
+    with the address of the secured one, and closing it would silently strip
+    the recovery an administrator gets from typing the address they remember.
     """
     if not 1 <= int(management_port) <= 65535:
         raise FirewallError("the management port is not a valid port number")
+    if redirect_port and not 1 <= int(redirect_port) <= 65535:
+        raise FirewallError("the redirect port is not a valid port number")
 
     accepted_sources = [_validate_source(source) for source in management_sources] or [
         "0.0.0.0/0"
@@ -183,6 +191,12 @@ def render_ruleset(
             f"        ip saddr {source} tcp dport {int(management_port)} accept "
             f"comment \"the appliance console\""
         )
+    if redirect_port and int(redirect_port) != int(management_port):
+        for source in accepted_sources:
+            lines.append(
+                f"        ip saddr {source} tcp dport {int(redirect_port)} accept "
+                f"comment \"the redirect to the secured console\""
+            )
 
     lines.append("")
     lines.append("        # Declared rules follow, in the order they were written.")

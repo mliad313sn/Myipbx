@@ -170,6 +170,17 @@ class ApplianceHarness:
             # A laboratory machine may legitimately run an allocation service;
             # the exclusion itself is asserted directly in its own tests.
             "fail_on_address_allocation_server": False,
+            # The harness serves over plain transport so that the suite can
+            # speak to it with an ordinary socket.  This is the one place that
+            # decision is made, and it is made here rather than by weakening
+            # the shipped default, which stays secured.  The secured listener
+            # has its own tests, and they generate a certificate at test time
+            # and complete a real handshake against it; a harness built with
+            # transport security switched on is what those tests use.
+            "tls_enabled": False,
+            # Nothing to redirect to when the transport is plain, and binding a
+            # fixed second port would collide between tests running together.
+            "plain_http_redirect_port": 0,
         }
         settings.update(overrides)
 

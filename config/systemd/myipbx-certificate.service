@@ -1,0 +1,40 @@
+[Unit]
+Description=Legacy-to-Modern IPBX Appliance certificate generation
+Documentation=file:/opt/myipbx/docs/operations-runbook.md
+
+# An image is one file that many machines boot, so no certificate travels
+# inside it. Each appliance generates its own on first start, and this unit is
+# what makes that happen before anything can serve without one.
+Before=myipbx.service
+
+# Deliberately short. This unit needs a writable filesystem and nothing else:
+# no network, because the address it names is read from the configuration
+# document rather than from an interface; no message bus, because a unit that
+# waits for one this early is a unit that fails on a boot where it is slow.
+# The predecessor of this unit failed on every boot for want of exactly that
+# restraint, and the appliance carried the failure in its image.
+After=local-fs.target
+ConditionPathExists=/opt/myipbx/bin/myipbx-generate-certificate.sh
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Root, because the key is written into a directory the appliance account may
+# read and may not write. This runs once per boot, does nothing at all on every
+# boot after the first, and exits.
+ExecStart=/opt/myipbx/bin/myipbx-generate-certificate.sh
+
+# The generation is a handful of arithmetic operations on a machine that may be
+# old and slow. If it has not finished by then something is wrong with it, and
+# waiting longer would only delay the report.
+TimeoutStartSec=120
+
+# Failure here is not silenced, but neither is it retried in a loop. The
+# control plane refuses to serve without a certificate and says why, which is a
+# better report to an operator than a unit restarting behind their back.
+Restart=no
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

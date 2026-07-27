@@ -445,7 +445,69 @@ an operator who ignores errors will ignore the one that matters.
   need a real machine.
 - **The disk installer is proved in rehearsal only.** It runs end to end and
   writes nothing. It has not laid an appliance down on a real disk.
-- **There is still no transport security.** The console speaks plain HTTP. An
-  administrator password for an appliance that can reboot the machine and
-  rewrite the firewall crosses the site network in clear text. This is a known,
-  open, blocking defect and it is not fixed in this pass.
+- **Transport security is in place, and its certificate has not been proved on
+  a real appliance.** The console is served over a secured listener built on
+  the standard library, the session cookie carries the attribute that keeps a
+  browser from ever sending it over plain transport, and a plain port answers
+  only by redirecting to the secured one. A real handshake against a real
+  listener, completing a real sign in, is exercised by the suite. What has not
+  been shown is the generation path on a real machine at first boot: the
+  generator has been run directly and proved idempotent, but the service unit
+  that runs it before the console starts has not been observed on a booting
+  appliance. See the certificate risks recorded below.
+
+## Transport security — what was done, and what is still exposed
+
+The console no longer speaks in the clear. What follows is what that repair
+covers, and what it deliberately does not.
+
+**Proved by the suite.** A certificate is generated at test time with the same
+tool the appliance uses, a real client completes a real handshake against a
+real listener and signs in over it, and the client verifies the certificate
+properly rather than switching verification off — a test that accepted any
+certificate would pass against an appliance presenting somebody else's. The
+session cookie is asserted to carry the attribute that stops a browser sending
+it over plain transport. The plain port is asserted to answer with a redirect
+and nothing else: no body, and no cookie, across four different request shapes.
+The appliance is asserted to refuse to start when its certificate is missing,
+unreadable, or paired with the wrong key, and to leave nothing listening when it
+does. The generated firewall ruleset is asserted to keep both console ports open
+ahead of every declared rule.
+
+**The trade that was made in the key's permissions.** The private key is mode
+`0640`, owned `root:myipbx`, rather than the `0600` that would be tighter. It
+cannot be owner read only: the control plane runs as the unprivileged appliance
+account and opens this file when it binds the listener, so a key that account
+cannot read is an appliance that cannot start. The group holds only that one
+account. This is the same arrangement the configuration document already uses.
+
+**Risks that remain, stated plainly.**
+
+- **The certificate is self signed, and always will be by default.** A browser
+  warns on every first connection, and an operator who has been trained by
+  those warnings to click through is an operator who would click through an
+  interception too. The fingerprint printed on the appliance's own console is
+  the only defence offered, and it depends on somebody actually comparing it.
+- **The oneshot unit has not been watched on a booting appliance.** It is
+  ordered before the control plane, waits on nothing beyond a writable
+  filesystem, keeps its result, and runs a generator that does nothing when a
+  usable certificate is already present — all of which is what a unit needs to
+  avoid becoming the sort that fails on every boot, which this repository has
+  shipped before. None of that is the same as having seen it succeed on real
+  hardware at first boot.
+- **The certificate names the address in the configuration document.** An
+  appliance whose management address is changed afterwards keeps a certificate
+  naming the old one, and the browser will refuse it until the certificate is
+  regenerated. The runbook says so; nothing regenerates it automatically.
+- **A ten year certificate is a ten year private key.** It is the right trade
+  for a machine that is fitted once and left alone, but a key disclosed in year
+  one is useful to an attacker in year nine, and this appliance has no
+  revocation path.
+- **Applying an uploaded certificate is not proved end to end.** The upload,
+  the validation, the refusal of a mismatched pair and the staging are all
+  exercised. The privileged verb that installs the staged pair and restarts the
+  console is exercised only against the stand-in helper, in common with every
+  other privileged verb.
+- **Transport security can still be switched off** by setting `tls_enabled` to
+  false in the configuration document. It logs a warning naming exactly what is
+  exposed. Nothing prevents a site from doing it.

@@ -260,7 +260,7 @@ class BrowserDashboardTests(unittest.IsolatedAsyncioTestCase):
             "overview", "calls", "history", "extensions", "trunks",
             "ring_groups", "inbound_routes", "outbound_routes",
             "time_conditions", "ivr_menus", "queues", "conferences",
-            "hardware", "system", "firewall", "configuration",
+            "hardware", "system", "firewall", "security", "configuration",
             "tasks", "logs", "backup", "constraints",
         }
         self.assertEqual(

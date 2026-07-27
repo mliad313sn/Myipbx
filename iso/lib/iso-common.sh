@@ -49,6 +49,12 @@ APPLIANCE_DEFAULT_ADDRESS="${APPLIANCE_DEFAULT_ADDRESS:-192.168.100.10}"
 APPLIANCE_DEFAULT_PREFIX="${APPLIANCE_DEFAULT_PREFIX:-24}"
 APPLIANCE_CONSOLE_PORT="${APPLIANCE_CONSOLE_PORT:-8088}"
 
+# The console is served over a secured transport. This second port answers only
+# by sending a browser to the secured one, so that an operator who types the
+# address without a scheme is redirected rather than left at a refused
+# connection. It serves no content and issues no session.
+APPLIANCE_REDIRECT_PORT="${APPLIANCE_REDIRECT_PORT:-8080}"
+
 # The name the appliance answers to.  The live boot machinery reads its own
 # settings out of the boot image rather than out of the root filesystem, and
 # this build deliberately does not rebuild the boot image, so a name written

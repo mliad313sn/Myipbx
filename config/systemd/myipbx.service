@@ -9,6 +9,14 @@ Wants=network-online.target
 # never participates in addressing it.
 After=dahdi.service
 
+# The console is served over a secured transport, and the certificate for it is
+# generated on this appliance rather than shipped to it. This is a want rather
+# than a requirement: if the generation fails, the control plane still starts
+# and refuses to serve with a message naming the file it could not read, which
+# tells an operator more than a dependency that was never scheduled.
+Wants=myipbx-certificate.service
+After=myipbx-certificate.service
+
 [Service]
 Type=simple
 User=myipbx

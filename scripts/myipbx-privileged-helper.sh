@@ -218,6 +218,72 @@ operation_firewall_apply() {
     log_info "the appliance ruleset is loaded; everything not named in it is dropped"
 }
 
+# The certificate and its key are validated by the control plane and written
+# to the state directory. This helper installs what is already there, and
+# checks the pair again itself before it does, because a helper that trusted
+# its caller would be a helper that could be made to install anything.
+STAGED_TLS_DIR="${STAGED_TLS_DIR:-/var/lib/myipbx/tls-staged}"
+INSTALLED_TLS_DIR="${INSTALLED_TLS_DIR:-/etc/myipbx/tls}"
+
+operation_certificate_apply() {
+    require_arguments 0 $#
+
+    local staged_certificate="${STAGED_TLS_DIR}/appliance.crt"
+    local staged_key="${STAGED_TLS_DIR}/appliance.key"
+
+    if ! have_command openssl; then
+        log_error "the openssl tool is not installed on this machine"
+        return 1
+    fi
+    if [[ ! -s "${staged_certificate}" || ! -s "${staged_key}" ]]; then
+        log_error "no certificate has been staged from the console yet; upload one there first"
+        return 1
+    fi
+
+    # Checked here as well as in the control plane. A pair that does not belong
+    # together would leave the console unable to start, and the console is the
+    # only way an operator has to correct it.
+    local certificate_public key_public
+    certificate_public="$(openssl x509 -in "${staged_certificate}" -noout -pubkey 2>/dev/null || true)"
+    key_public="$(openssl pkey -in "${staged_key}" -pubout 2>/dev/null || true)"
+    if [[ -z "${certificate_public}" || "${certificate_public}" != "${key_public}" ]]; then
+        log_error "the staged certificate and key do not match and were not installed"
+        return 1
+    fi
+
+    # The material already in place is kept. An operator who installs a
+    # certificate that turns out to be wrong for their site has something to
+    # put back without a terminal, which is the whole premise of this console.
+    mkdir -p "${INSTALLED_TLS_DIR}"
+    chmod 0750 "${INSTALLED_TLS_DIR}"
+    if [[ -f "${INSTALLED_TLS_DIR}/appliance.crt" ]]; then
+        cp -f "${INSTALLED_TLS_DIR}/appliance.crt" "${INSTALLED_TLS_DIR}/appliance.crt.previous"
+        cp -f "${INSTALLED_TLS_DIR}/appliance.key" "${INSTALLED_TLS_DIR}/appliance.key.previous" 2>/dev/null || true
+        chmod 0640 "${INSTALLED_TLS_DIR}/appliance.key.previous" 2>/dev/null || true
+    fi
+
+    install -m 0644 "${staged_certificate}" "${INSTALLED_TLS_DIR}/appliance.crt"
+    install -m 0640 "${staged_key}" "${INSTALLED_TLS_DIR}/appliance.key"
+    if id -u myipbx >/dev/null 2>&1; then
+        chown "root:myipbx" "${INSTALLED_TLS_DIR}/appliance.crt" "${INSTALLED_TLS_DIR}/appliance.key"
+    fi
+
+    # The staged copy of a private key is removed once it is installed. There
+    # is no reason for a second copy of it to exist on this machine.
+    rm -f "${staged_certificate}" "${staged_key}"
+
+    log_info "the certificate was installed; restarting the console, which ends every session on this appliance"
+    if have_command systemctl; then
+        systemctl restart myipbx.service || {
+            log_error "the certificate was installed but the console did not restart"
+            return 1
+        }
+    else
+        log_warn "this machine has no service manager; restart the control plane by hand for the certificate to take effect"
+    fi
+    log_info "the console is serving with the newly installed certificate"
+}
+
 operation_firewall_status() {
     require_arguments 0 $#
 
@@ -319,6 +385,8 @@ usage: myipbx-privileged-helper.sh VERB [ARGUMENT ...]
   driver-rebuild              recompile the interface card drivers
   span-generate               regenerate and apply the span configuration
   firewall-apply              load the ruleset the appliance generated
+  certificate-apply           install the certificate staged from the console
+                              and restart the console, ending every session
   firewall-status             report whether that ruleset is loaded
   firewall-clear              unload it, leaving the machine unfiltered
   hostname-set NAME           set the machine's host name
@@ -355,6 +423,7 @@ main() {
         driver-rebuild)   operation_driver_rebuild "$@" ;;
         span-generate)    operation_span_generate "$@" ;;
         firewall-apply)   operation_firewall_apply "$@" ;;
+        certificate-apply) operation_certificate_apply "$@" ;;
         firewall-status)  operation_firewall_status "$@" ;;
         firewall-clear)   operation_firewall_clear "$@" ;;
         hostname-set)     operation_hostname_set "$@" ;;

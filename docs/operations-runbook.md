@@ -30,6 +30,21 @@ Confirm you have, on the machine:
 - the site's static address, prefix length, and gateway, written down. The
   appliance does not discover these and will not guess them.
 
+Decide the management address before you install. The console binds one
+address, not every address, and the installer takes it from
+`APPLIANCE_LISTEN_ADDRESS`:
+
+```bash
+sudo APPLIANCE_LISTEN_ADDRESS=192.0.2.10 ./scripts/install-appliance.sh
+```
+
+If you give it none, the console binds the loopback address and is reachable
+only from the machine itself. The installer says so in as many words when it
+finishes. This is deliberate: a console that can reboot the machine, rewrite
+the firewall and recompile kernel modules should appear on a network somebody
+chose for it, and on no other. To change it afterwards, edit `listen_address`
+in `/etc/myipbx/appliance.json` and restart `myipbx.service`.
+
 ## Installing
 
 There are two ways to get an appliance, and which one you want depends on
@@ -77,6 +92,43 @@ sudo APPLIANCE_INTERFACE=eth0 \
 **Record the administrator password.** The control plane prints it once, on the
 console, on its first start. It is never written to a log. If you miss it, see
 the recovery procedure below.
+
+**Record the certificate fingerprint printed beside it.** The console is served
+over a secured connection, so open it with `https://`, not `http://`. This
+appliance generated its own certificate the first time it started — no two
+appliances share one, and none of them is signed by an authority any browser
+knows — so your browser will warn on the first connection. Compare what it
+shows against the fingerprint printed on the appliance's own screen before you
+accept it. That comparison is the whole point: it is the one check that tells
+an ordinary self signed certificate apart from somebody sitting in the middle
+of the connection.
+
+If you missed the fingerprint, read it back on the appliance itself:
+
+```bash
+sudo openssl x509 -in /etc/myipbx/tls/appliance.crt -noout -fingerprint -sha256
+```
+
+The appliance also listens on port number eight thousand and eighty. That port
+serves nothing: it answers every request by redirecting to the secured port, so
+that typing the address without a scheme takes you to the right place instead
+of a refused connection.
+
+### Installing your site's own certificate
+
+If your site issues its own certificates, install one from the console rather
+than from a terminal: **transport security** in the navigation, paste the
+certificate and its private key, and press *check and store it*. The pair is
+checked against each other before either is stored, so a mismatched pair is
+refused there and then rather than at the moment it would have taken the
+console down.
+
+Storing it does not apply it. Press *apply the stored certificate* when you are
+ready. That restarts the console, which signs out every session on the
+appliance including your own, and every open dashboard has to sign in again. No
+call in progress is affected. The certificate that was in place is kept beside
+the new one as `appliance.crt.previous`, so a certificate that turns out to be
+wrong for the site can be put back.
 
 ### If a stage fails
 
@@ -136,6 +188,38 @@ refusal, not a fault. Find it and remove it:
 ```bash
 sudo ./scripts/verify-no-dhcp.sh
 ```
+
+If the service refuses to start with a message naming a certificate or a
+private key, the appliance has no usable transport security material and will
+not fall back to serving in the clear. The message names the file it could not
+read. Generate one:
+
+```bash
+sudo /opt/myipbx/bin/myipbx-generate-certificate.sh
+sudo systemctl restart myipbx.service
+```
+
+That script does nothing at all if the appliance already holds a usable
+certificate and its matching key, so it is safe to run at any time. To replace
+a certificate that is present but wrong, add `--force`.
+
+If the browser reports that it cannot connect at all, check that you used
+`https://` and not `http://`, and that you used the port the console is bound
+to. If the browser connects but refuses to proceed past a certificate warning
+you cannot dismiss, the certificate probably names an address other than the
+one you typed — it is issued for the appliance's configured management address
+and its host name. Reach it by that name, or regenerate the certificate after
+correcting `listen_address`:
+
+```bash
+sudo /opt/myipbx/bin/myipbx-generate-certificate.sh --force
+sudo systemctl restart myipbx.service
+```
+
+If the console is unreachable from anywhere except the machine itself, the
+installation was given no management address and bound the loopback address.
+Set `listen_address` in `/etc/myipbx/appliance.json`, regenerate the
+certificate with `--force` so that it names the new address, and restart.
 
 ### A button in the interface reports that the helper is not running
 
@@ -338,4 +422,8 @@ exist:
 - it will never overwrite a generated configuration file you edited without an
   explicit decision;
 - it will never print a digit character in a log line;
-- it will never ship with a default password.
+- it will never ship with a default password;
+- it will never ship with a certificate, so no two appliances share a private
+  key; each generates its own the first time it starts;
+- it will never serve its console in the clear because a certificate was
+  missing. It refuses to serve at all instead, and names the file.

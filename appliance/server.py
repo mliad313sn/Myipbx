@@ -129,6 +129,12 @@ class Appliance:
             port=self.config.listen_port,
             upgrade_handler=self._handle_upgrade,
         )
+        # The transport security material is read at start rather than here, so
+        # that a certificate a technician is still installing produces a refusal
+        # to serve with a reason attached rather than an appliance object that
+        # cannot be constructed at all.
+        self.redirect: httpd.RedirectServer | None = None
+        self.tls_fingerprint = ""
 
         self._running = False
         self._connection_counter = 0
@@ -143,6 +149,11 @@ class Appliance:
         # machine that allocates addresses never reaches a serving state.
         self._enforce_address_allocation_exclusion()
 
+        # The transport is secured before the credential is generated, because
+        # the credential is printed on the console in the same breath as the
+        # certificate's fingerprint and an operator needs both together.
+        self._configure_transport_security()
+
         self._ensure_credentials()
         self._load_declared_trunks()
 
@@ -154,6 +165,7 @@ class Appliance:
         self.tasks.start()
         self.hub.start_heartbeat()
         await self.http.start()
+        await self._start_redirect_listener()
 
         self._running = True
         self.state.touch()
@@ -170,6 +182,9 @@ class Appliance:
         self._running = False
         _LOG.info("the appliance control plane is stopping")
 
+        if self.redirect is not None:
+            await self.redirect.stop()
+            self.redirect = None
         await self.http.stop()
         await self.hub.stop()
         await self.tasks.stop()
@@ -199,6 +214,74 @@ class Appliance:
                 finding.detail,
             )
 
+    # -- transport security --------------------------------------------------
+
+    def _configure_transport_security(self) -> None:
+        """Build the secured listener's context, or refuse to serve.
+
+        Refusing is the whole point.  An appliance that quietly fell back to
+        plain transport when its certificate was missing would put the
+        administrator's password on the wire on exactly the machines where
+        somebody had already got the installation half right, and nobody would
+        find out until it mattered.
+        """
+        if not self.config.tls_enabled:
+            _LOG.warning(
+                "transport security is switched off in the configuration document; "
+                "the administrator password and the session cookie will cross this "
+                "network in the clear"
+            )
+            self.http.tls_context = None
+            return
+
+        # A failure here propagates.  The caller turns it into a refusal to
+        # start with the message intact, because the message names the file.
+        self.http.tls_context = httpd.build_tls_context(
+            certificate=self.config.tls_certificate,
+            private_key=self.config.tls_private_key,
+            minimum_version=self.config.tls_minimum_version,
+        )
+        # The fingerprint is deliberately kept out of the log. Constraint Two
+        # sanitises every numeral in a log line into words, which would render
+        # a digest unrecognisable against the one a browser displays, and the
+        # whole value of a fingerprint is that the two can be compared
+        # character by character. It goes to the console instead, beside the
+        # password, which is the same reason the password goes there.
+        self.tls_fingerprint = httpd.certificate_fingerprint(self.config.tls_certificate)
+        _LOG.info(
+            "the console is secured by the certificate at %s",
+            self.config.tls_certificate,
+        )
+
+    async def _start_redirect_listener(self) -> None:
+        """Answer the plain port with the secured address, if one is configured.
+
+        A failure to bind this port is reported and then tolerated.  It carries
+        no content and no session, so an appliance without it is inconvenient
+        rather than broken, and refusing to serve the console over a courtesy
+        redirect would be the wrong trade.
+        """
+        port = self.config.plain_http_redirect_port
+        if not self.config.tls_enabled or not port:
+            return
+
+        redirect = httpd.RedirectServer(
+            host=self.config.listen_address,
+            port=port,
+            secure_port=self.http.bound_port or self.config.listen_port,
+        )
+        try:
+            await redirect.start()
+        except OSError as error:
+            _LOG.warning(
+                "the plain listener at port number %d could not be bound, so a browser "
+                "reaching this appliance without a scheme will not be redirected: %s",
+                port,
+                error,
+            )
+            return
+        self.redirect = redirect
+
     # -- startup helpers ----------------------------------------------------
 
     def _ensure_credentials(self) -> None:
@@ -210,14 +293,30 @@ class Appliance:
         # This is the one and only time the password is rendered.  It is
         # written to the console rather than to the log, because the log is a
         # durable artefact and a credential must not be one.
-        print(
-            "\n"
-            "  an initial administrator credential has been generated for this appliance\n"
-            "  user name: administrator\n"
-            f"  password:  {password}\n"
-            "  this password is shown once and is not written to any log; record it now\n",
-            flush=True,
-        )
+        #
+        # The certificate's fingerprint goes here too.  This appliance signs
+        # its own certificate, so the first browser to reach it will warn; the
+        # only way an operator can tell that warning apart from an interception
+        # is to have seen the fingerprint somewhere the network was not
+        # involved, and this console is that somewhere.
+        lines = [
+            "",
+            "  an initial administrator credential has been generated for this appliance",
+            "  user name: administrator",
+            f"  password:  {password}",
+            "  this password is shown once and is not written to any log; record it now",
+        ]
+        if self.tls_fingerprint:
+            lines.extend(
+                [
+                    "",
+                    "  this appliance signed its own certificate, so the first connection",
+                    "  will warn. compare what the browser shows against this fingerprint",
+                    "  before accepting it:",
+                    f"  {self.tls_fingerprint}",
+                ]
+            )
+        print("\n".join(lines) + "\n", flush=True)
 
     def _load_declared_trunks(self) -> None:
         try:
@@ -349,10 +448,19 @@ class Appliance:
         document = self.store.load()
         rules = document.get("firewall_rules", []) or []
 
+        # Both console ports are named. The secured one carries the console;
+        # the plain one carries only the redirect to it, and an administrator
+        # who reaches for the appliance the way they always have would find
+        # nothing listening if a ruleset closed it.
+        redirect_port = (
+            self.redirect.bound_port if self.redirect is not None else 0
+        ) or self.config.plain_http_redirect_port
+
         ruleset = firewall_module.render_ruleset(
             rules,
             management_port=self.http.bound_port or self.config.listen_port,
             management_sources=document.get("firewall_management_sources", ["0.0.0.0/0"]),
+            redirect_port=redirect_port if self.config.tls_enabled else 0,
         )
 
         destination = self.config.state_path / "firewall.nft"
@@ -564,6 +672,13 @@ async def _serve(config: ApplianceConfig) -> int:
         await appliance.start()
     except AddressAllocationDetected:
         return 2
+    except httpd.TlsConfigurationError as error:
+        # Printed as well as logged.  An operator watching an installation is
+        # looking at the console, and this is the one failure whose remedy is a
+        # single command they can run before trying again.
+        _LOG.error("the appliance refuses to serve without transport security: %s", error)
+        print(f"\n  the appliance did not start: {error}\n", flush=True)
+        return 3
     except OSError as error:
         _LOG.error("the appliance could not bind its listening socket: %s", error)
         return 1

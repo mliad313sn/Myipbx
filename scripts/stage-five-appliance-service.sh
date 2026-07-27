@@ -18,8 +18,23 @@ source "${SCRIPT_DIR}/lib/common.sh"
 STAGE="stage-five-appliance-service"
 
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LISTEN_ADDRESS="${APPLIANCE_LISTEN_ADDRESS:-0.0.0.0}"
+
+# The console binds one address, not every address. An appliance that can
+# reboot the machine, rewrite its firewall and rebuild kernel modules should
+# appear on the network somebody chose for it and on no other. When the
+# installation was given no management address, the console binds the loopback
+# address and this stage says so at the end in as many words, because an
+# appliance nobody can reach is a problem an operator can fix in a minute and
+# an appliance on every interface is one they will not discover for months.
+LISTEN_ADDRESS="${APPLIANCE_LISTEN_ADDRESS:-}"
+MANAGEMENT_ADDRESS_WAS_GIVEN="yes"
+if [[ -z "${LISTEN_ADDRESS}" ]]; then
+    LISTEN_ADDRESS="127.0.0.1"
+    MANAGEMENT_ADDRESS_WAS_GIVEN="no"
+fi
 LISTEN_PORT="${APPLIANCE_LISTEN_PORT:-8088}"
+REDIRECT_PORT="${APPLIANCE_REDIRECT_PORT:-8080}"
+TLS_DIR="${APPLIANCE_CONFIG_DIR}/tls"
 
 install_control_plane() {
     log_step "installing the control plane package"
@@ -50,7 +65,8 @@ install_privileged_helper() {
     # The helper delegates the network and driver work to the staging scripts,
     # so they must be beside it once installed.
     local stage
-    for stage in stage-two-network-static.sh stage-three-dahdi-drivers.sh verify-no-dhcp.sh; do
+    for stage in stage-two-network-static.sh stage-three-dahdi-drivers.sh verify-no-dhcp.sh \
+                 myipbx-generate-certificate.sh; do
         install_file "${REPOSITORY_ROOT}/scripts/${stage}" \
             "${APPLIANCE_PREFIX}/bin/${stage}" 0755
     done
@@ -142,6 +158,12 @@ write_configuration_document() {
   "appliance": {
     "listen_address": "${LISTEN_ADDRESS}",
     "listen_port": ${LISTEN_PORT},
+    "tls_enabled": true,
+    "tls_certificate": "${TLS_DIR}/appliance.crt",
+    "tls_private_key": "${TLS_DIR}/appliance.key",
+    "tls_minimum_version": "TLSv1.2",
+    "plain_http_redirect_port": ${REDIRECT_PORT},
+    "session_cookie_secure": true,
     "web_root": "${APPLIANCE_PREFIX}/web",
     "state_directory": "${APPLIANCE_STATE_DIR}",
     "asterisk_configuration_directory": "/etc/asterisk",
@@ -169,15 +191,44 @@ EOF
     log_info "the configuration document was written to ${document}"
 }
 
+generate_certificate() {
+    log_step "generating this appliance's own certificate"
+
+    # Generated here, on this machine, and never shipped. A certificate that
+    # travelled with the software would be the same certificate on every
+    # appliance running it, and one private key shared by every site is worse
+    # than the plain transport it would appear to have replaced.
+    local generator="${APPLIANCE_PREFIX}/bin/myipbx-generate-certificate.sh"
+    [[ -x "${generator}" ]] || fail "the certificate generator was not installed beside the helper"
+
+    if is_rehearsal; then
+        log_info "rehearsal: this appliance's certificate would be generated at ${TLS_DIR}"
+        return 0
+    fi
+
+    APPLIANCE_LISTEN_ADDRESS="${LISTEN_ADDRESS}" "${generator}" \
+        || fail "the certificate could not be generated, and the console will not serve without one"
+}
+
 install_service_unit() {
     log_step "installing the service unit"
 
     local source="${REPOSITORY_ROOT}/config/systemd/myipbx.service"
     [[ -f "${source}" ]] || fail "the service unit template is missing from the repository"
 
+    local certificate_unit="${REPOSITORY_ROOT}/config/systemd/myipbx-certificate.service"
+    [[ -f "${certificate_unit}" ]] || fail "the certificate service unit is missing from the repository"
+
     if [[ -d /etc/systemd/system ]]; then
         install_file "${source}" /etc/systemd/system/myipbx.service 0644
+        # The generation runs again before every start, and does nothing at all
+        # on every start after the first. It is installed even though this
+        # stage has already generated one, because an appliance whose
+        # certificate is later removed or expires should recover on a reboot
+        # rather than wait for somebody to notice.
+        install_file "${certificate_unit}" /etc/systemd/system/myipbx-certificate.service 0644
         run_command systemctl daemon-reload
+        run_command systemctl enable myipbx-certificate.service
         run_command systemctl enable myipbx.service
         log_info "the appliance service unit is installed and enabled"
     else
@@ -213,9 +264,33 @@ start_appliance() {
 
 report_access_details() {
     printf '\n'
-    log_info "the dashboard is reachable on the address ${LISTEN_ADDRESS} at port number ${LISTEN_PORT}"
+    log_info "the dashboard is reachable over a secured connection on the address ${LISTEN_ADDRESS} at port number ${LISTEN_PORT}"
+    log_info "the plain port number ${REDIRECT_PORT} answers only by sending a browser to the secured one; it serves nothing"
     log_info "the initial administrator password was printed by the control plane on its first start; recover it from the service journal if it was missed"
     log_info "this appliance assigns no addresses"
+
+    if [[ "${MANAGEMENT_ADDRESS_WAS_GIVEN}" != "yes" ]]; then
+        printf '\n'
+        log_warn "this installation was given no management address, so the console is bound to the loopback address and is reachable only from this machine"
+        log_warn "it was NOT bound to every interface, because a console that can reboot this machine and rewrite its firewall should not appear on a network nobody chose"
+        log_warn "set the management address in ${APPLIANCE_CONFIG_DIR}/appliance.json and restart the appliance service to reach it from elsewhere"
+    fi
+
+    # Printed rather than logged, and printed with its numerals intact. Every
+    # logged line has them spelled into words to satisfy Constraint Two, and a
+    # fingerprint put through that could no longer be compared against the one
+    # the browser shows, which is the only thing it is for.
+    if [[ -r "${TLS_DIR}/appliance.crt" ]] && have_command openssl; then
+        local fingerprint
+        fingerprint="$(openssl x509 -in "${TLS_DIR}/appliance.crt" -noout -fingerprint -sha256 2>/dev/null | sed 's/^.*=//')"
+        if [[ -n "${fingerprint}" ]]; then
+            printf '\n'
+            printf '  this appliance signed its own certificate. the first browser to reach\n'
+            printf '  the console will warn. compare what it shows against this fingerprint\n'
+            printf '  before accepting it:\n\n'
+            printf '  %s\n' "${fingerprint}"
+        fi
+    fi
     printf '\n'
 }
 
@@ -231,6 +306,9 @@ main() {
     install_privileged_helper
     install_dashboard
     write_configuration_document
+    # Before the unit is installed and long before the service starts: the
+    # control plane refuses to serve without a certificate, by design.
+    generate_certificate
     install_service_unit
     start_appliance
     report_access_details

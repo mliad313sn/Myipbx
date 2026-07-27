@@ -61,6 +61,7 @@
       <button type="button" class="nav-item" data-view="hardware">hardware</button>
       <button type="button" class="nav-item" data-view="system">system</button>
       <button type="button" class="nav-item" data-view="firewall">firewall</button>
+      <button type="button" class="nav-item" data-view="security">transport security</button>
       <button type="button" class="nav-item" data-view="configuration">configuration</button>
       <button type="button" class="nav-item" data-view="tasks">tasks</button>
       <button type="button" class="nav-item" data-view="logs">logs</button>
@@ -292,6 +293,49 @@
         <section class="panel">
           <h2>the ruleset this would load</h2>
           <pre class="log-view" id="firewall-preview">loading</pre>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-security" hidden>
+        <section class="panel">
+          <h2>transport security</h2>
+          <p class="hint" id="security-explanation">loading</p>
+          <dl class="readings" id="security-readings"></dl>
+        </section>
+
+        <section class="panel">
+          <h2>install your own certificate</h2>
+          <p class="hint">
+            This appliance generated its own certificate when it first started,
+            so every browser will warn about it. If your site issues its own
+            certificates, paste the certificate and its private key here. Both
+            are checked against each other before either is stored, and nothing
+            takes effect until you apply it.
+          </p>
+          <p class="hint">
+            The fingerprint to compare against on a first connection is printed
+            on this appliance's own screen, beside the administrator password.
+            It is not shown here: a fingerprint is compared character by
+            character, and every numeral on this page is written out in words.
+          </p>
+          <form id="certificate-form" class="stacked-form">
+            <label for="certificate-body">certificate</label>
+            <textarea id="certificate-body" rows="8" spellcheck="false"
+                      placeholder="the certificate, in the usual text form"></textarea>
+
+            <label for="certificate-key">private key</label>
+            <textarea id="certificate-key" rows="8" spellcheck="false"
+                      placeholder="the matching private key, in the usual text form"></textarea>
+
+            <div class="actions">
+              <button type="submit" id="certificate-upload">check and store it</button>
+              <button type="button" id="certificate-apply" class="caution">
+                apply the stored certificate
+              </button>
+            </div>
+          </form>
+          <p class="hint" id="certificate-outcome" hidden></p>
         </section>
       </section>
 

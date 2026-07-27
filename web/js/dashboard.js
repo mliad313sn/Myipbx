@@ -857,6 +857,107 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* transport security                                                   */
+    /* ------------------------------------------------------------------ */
+
+    function loadSecurity() {
+        return request('/api/tls').then(function (result) {
+            if (!result.ok) {
+                return;
+            }
+            var payload = result.payload || {};
+            nodes.securityExplanation.textContent = numerals.sanitize(
+                payload.explanation || ''
+            );
+
+            var readings = nodes.securityReadings;
+            clear(readings);
+
+            /* The fingerprint the appliance reports is deliberately not among
+             * these. It is hexadecimal, and every numeral rendered on this page
+             * is written out in words; a spelled fingerprint could not be
+             * compared against the one a browser displays, which is the only
+             * thing a fingerprint is for. It is printed on the appliance's own
+             * screen instead, where an operator is standing when they first
+             * connect and where no spelling rule applies. */
+            [
+                ['connection', payload.secured
+                    ? 'secured; the password and the session cookie are encrypted on the wire'
+                    : 'NOT secured; the password and the session cookie cross this network in the clear'],
+                ['certificate', payload.certificate],
+                ['private key', payload.private_key],
+                ['lowest version accepted', payload.minimum_version],
+                ['plain port', payload.redirect_port
+                    ? 'answers only by sending a browser to the secured port'
+                    : 'not listening']
+            ].forEach(function (entry) {
+                if (entry[1] === undefined || entry[1] === null) {
+                    return;
+                }
+                readings.appendChild(element('dt', null, entry[0]));
+                readings.appendChild(element('dd', null, numerals.sanitize(String(entry[1]))));
+            });
+        });
+    }
+
+    function uploadCertificate(event) {
+        event.preventDefault();
+
+        var certificate = nodes.certificateBody.value || '';
+        var privateKey = nodes.certificateKey.value || '';
+        if (!certificate.trim() || !privateKey.trim()) {
+            toast('both the certificate and its private key are needed', 'bad');
+            return Promise.resolve();
+        }
+
+        nodes.certificateUpload.disabled = true;
+        return request('/api/tls/certificate', {
+            method: 'POST',
+            body: JSON.stringify({ certificate: certificate, private_key: privateKey })
+        }).then(function (result) {
+            nodes.certificateUpload.disabled = false;
+            var payload = result.payload || {};
+
+            if (!result.ok) {
+                nodes.certificateOutcome.hidden = false;
+                nodes.certificateOutcome.textContent = numerals.sanitize(
+                    payload.error || 'the certificate was not accepted'
+                );
+                toast(payload.error || 'the certificate was not accepted', 'bad');
+                return;
+            }
+
+            /* The private key is cleared from the page as soon as it has been
+             * accepted. There is no reason for it to sit in a form field on a
+             * screen somebody may walk away from. */
+            nodes.certificateKey.value = '';
+            nodes.certificateBody.value = '';
+
+            nodes.certificateOutcome.hidden = false;
+            nodes.certificateOutcome.textContent = numerals.sanitize(
+                (payload.warning || '') + ' ' + (payload.next_step || '')
+            );
+            toast('the certificate was checked and stored; apply it when you are ready');
+        });
+    }
+
+    function applyCertificate() {
+        return confirmAction(
+            'apply the stored certificate',
+            'this restarts the console. every session on this appliance ends, '
+                + 'including this one, and every open dashboard has to sign in '
+                + 'again. no call in progress is affected. if the new certificate '
+                + 'is wrong for this site, the previous one is kept on the '
+                + 'appliance and can be put back.'
+        ).then(function (confirmed) {
+            if (!confirmed) {
+                return null;
+            }
+            return runOperation('certificate-apply', {}, false);
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
     /* configuration reconciliation                                        */
     /* ------------------------------------------------------------------ */
 
@@ -1149,6 +1250,7 @@
         hardware: function () { loadHardware(); renderWizard(); },
         system: function () { loadSystem(); },
         firewall: function () { loadFirewall(); },
+        security: function () { loadSecurity(); },
         configuration: function () { loadDrift(); },
         tasks: function () { loadTasks(); },
         logs: function () { loadLogCatalogue(); },
@@ -1277,6 +1379,14 @@
             ['firewallApply', 'firewall-apply'],
             ['firewallStatus', 'firewall-status'],
             ['firewallClear', 'firewall-clear'],
+            ['securityExplanation', 'security-explanation'],
+            ['securityReadings', 'security-readings'],
+            ['certificateForm', 'certificate-form'],
+            ['certificateBody', 'certificate-body'],
+            ['certificateKey', 'certificate-key'],
+            ['certificateUpload', 'certificate-upload'],
+            ['certificateApply', 'certificate-apply'],
+            ['certificateOutcome', 'certificate-outcome'],
             ['signInPanel', 'sign-in-panel'], ['signInForm', 'sign-in-form'],
             ['signInFailure', 'sign-in-failure'], ['signInButton', 'sign-in-button'],
             ['username', 'username'], ['password', 'password'],
@@ -1388,6 +1498,8 @@
         nodes.firewallStatus.addEventListener('click', function () {
             runOperation('firewall-status', {}, false);
         });
+        nodes.certificateForm.addEventListener('submit', uploadCertificate);
+        nodes.certificateApply.addEventListener('click', applyCertificate);
         nodes.firewallClear.addEventListener('click', function () {
             runOperation('firewall-clear', {}, true).then(loadFirewall);
         });

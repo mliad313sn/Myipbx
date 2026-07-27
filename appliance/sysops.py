@@ -136,6 +136,16 @@ OPERATIONS: dict[str, Operation] = {
             disruptive=False,
             timeout_seconds=60.0,
         ),
+        Operation(
+            "certificate-apply",
+            "install the certificate staged from the console and restart the console",
+            # Disruptive, and labelled so wherever it is offered. The console
+            # reads its certificate when it starts, so installing one means
+            # restarting it, and every session on this appliance ends including
+            # the one that asked. No call in progress is affected.
+            disruptive=True,
+            timeout_seconds=120.0,
+        ),
         Operation("firewall-status", "report whether the appliance ruleset is loaded"),
         Operation(
             "firewall-clear",

@@ -193,7 +193,8 @@ install_control_plane() {
     install -m 0755 "${REPOSITORY_ROOT}/scripts/myipbx-privileged-helper.sh" "${prefix}/bin/"
     install -m 0644 "${REPOSITORY_ROOT}/scripts/lib/common.sh" "${prefix}/bin/lib/"
     local script
-    for script in stage-two-network-static.sh stage-three-dahdi-drivers.sh verify-no-dhcp.sh; do
+    for script in stage-two-network-static.sh stage-three-dahdi-drivers.sh verify-no-dhcp.sh \
+                  myipbx-generate-certificate.sh; do
         install -m 0755 "${REPOSITORY_ROOT}/scripts/${script}" "${prefix}/bin/"
     done
 
@@ -211,8 +212,12 @@ install_control_plane() {
     # plane's unit sets NoNewPrivileges, and sudo refuses to run under that
     # flag.  No privilege grant is installed here, and any left behind by an
     # older image is removed.
+    #
+    # No certificate is installed here, only the unit that generates one. A
+    # certificate inside this image would be the same certificate, and the same
+    # private key, on every appliance anybody ever booted from it.
     local unit
-    for unit in myipbx.service myipbx-helperd.service; do
+    for unit in myipbx.service myipbx-helperd.service myipbx-certificate.service; do
         install -m 0644 "${REPOSITORY_ROOT}/config/systemd/${unit}" \
             "${CHROOT_DIR}/etc/systemd/system/${unit}"
     done

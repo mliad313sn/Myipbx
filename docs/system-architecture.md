@@ -137,9 +137,69 @@ No default credentials: the installer generates the initial administrator
 password and prints it once. Passwords are stored as salted key derivations
 with a high iteration count and verified in constant time. Sessions are opaque
 random tokens with an idle expiry, delivered as strict same site cookies
-marked as unavailable to browser scripting. Authentication attempts are rate
-limited per source address with a lockout. The socket upgrade validates both
-the session and the origin header before completing the handshake.
+marked as unavailable to browser scripting and as unavailable over plain
+transport. Authentication attempts are rate limited per source address with a
+lockout. The socket upgrade validates both the session and the origin header
+before completing the handshake.
+
+### Transport security
+
+The console carries the administrator's password on the way in and the session
+cookie on every request afterwards, and authorises operations that reach as far
+as rebooting the machine and recompiling kernel modules. None of that may cross
+a site network in the clear, so the listener is secured and the appliance
+refuses to serve without a certificate rather than falling back to plain
+transport. A fallback would put the password on the wire on exactly the
+machines where somebody had got the installation half right, and nobody would
+find out until it mattered.
+
+The listener is built from the standard library's own transport security
+module, because these appliances are old and air gapped and cannot be asked to
+acquire a package in order to be safe. The negotiated version floor is pinned
+and the cipher selection is left to the library; naming ciphers here would
+freeze this appliance's idea of which ones are sound at the moment it shipped,
+and it is not updated often.
+
+Two ports are bound. The secured one serves the console. The plain one serves
+nothing at all: it answers every request with a redirect to the secured port,
+issues no cookie and returns no body, so that an operator who types the
+appliance's address without a scheme is sent to the right place rather than
+left at a refused connection. The generated firewall ruleset opens both, ahead
+of any declared rule, for the same reason it already opened the console: an
+administrator must not be able to write a ruleset that removes their own way
+back in.
+
+**No certificate travels in the image.** An image is one file that many
+machines boot, so a certificate inside it would give every appliance built from
+it the same private key, and anybody holding the image could then read the
+console traffic of every site running it — a worse position than the plain
+transport it replaced, because it would look secured. Each appliance therefore
+generates its own on first start: the installer runs the generator before the
+service starts, and an image booted appliance runs the same generator from a
+oneshot unit ordered before the control plane. The unit waits on nothing that
+is not up early, because a unit that fails on every boot is worse than the
+problem it solves, and this repository has shipped one of those before.
+
+The certificate is self signed, so a browser will warn on a first connection.
+The only way an operator can tell that warning apart from an interception is to
+have seen the fingerprint somewhere the network was not involved, so the
+fingerprint is printed on the appliance's own console beside the initial
+administrator password. It is deliberately printed rather than logged, and
+deliberately not rendered on the dashboard: Constraint Two spells every numeral
+reaching an operator into words, and a spelled digest could not be compared
+character by character against what a browser displays, which is the only thing
+a fingerprint is for.
+
+A site with its own certificate authority can install its own pair from the
+console without reaching for a terminal. The pair is validated together — by
+actually loading it, because that is the only check that answers whether the
+listener will come up on it — before either file is stored. Installing it is a
+second, separate step, because it restarts the console and ends every session
+including the one that uploaded it, and the interface says so before it happens.
+The control plane runs unprivileged and cannot write into the configuration
+directory, so it stages the validated material in its own state directory and
+the privileged helper installs it, which is the same shape the firewall already
+uses.
 
 ### How the control plane reaches privilege
 

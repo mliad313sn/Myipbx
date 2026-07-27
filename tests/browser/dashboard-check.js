@@ -53,7 +53,7 @@ const VIEWS = [
     'extensions', 'trunks', 'ring_groups',
     'inbound_routes', 'outbound_routes', 'time_conditions',
     'ivr_menus', 'queues', 'conferences',
-    'hardware', 'system', 'firewall', 'configuration', 'tasks', 'logs', 'backup',
+    'hardware', 'system', 'firewall', 'security', 'configuration', 'tasks', 'logs', 'backup',
     'constraints',
 ];
 

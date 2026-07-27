@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from . import backup, entities, firewall, numerals, sysops
+from . import backup, entities, firewall, httpd, numerals, sysops
 from .confstore import DriftDetected
 from .httpd import Request, Response, Router
 from .logging_setup import get_logger
@@ -102,6 +102,13 @@ def build_router(context: Any) -> Router:
     router.post(
         "/api/system/operations/{verb}",
         guard.write(lambda request: _run_operation(context, request)),
+    )
+
+    # -- transport security -------------------------------------------------
+    router.get("/api/tls", guard.read(lambda request: _transport_security(context)))
+    router.post(
+        "/api/tls/certificate",
+        guard.write(lambda request: _stage_certificate(context, request)),
     )
 
     # -- diagnostics --------------------------------------------------------
@@ -429,6 +436,129 @@ def _sign_in(context: Any, request: Request) -> Response:
         {"signed_in": True, "username": username},
         headers={"Set-Cookie": "; ".join(attributes)},
     )
+
+
+def _transport_security(context: Any) -> Response:
+    """Describe how this appliance's console is protected on the wire."""
+    config = context.config
+    fingerprint = getattr(context, "tls_fingerprint", "")
+    return Response.json(
+        {
+            "secured": bool(config.tls_enabled),
+            "certificate": config.tls_certificate,
+            "private_key": config.tls_private_key,
+            "minimum_version": config.tls_minimum_version,
+            # The fingerprint carries digits deliberately.  It exists to be
+            # compared character by character against what a browser displays,
+            # and a spelled rendering of it could not be.
+            "fingerprint": fingerprint,
+            "self_signed_warning_expected": bool(fingerprint),
+            "redirect_port": numerals.spell_integer(
+                int(config.plain_http_redirect_port or 0)
+            ),
+            "explanation": (
+                "the console is served over a secured transport. this appliance "
+                "generated its own certificate when it first started, so no two "
+                "appliances share one and no browser will recognise the signature. "
+                "compare the fingerprint above against the one your browser shows "
+                "the first time you connect, then install your own certificate here "
+                "if your site has one"
+            )
+            if config.tls_enabled
+            else (
+                "transport security is switched off on this appliance. the "
+                "administrator password and the session cookie cross this network "
+                "in the clear, and anything on the path can read them"
+            ),
+        }
+    )
+
+
+def _stage_certificate(context: Any, request: Request) -> Response:
+    """Accept a certificate and its key from the console, having checked them.
+
+    Nothing is installed here.  The material is validated, written where only
+    the privileged helper will read it, and left staged; installing it means
+    restarting the console, which drops every session including the one that
+    uploaded it, and that is not something to do inside the request that asked.
+    """
+    payload = request.json() or {}
+    if not isinstance(payload, dict):
+        return Response.error(400, "the request body must be a mapping")
+
+    certificate = str(payload.get("certificate", ""))
+    private_key = str(payload.get("private_key", ""))
+
+    try:
+        fingerprint = httpd.validate_certificate_pair(certificate, private_key)
+    except httpd.TlsConfigurationError as error:
+        # Refused before anything is written.  A staged pair that does not load
+        # would take the console down at the moment it was applied, which is
+        # the one moment an operator cannot reach the console to undo it.
+        _LOG.warning("a certificate offered through the interface was refused")
+        return Response.error(400, str(error))
+
+    try:
+        staged = _write_staged_certificate(context, certificate, private_key)
+    except OSError as error:
+        _LOG.error("a validated certificate could not be staged: %s", error)
+        return Response.error(500, f"the certificate could not be stored: {error}")
+
+    active_sessions = len(context.sessions)
+    _LOG.info("a certificate offered through the interface was accepted and staged")
+
+    return Response.json(
+        {
+            "staged": True,
+            "applied": False,
+            "fingerprint": fingerprint,
+            "staged_certificate": str(staged["certificate"]),
+            "session_count": numerals.spell_integer(active_sessions),
+            "warning": (
+                "this certificate is stored but not yet in use. applying it "
+                "restarts the console, which ends every session on this appliance "
+                f"including this one: {numerals.spell_integer(active_sessions)} "
+                "session or sessions will be signed out and every open dashboard "
+                "will have to sign in again. no call in progress is affected"
+            ),
+            "next_step": (
+                "run the operation named certificate-apply to install it and "
+                "restart the console"
+            ),
+        }
+    )
+
+
+def _write_staged_certificate(
+    context: Any, certificate: str, private_key: str
+) -> dict[str, Any]:
+    """Write the validated pair where the privileged helper will find it.
+
+    The control plane cannot write into the configuration directory and is not
+    meant to be able to: it runs unprivileged and that directory is mounted
+    read only beneath it.  So the same shape the firewall already uses applies
+    here.  The control plane produces the artefact in its own state directory
+    and the helper, which holds the privilege, is the only thing that installs
+    it.
+    """
+    import os
+
+    directory = context.config.state_path / "tls-staged"
+    directory.mkdir(parents=True, exist_ok=True)
+    os.chmod(directory, 0o700)
+
+    certificate_path = directory / "appliance.crt"
+    key_path = directory / "appliance.key"
+
+    # The key is created with its permissions rather than given them
+    # afterwards, so there is no instant at which it exists and is readable.
+    descriptor = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(private_key)
+    certificate_path.write_text(certificate, encoding="utf-8")
+    os.chmod(certificate_path, 0o644)
+
+    return {"certificate": certificate_path, "private_key": key_path}
 
 
 def _sign_out(context: Any, request: Request) -> Response:
