@@ -240,12 +240,81 @@ operation_certificate_apply() {
         return 1
     fi
 
+    # The staging directory is written by the unprivileged control plane and
+    # read by this helper, which runs as root. That is a shared directory
+    # between two privilege levels, and everything below exists because of it.
+    #
+    # The directory itself must be a directory. Were it replaced by a link, the
+    # two paths above would name whatever it pointed at, and this helper would
+    # be reading its inputs from a location the caller chose.
+    if [[ -L "${STAGED_TLS_DIR}" || ! -d "${STAGED_TLS_DIR}" ]]; then
+        log_error "the staging directory is not a directory; nothing was installed"
+        return 1
+    fi
+
+    # Take a private copy before looking at anything, and look only at the
+    # copy from here on.
+    #
+    # Validating the staged path and then installing from it are two separate
+    # reads of a path the caller can still write. Between them the caller can
+    # replace a validated certificate with a link to any file root can read,
+    # and the install that follows would copy that file out under a mode the
+    # console serves. Copying first collapses the two reads into one: whatever
+    # this copy captured is what gets checked and what gets installed, and a
+    # substitution after it changes nothing.
+    #
+    # The copy is taken without following links, so a link that was already in
+    # place arrives here as a link rather than as its target, and is refused
+    # below by looking at what was copied rather than at what was asked for.
+    local snapshot
+    snapshot="$(mktemp -d "${TMPDIR:-/tmp}/myipbx-tls-XXXXXXXX")" || {
+        log_error "a private working directory could not be created; nothing was installed"
+        return 1
+    }
+    chmod 0700 "${snapshot}"
+    # shellcheck disable=SC2064
+    trap "rm -rf -- '${snapshot}'" RETURN
+
+    cp --no-dereference --preserve=mode "${staged_certificate}" "${snapshot}/appliance.crt" 2>/dev/null || {
+        log_error "the staged certificate could not be read; nothing was installed"
+        return 1
+    }
+    cp --no-dereference --preserve=mode "${staged_key}" "${snapshot}/appliance.key" 2>/dev/null || {
+        log_error "the staged key could not be read; nothing was installed"
+        return 1
+    }
+
+    local snapshot_certificate="${snapshot}/appliance.crt"
+    local snapshot_key="${snapshot}/appliance.key"
+
+    if [[ -L "${snapshot_certificate}" || -L "${snapshot_key}" ]]; then
+        log_error "the staged material is a link rather than a file; nothing was installed"
+        return 1
+    fi
+    if [[ ! -f "${snapshot_certificate}" || ! -f "${snapshot_key}" ]]; then
+        log_error "the staged material is not a plain file; nothing was installed"
+        return 1
+    fi
+
+    # And it has to have been written by the account that stages it. A file
+    # this helper found here owned by root was not put here by the console,
+    # and copying one out would disclose it.
+    if id -u myipbx >/dev/null 2>&1; then
+        local certificate_owner key_owner
+        certificate_owner="$(stat -c '%U' "${staged_certificate}" 2>/dev/null || echo unknown)"
+        key_owner="$(stat -c '%U' "${staged_key}" 2>/dev/null || echo unknown)"
+        if [[ "${certificate_owner}" != "myipbx" || "${key_owner}" != "myipbx" ]]; then
+            log_error "the staged material was not written by the console; nothing was installed"
+            return 1
+        fi
+    fi
+
     # Checked here as well as in the control plane. A pair that does not belong
     # together would leave the console unable to start, and the console is the
     # only way an operator has to correct it.
     local certificate_public key_public
-    certificate_public="$(openssl x509 -in "${staged_certificate}" -noout -pubkey 2>/dev/null || true)"
-    key_public="$(openssl pkey -in "${staged_key}" -pubout 2>/dev/null || true)"
+    certificate_public="$(openssl x509 -in "${snapshot_certificate}" -noout -pubkey 2>/dev/null || true)"
+    key_public="$(openssl pkey -in "${snapshot_key}" -pubout 2>/dev/null || true)"
     if [[ -z "${certificate_public}" || "${certificate_public}" != "${key_public}" ]]; then
         log_error "the staged certificate and key do not match and were not installed"
         return 1
@@ -262,8 +331,11 @@ operation_certificate_apply() {
         chmod 0640 "${INSTALLED_TLS_DIR}/appliance.key.previous" 2>/dev/null || true
     fi
 
-    install -m 0644 "${staged_certificate}" "${INSTALLED_TLS_DIR}/appliance.crt"
-    install -m 0640 "${staged_key}" "${INSTALLED_TLS_DIR}/appliance.key"
+    # From the private copy, never from the staged path. This is the half of
+    # the fix that matters: the path the caller can still write is not read
+    # again after the snapshot was taken.
+    install -m 0644 "${snapshot_certificate}" "${INSTALLED_TLS_DIR}/appliance.crt"
+    install -m 0640 "${snapshot_key}" "${INSTALLED_TLS_DIR}/appliance.key"
     if id -u myipbx >/dev/null 2>&1; then
         chown "root:myipbx" "${INSTALLED_TLS_DIR}/appliance.crt" "${INSTALLED_TLS_DIR}/appliance.key"
     fi
@@ -436,4 +508,11 @@ main() {
     esac
 }
 
-main "$@"
+# Dispatch when run, stay quiet when sourced. Sourcing is how the suite gets at
+# one operation at a time without a service manager, a real interface card, or
+# an appliance underneath it; running is how the daemon uses it. The two are
+# told apart by the ordinary shell idiom rather than by a switch, so there is
+# nothing here that exists only for the tests.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
