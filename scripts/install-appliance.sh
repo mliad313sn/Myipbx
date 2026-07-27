@@ -91,6 +91,13 @@ validate_range() {
 preflight() {
     log_step "preflight"
 
+    # The standalone preflight check runs before anything else, because every
+    # condition it reports is one that would otherwise be discovered midway
+    # through a stage, with the machine already part changed.
+    if ! bash "${SCRIPT_DIR}/preflight-check.sh"; then
+        fail "the preflight check reported a blocking failure; correct the causes it named and run this installer again"
+    fi
+
     require_root
     require_command uname
     require_command install
