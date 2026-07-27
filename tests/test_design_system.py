@@ -341,7 +341,49 @@ class ThemeTests(unittest.TestCase):
     def test_the_operating_system_preference_is_honoured(self) -> None:
         text = TOKENS.read_text(encoding="utf-8")
         self.assertIn("@media (prefers-color-scheme: dark)", text)
-        self.assertIn("@media (prefers-contrast: more)", text)
+
+    def test_more_contrast_is_answered_separately_for_each_colour_scheme(self) -> None:
+        """A request for more contrast is a direction, and direction depends on
+        which ground is underneath.
+
+        A single ``prefers-contrast: more`` block took the ink to black, which
+        is right on a white page and ruinous on a dark one. An operator whose
+        system asked for high contrast and dark mode together -- the pairing a
+        low vision operator is most likely to be running -- got black text on
+        the dark canvas at around one to one. The one person the theme exists
+        for was the only one it failed. So the query has to be asked twice,
+        once per scheme, and this test refuses the single unqualified form that
+        caused it.
+        """
+        text = TOKENS.read_text(encoding="utf-8")
+        self.assertIn(
+            "@media (prefers-color-scheme: light) and (prefers-contrast: more)", text
+        )
+        self.assertIn(
+            "@media (prefers-color-scheme: dark) and (prefers-contrast: more)", text
+        )
+        self.assertNotIn(
+            "@media (prefers-contrast: more)", text,
+            "an unqualified more-contrast block applies to both schemes and "
+            "can only be right for one of them",
+        )
+
+        # The rule reader flattens nesting away, so the block is read from the
+        # raw text: from its own at-rule up to whatever at-rule follows it.
+        stripped = _without_comments(text)
+        opening = "@media (prefers-color-scheme: dark) and (prefers-contrast: more)"
+        start = stripped.index(opening)
+        end = stripped.find("@media", start + len(opening))
+        block = stripped[start : end if end != -1 else len(stripped)]
+        self.assertIn(
+            "--mx-text-primary: #ffffff", block,
+            "on a dark ground more contrast means lighter ink, not darker",
+        )
+        self.assertIn(
+            "--mx-background-canvas: #000000", block,
+            "and a ground that goes the other way, so the two meet nowhere in "
+            "the middle",
+        )
 
     def test_an_explicit_choice_wins_in_both_directions(self) -> None:
         """The dark preference is scoped so that an explicit light theme beats it.

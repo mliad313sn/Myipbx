@@ -29,6 +29,7 @@ const report = {
     pageErrors: [],
     consoleErrors: [],
     failedRequests: [],
+    nonText: [],
     stage: 'starting',
 };
 
@@ -37,10 +38,17 @@ const finding = function (severity, title, detail) {
     report.findings.push({ severity: severity, title: title, detail: detail });
 };
 
-const fail = function (message) {
-    report.failure = message;
+/* Hand the report back on one line, then let the process end on its own.
+ *
+ * Calling process.exit here discarded the tail of the line: a write to a pipe
+ * larger than the pipe's buffer completes asynchronously, and exit does not
+ * wait for it. The result was a report that parsed as truncated JSON exactly
+ * once the contrast sweep grew past sixty four kilobytes, which reads as the
+ * run having crashed rather than as the harness having cut its own output off.
+ * An exit code set here is honoured when the event loop drains. */
+const emit = function () {
     console.log('RESULT ' + JSON.stringify(report));
-    process.exit(0);
+    process.exitCode = 0;
 };
 
 const VIEWS = [
@@ -410,49 +418,191 @@ const CONTRAST_HELPERS = `
         }
 
         // -- contrast, measured -------------------------------------------
+        /* Four themes an operator can be handed by choice, and two more they
+         * can be handed by their operating system without ever visiting the
+         * switch. The second pair is the one that went wrong: "more contrast"
+         * means move the ink away from the ground, and which way that is
+         * depends on which ground is underneath, so the two have to be asked
+         * about separately. */
         report.stage = 'contrast';
-        for (const theme of ['light', 'dark', 'high-contrast']) {
-            await page.evaluate(function (name) {
-                document.documentElement.setAttribute('data-theme', name);
-            }, theme);
-            await page.waitForTimeout(150);
-            const measured = await page.evaluate(new Function(CONTRAST_HELPERS + `
+        const reportedNonText = {};
+        const CONTRAST_VIEWS = ['overview', 'extensions', 'trunks', 'hardware', 'firewall'];
+        const SCHEMES = [
+            { name: 'light', theme: 'light' },
+            { name: 'dark', theme: 'dark' },
+            { name: 'high-contrast', theme: 'high-contrast' },
+            { name: 'system light, more contrast', media: { colorScheme: 'light', contrast: 'more' } },
+            { name: 'system dark, more contrast', media: { colorScheme: 'dark', contrast: 'more' } },
+        ];
+        for (const scheme of SCHEMES) {
+            const theme = scheme.name;
+            if (scheme.media) {
+                /* The system preference blocks are scoped to a page that has
+                 * not chosen a theme, so the choice has to be taken away
+                 * before the preference can be seen at all. */
+                await page.evaluate(function () {
+                    document.documentElement.removeAttribute('data-theme');
+                });
+                await page.emulateMedia(scheme.media);
+            } else {
+                await page.emulateMedia({ colorScheme: 'light', contrast: 'no-preference' });
+                await page.evaluate(function (name) {
+                    document.documentElement.setAttribute('data-theme', name);
+                }, scheme.theme);
+            }
+            await page.waitForTimeout(200);
+
+            /* Measured across several sections rather than whichever happened
+             * to be open. A stylesheet is only as good as its worst view, and
+             * the tiles, the tables and the generated ruleset each paint
+             * something the others do not. */
+            const measured = [];
+            for (const view of CONTRAST_VIEWS) {
+                const item = await page.$('.nav-item[data-view="' + view + '"]');
+                if (!item) { continue; }
+                await item.click();
+                await page.waitForTimeout(250);
+                const batch = await page.evaluate(new Function(CONTRAST_HELPERS + `
+                    var results = [];
+                    /* Wide, because the narrow list was the reason a defect
+                     * survived: the big figure on a tile is drawn in the brand
+                     * colour and was never sampled, so brand-as-ink measured
+                     * nothing at all until it was asked for by name. */
+                    var samples = document.querySelectorAll(
+                        'body, .nav-item, .tile, button, input, .lamp, .state-pill, a, ' +
+                        '.figure, .caption, .hint, .summary, .subtitle, .link-text, .link-age, ' +
+                        'label, th, td, li, h1, h2, h3, p, .field-help, .field-error');
+                    var seen = {};
+                    Array.prototype.slice.call(samples).forEach(function (element) {
+                        if (element.getClientRects().length === 0) { return; }
+                        if (!ownText(element)) { return; }
+                        var style = getComputedStyle(element);
+                        if (parseFloat(style.opacity) === 0) { return; }
+                        var ground = behind(element);
+                        /* Keyed on what is actually painted, not on the tag
+                         * alone. Collapsing every paragraph into one sample
+                         * meant the first paragraph on the page decided
+                         * whether any paragraph anywhere was measured. */
+                        var key = element.tagName + '|' +
+                            String(element.className || '').split(' ').slice(0, 2).join('.') +
+                            '|' + style.color + '|' + ground;
+                        if (seen[key]) { return; }
+                        seen[key] = true;
+                        var r = ratio(style.color, ground);
+                        if (r !== null) {
+                            results.push({
+                                element: element.tagName + '|' +
+                                    String(element.className || '').split(' ')[0],
+                                colour: style.color,
+                                background: ground,
+                                ratio: r,
+                                fontSize: style.fontSize,
+                                fontWeight: style.fontWeight,
+                            });
+                        }
+                    });
+                    return results;
+                `));
+                batch.forEach(function (sample) {
+                    sample.view = view;
+                    measured.push(sample);
+                });
+            }
+
+            /* Only what is worth reading back: everything that fails, and
+             * the ten tightest of the rest so a ratio drifting towards the
+             * line is visible before it crosses it. The whole sweep is
+             * thousands of samples and the report travels as one line. */
+            const ranked = measured.slice().sort(function (a, b) { return a.ratio - b.ratio; });
+            report.contrast.push({
+                theme: theme,
+                sampleCount: measured.length,
+                samples: ranked.slice(0, 10),
+            });
+
+            /* Non-text contrast, which the text sweep cannot see.
+             *
+             * The link lamp carries no text of its own, so it was skipped by
+             * every measurement above while being one of the two things on the
+             * page an operator reads from across a room. A graphical indicator
+             * needs three to one against what it sits on, and the lamp sits on
+             * the brand ground rather than on a panel, which is exactly where a
+             * status colour chosen against a white panel stops working. */
+            const lamps = await page.evaluate(new Function(CONTRAST_HELPERS + `
                 var results = [];
-                var samples = document.querySelectorAll(
-                    'body, .nav-item, .tile, button, input, .lamp, .state-pill, a');
                 var seen = {};
-                Array.prototype.slice.call(samples).forEach(function (element) {
+                function measure(element, label) {
                     if (element.getClientRects().length === 0) { return; }
-                    if (!ownText(element)) { return; }
                     var style = getComputedStyle(element);
-                    if (parseFloat(style.opacity) === 0) { return; }
-                    var key = element.tagName + '|' + String(element.className).split(' ')[0];
+                    var own = style.backgroundColor;
+                    var parent = element.parentElement;
+                    var ground = parent ? behind(parent) : 'rgb(255, 255, 255)';
+                    var key = label + '|' + own + '|' + ground;
                     if (seen[key]) { return; }
                     seen[key] = true;
-                    var r = ratio(style.color, behind(element));
+                    var r = ratio(own, ground);
                     if (r !== null) {
                         results.push({
-                            element: key,
-                            colour: style.color,
-                            background: behind(element),
+                            element: label,
+                            colour: own,
+                            background: ground,
                             ratio: r,
-                            fontSize: style.fontSize,
                         });
                     }
-                });
+                }
+
+                /* Every state the lamp can be in, not only the one it happens
+                 * to be in during the run. The link is live throughout an
+                 * acceptance run by design, so measuring what is on screen
+                 * measures one third of the indicator and leaves the two
+                 * states an operator only sees when something is wrong — the
+                 * two that matter most — never looked at. */
+                Array.prototype.slice.call(document.querySelectorAll('.lamp, .mx-lamp'))
+                    .forEach(function (element) {
+                        var original = element.className;
+                        ['live', 'reconnecting', 'stale', ''].forEach(function (state) {
+                            element.className = 'lamp' + (state ? ' ' + state : '');
+                            measure(element, 'lamp ' + (state || 'not connected'));
+                        });
+                        element.className = original;
+                    });
+
+                Array.prototype.slice.call(document.querySelectorAll('.state-pill'))
+                    .forEach(function (element) {
+                        measure(element, String(element.className || '').trim());
+                    });
                 return results;
             `));
-            report.contrast.push({ theme: theme, samples: measured });
+            report.nonText.push({ theme: theme, samples: lamps });
+            lamps.forEach(function (sample) {
+                if (sample.ratio >= 3.0) { return; }
+                const key = 'lamp' + theme + sample.element + sample.colour + sample.background;
+                if (reportedNonText[key]) { return; }
+                reportedNonText[key] = true;
+                finding('high', 'A status indicator is not distinct enough from its ground',
+                    theme + ': ' + sample.element + ' measures ' + sample.ratio + ':1 (' +
+                    sample.colour + ' on ' + sample.background + '), needs 3:1.');
+            });
+            const reported = {};
             measured.forEach(function (sample) {
-                const large = parseFloat(sample.fontSize) >= 24;
+                /* Large text is eighteen point, or fourteen point bold. Both
+                 * halves matter: a bold heading at nineteen pixels is large
+                 * text and a light one at the same size is not. */
+                const size = parseFloat(sample.fontSize);
+                const weight = parseInt(sample.fontWeight, 10) || 400;
+                const large = size >= 24 || (size >= 18.66 && weight >= 700);
                 const needed = large ? 3.0 : 4.5;
-                if (sample.ratio < needed) {
-                    finding('high', 'Text contrast below the required ratio',
-                        theme + ': ' + sample.element + ' measures ' + sample.ratio +
-                        ':1 (' + sample.colour + ' on ' + sample.background + '), needs ' + needed + ':1.');
-                }
+                if (sample.ratio >= needed) { return; }
+                const key = theme + sample.element + sample.colour + sample.background;
+                if (reported[key]) { return; }
+                reported[key] = true;
+                finding('high', 'Text contrast below the required ratio',
+                    theme + ', ' + sample.view + ': ' + sample.element + ' measures ' +
+                    sample.ratio + ':1 (' + sample.colour + ' on ' + sample.background +
+                    '), needs ' + needed + ':1.');
             });
         }
+        await page.emulateMedia({ colorScheme: 'light', contrast: 'no-preference' });
         await page.evaluate(function () { document.documentElement.removeAttribute('data-theme'); });
 
         // -- a narrow screen, and a magnified one -------------------------
@@ -561,7 +711,10 @@ const CONTRAST_HELPERS = `
         report.stage = 'complete';
     } catch (error) {
         report.stage = 'threw at ' + report.stage;
-        fail(String(error && error.stack ? error.stack : error));
+        report.failure = String(error && error.stack ? error.stack : error);
+        await browser.close();
+        emit();
+        return;
     }
 
     if (report.pageErrors.length) {
@@ -574,6 +727,5 @@ const CONTRAST_HELPERS = `
     }
 
     await browser.close();
-    console.log('RESULT ' + JSON.stringify(report));
-    process.exit(0);
+    emit();
 })();

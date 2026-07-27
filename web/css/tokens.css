@@ -324,11 +324,18 @@
    * where the surface behind them is neither a light theme nor a dark one.
    * They are lightened enough to hold against that ground, and the lamp that
    * uses them is given a distinct shape as well, because a lamp is the one
-   * indicator with no room for a word inside it. */
+   * indicator with no room for a word inside it.
+   *
+   * Measured against that ground rather than judged by eye. The two that were
+   * short of the three to one a graphical indicator needs were the two that
+   * mean something is wrong -- the red at two point two six and the grey at
+   * two point one -- so the lamp was at its least legible in precisely the
+   * condition an operator glances at it to check. Both are lifted here. The
+   * green and the amber clear it as they stand. */
   --mx-status-success-on-brand: #46d07f;
   --mx-status-warning-on-brand: #f0b429;
-  --mx-status-critical-on-brand: #ff6b5e;
-  --mx-status-offline-on-brand: #8b96a0;
+  --mx-status-critical-on-brand: #ff9d92;
+  --mx-status-offline-on-brand: #b9c2cb;
 
   /* -- telephony -------------------------------------------------------------
    *
@@ -832,8 +839,8 @@
 
   --mx-status-success-on-brand: #46d07f;
   --mx-status-warning-on-brand: #f0b429;
-  --mx-status-critical-on-brand: #ff6b5e;
-  --mx-status-offline-on-brand: #8b96a0;
+  --mx-status-critical-on-brand: #ff9d92;
+  --mx-status-offline-on-brand: #b9c2cb;
 
   --mx-telephony-inbound-text: #14555c;
   --mx-telephony-inbound-background: #dff1f3;
@@ -1051,8 +1058,18 @@
 
 /* An operating system asking for more contrast is asking for this theme, and
  * should get it without anybody having to find the switch. An explicit choice
- * still wins, which is why this is scoped to a page that has not made one. */
-@media (prefers-contrast: more) {
+ * still wins, which is why this is scoped to a page that has not made one.
+ *
+ * It has to be asked twice, once per colour scheme. More contrast means "move
+ * the ink further from the ground", and which direction that is depends
+ * entirely on which ground is underneath. Blackening the ink is right on a
+ * white page and catastrophic on a dark one: an operator whose system asks for
+ * high contrast and dark mode together — the combination a low vision operator
+ * is most likely to be running — was reading black text on the dark canvas at
+ * between one point nought four and one point two eight to one, which is
+ * indistinguishable from a blank screen. The very person the theme exists for
+ * was the only one it broke. */
+@media (prefers-color-scheme: light) and (prefers-contrast: more) {
   :root:not([data-theme]) {
     --mx-text-primary: #000000;
     --mx-text-secondary: #1a1a1a;
@@ -1063,6 +1080,39 @@
     --mx-border-strong: #000000;
     --mx-border-focus: #0b3d91;
     --mx-focus-ring-width: 3px;
+    --mx-elevation-raised: none;
+    --mx-elevation-floating: none;
+    --mx-elevation-overlay: none;
+    --mx-elevation-modal: none;
+  }
+}
+
+/* The same request, answered in the other direction: the inks go up towards
+ * white rather than down towards black, and the grounds go down towards it. */
+@media (prefers-color-scheme: dark) and (prefers-contrast: more) {
+  :root:not([data-theme]) {
+    --mx-text-primary: #ffffff;
+    --mx-text-secondary: #f0f0f0;
+    --mx-text-tertiary: #e0e0e0;
+    --mx-text-disabled: #a8a8a8;
+
+    /* Pure black under white ink, so nothing sits at a middling lightness
+     * where the two meet. */
+    --mx-background-canvas: #000000;
+    --mx-background-surface: #000000;
+    --mx-background-surface-elevated: #0a0a0a;
+    --mx-background-surface-subtle: #000000;
+    --mx-background-code: #000000;
+
+    --mx-border-default: #ffffff;
+    --mx-border-subtle: #ffffff;
+    --mx-border-strong: #ffffff;
+    --mx-border-focus: #ffd54a;
+    --mx-focus-ring-width: 3px;
+
+    /* The brand as ink has to clear white-on-black's neighbourhood too. */
+    --mx-brand-text: #9fd0ff;
+
     --mx-elevation-raised: none;
     --mx-elevation-floating: none;
     --mx-elevation-overlay: none;
