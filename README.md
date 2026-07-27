@@ -61,7 +61,7 @@ web/           the console -- vanilla markup and scripting, no build step
 iso/           the bootable image build: five stages and a boot test
 scripts/       the staging scripts, the exclusion audit, the privileged helper
 config/        engine, service, network, privilege, and appliance templates
-tests/         the quality assurance suite -- three hundred forty-two tests
+tests/         the quality assurance suite -- four hundred eighty-five tests
 docs/          vision, benchmarks, architecture, user guide, runbook, assurance
 ```
 
@@ -220,11 +220,12 @@ designed to do and what has been demonstrated is real.
 - **No real interface card has ever been driven by this code.** Every hardware
   test uses a simulated fixture. The drivers are compiled into the image and
   the bring-up path is written, but no B410P or TDM410P has been brought up.
-- **The console is served over a secured transport, but its certificate has
-  not been generated on a real appliance at first boot.** The listener, the
-  handshake and the sign in over it are exercised by the suite, and the
-  generator has been run and proved idempotent. The service unit that runs it
-  before the console starts has not been watched on a booting machine.
+- **The console is served over a secured transport.** The listener, the
+  handshake and a sign in over it are exercised by the suite, and the
+  generator has been run and proved idempotent. On the finished image the
+  generation service starts during the boot and reports itself working; the
+  boot test stops at the login prompt, so the certificate it produces on a real
+  first boot has been seen to be started and not seen to be finished.
 - **The disk installer is proved in rehearsal only.** It runs end to end and
   writes nothing; it has not yet laid an appliance down on a real disk.
 

@@ -1,18 +1,26 @@
 # Quality Assurance Report
 
 Author: Agent Five, Quality Assurance role.
-Verdict: **PASS.** Three hundred forty-two tests, zero failures, zero errors,
-zero skipped.
+Verdict: **PASS.** Four hundred eighty-five tests, zero failures, zero errors,
+one skipped.
 
 This report is written against a suite that was actually executed, not
 described. Every figure below was read off a run, and the run is reproducible
 with `make test`.
 
+**Read that sentence sceptically, because an earlier version of this document
+was wrong about it.** The header used to claim three hundred forty-two tests
+with nothing skipped, and it went on claiming it after the count had changed.
+An external reviewer running the same suite got a different result again. Run
+the suite. Do not quote this document. What the third pass below found is that
+a green suite was never evidence the product worked, because the one thing the
+product most needed to do was replaced by a mock in every test that touched it.
+
 ## Result
 
 ```
-Ran three hundred forty-two tests in roughly twenty-seven seconds
-OK
+Ran four hundred eighty-five tests in roughly forty-five seconds
+OK (skipped=one)
 ```
 
 | Suite | Tests | Covers |
@@ -22,10 +30,17 @@ OK
 | `test_engine_and_trunks.py` | thirty-nine | the engine client, retry timing, the trunk state machine, live state |
 | `test_store_and_hardware.py` | thirty-one | configuration drift detection and legacy hardware enumeration |
 | `test_security_and_transport.py` | sixty-three | credentials, sessions, request parsing, task execution |
+| `test_transport_security.py` | sixty-five | the secured listener, certificate generation and upload, the redirect port |
 | `test_operations.py` | ninety-five | privileged operations, telephony objects, menus, queues, conference rooms, the firewall, diagnostics, backup |
-| `test_constraint_one.py` | nineteen | Constraint One at all four enforcement points |
+| `test_privileged_path.py` | eighteen | the real privileged daemon over a real socket, with nothing on the path replaced |
+| `test_broadcast_coalescing.py` | seventeen | the coalescing window, the bypass list, and the cached state snapshot |
+| `test_preflight.py` | thirty-three | the check that refuses an installation before it half completes |
+| `test_constraint_one.py` | twenty-nine | Constraint One at all four enforcement points, and the image build |
 | `test_integration.py` | forty-one | end to end over real sockets, including concurrency |
 | `test_browser.py` | two | the console, executed in a real browser against a real appliance |
+
+The one skipped test needs a certificate the run could not produce, and says so
+rather than passing quietly.
 
 ## The specification's named test cases
 
@@ -433,6 +448,33 @@ This is presentation rather than function. It is recorded because a console
 full of errors during a normal boot teaches an operator to ignore errors, and
 an operator who ignores errors will ignore the one that matters.
 
+## The finished image, verified by starting it
+
+The image is built by five stages and then started in an emulator, and the
+console transcript is read rather than assumed. The last build produced an
+image of roughly one point two gibibytes carrying both boot paths — a legacy
+boot record for older machines and a firmware boot image for modern ones, in a
+hybrid partition table so the same file can be burned or written to a flash
+device.
+
+What the final boot showed, in the transcript:
+
+- both required markers, the appliance's own console message and a login
+  prompt;
+- the machine named itself correctly, which an earlier image did not;
+- no mention of address allocation of any kind;
+- no failed service unit;
+- thirty-eight lines of console output, down from fifty-three before the live
+  boot machinery was given the directories it reaches for;
+- the certificate generation service starting during the boot and reporting
+  itself working. The test stops the machine at the login prompt, so that
+  service was seen to start and was not seen to finish. That is the honest
+  limit of what this proves.
+
+Two warnings remain, both from the live boot machinery's own scripts using a
+deprecated form of an ownership command. They are inside the boot image, which
+this build deliberately does not rebuild, and cannot be removed from here.
+
 ## What this pass does not claim
 
 - **No real hardware has been driven.** Nothing in this repository shows a real
@@ -450,11 +492,12 @@ an operator who ignores errors will ignore the one that matters.
   the standard library, the session cookie carries the attribute that keeps a
   browser from ever sending it over plain transport, and a plain port answers
   only by redirecting to the secured one. A real handshake against a real
-  listener, completing a real sign in, is exercised by the suite. What has not
-  been shown is the generation path on a real machine at first boot: the
-  generator has been run directly and proved idempotent, but the service unit
-  that runs it before the console starts has not been observed on a booting
-  appliance. See the certificate risks recorded below.
+  listener, completing a real sign in, is exercised by the suite. The
+  generation service has since been observed starting on a booting image and
+  reporting itself working, so it is no longer merely asserted — but the boot
+  test stops the machine at the login prompt, so the certificate that service
+  produces has not been seen to exist. See the certificate risks recorded
+  below.
 
 ## Transport security — what was done, and what is still exposed
 
