@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable
 
 from . import backup, entities, firewall, httpd, numerals, sysops
-from .confstore import DriftDetected
+from .confstore import DocumentRefused, DriftDetected
 from .httpd import Request, Response, Router
 from .logging_setup import get_logger
 from .trunks import TrunkState
@@ -208,17 +208,58 @@ class _Guard:
 
 
 def _health(context: Any, request: Request) -> Response:
-    """A summary safe to serve without a session, used by monitoring."""
+    """A summary safe to serve without a session, used by monitoring.
+
+    This is the route something outside the appliance polls, and it is very
+    often the only signal anybody watches. It therefore has to answer the
+    question a monitor is really asking -- can this site make and receive calls
+    -- rather than the narrower one of whether the process is up.
+
+    It used to answer the narrower one, and reported the appliance healthy with
+    every trunk dead, because no alarm existed for a trunk and the engine was
+    still connected. A monitor watching this route saw green through a total
+    loss of dialtone. The registered trunk count is now part of the answer, and
+    it names which trunks are down rather than only counting them, so an
+    operator reaching this from a telephone learns something they can act on.
+    """
     snapshot = context.state.snapshot()
+    alarms = list(context.state.alarms.values())
+
+    registry = getattr(context, "trunks", None)
+    declared = list(getattr(registry, "all", lambda: [])()) if registry else []
+    registered = [
+        trunk for trunk in declared if getattr(trunk.state, "value", "") == "registered"
+    ]
+    unregistered = [
+        trunk.name
+        for trunk in declared
+        if getattr(trunk.state, "value", "") != "registered" and trunk.enabled
+    ]
+
     return Response.json(
         {
             "product": "Legacy-to-Modern IPBX Appliance",
             "healthy": bool(snapshot.get("engine_connected"))
-            and not context.state.alarms,
+            and not alarms
+            and not unregistered,
             "engine_connected": snapshot.get("engine_connected"),
             "uptime": numerals.spell_duration(int(snapshot.get("uptime_seconds", 0))),
             "active_calls": numerals.spell_integer(int(snapshot.get("active_calls", 0))),
-            "alarm_count": numerals.spell_integer(len(context.state.alarms)),
+            "alarm_count": numerals.spell_integer(len(alarms)),
+            # Named, not merely counted. This is frequently the only route an
+            # operator can reach from a telephone, and a number alone sends
+            # them to a terminal to find out which.
+            "alarms": [
+                {
+                    "key": alarm.key,
+                    "severity": alarm.severity,
+                    "message": alarm.message,
+                }
+                for alarm in alarms
+            ],
+            "trunks_registered": numerals.spell_integer(len(registered)),
+            "trunks_declared": numerals.spell_integer(len(declared)),
+            "trunks_not_registered": unregistered,
             "assigns_addresses": False,
             "address_allocation_findings": numerals.spell_integer(
                 len(getattr(context, "audit_findings", ()) or ())
@@ -599,7 +640,13 @@ def _save_configuration(context: Any, request: Request) -> Response:
     if not isinstance(payload, dict):
         return Response.error(400, "the configuration document must be a mapping")
 
-    document = context.store.save(payload)
+    try:
+        document = context.store.save(payload)
+    except DocumentRefused as refusal:
+        # A refusal here is the operator's mistake or somebody's attempt, and
+        # either way it is the caller's problem rather than a server fault.
+        return Response.error(422, str(refusal))
+
     context.trunks.declare_many(document.get("trunks", []) or [])
     context.state.touch()
     return Response.json(

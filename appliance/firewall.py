@@ -23,6 +23,8 @@ having passed the schema first.
 from __future__ import annotations
 
 import ipaddress
+import re
+
 from typing import Any, Iterable, Mapping
 
 from . import numerals
@@ -128,6 +130,37 @@ def _port_expression(ports: Iterable[Any]) -> str:
     return "{ " + ", ".join(pieces) + " }" if len(pieces) > 1 else pieces[0]
 
 
+
+#: Characters that would end the rule they appear in, or the comment they sit
+#: inside, and begin something the appliance never wrote.
+_UNSAFE_IN_COMMENT = re.compile(r'[\r\n"\\\x00-\x1f\x7f]')
+
+
+def _safe_comment(name: str) -> str:
+    """Return a rule name fit to sit inside a quoted comment, or refuse it.
+
+    The ruleset this builds is loaded by root. A name carrying a quotation mark
+    closes the comment; a name carrying a newline ends the rule and starts a new
+    one, and a new line in this file is a new instruction.
+
+    A security review turned that into a working attack: a rule name containing
+    a line break introduced a redirection chain that sent call signalling to a
+    host of the attacker's choosing. It was accepted by the syntax check the
+    privileged helper gates on, because it was perfectly valid syntax — which is
+    why syntax validity is not the thing to rely on here.
+
+    Refused rather than stripped. A name that cannot be written is a name
+    somebody should be told about, and silently rewriting it would leave the
+    operator looking at a rule that is not the one they are reading.
+    """
+    if _UNSAFE_IN_COMMENT.search(name):
+        raise FirewallError(
+            "a rule name may not contain a quotation mark, a line break or a "
+            "control character, because the name is written into the ruleset "
+            "that this appliance loads"
+        )
+    return name
+
 def render_ruleset(
     rules: Iterable[Mapping[str, Any]],
     management_port: int,
@@ -206,7 +239,7 @@ def render_ruleset(
         if not rule.get("enabled", True):
             continue
 
-        name = str(rule.get("name", "an unnamed rule"))
+        name = _safe_comment(str(rule.get("name", "an unnamed rule")))
         service_name = str(rule.get("service", "")).strip().lower()
         service = SERVICES.get(service_name)
         if service is None:

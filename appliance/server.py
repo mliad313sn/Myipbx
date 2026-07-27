@@ -517,8 +517,50 @@ class Appliance:
         coalescing flush; see the topic sets in the transport module for which
         is which.  Nothing is offered at all when no dashboard is connected.
         """
+        if topic == "trunk.transition":
+            self._note_trunk_health(payload)
+
         if self.hub.connection_count:
             self.hub.publish(topic, payload)
+
+    #: Trunk states in which the appliance cannot place or receive a call on
+    #: that trunk.  Registering is deliberately absent: a trunk on its way up
+    #: is not a fault, and alarming on it would alarm on every start.
+    _TRUNK_DOWN_STATES = frozenset({"retrying", "failed", "unknown", "unconfigured"})
+
+    def _note_trunk_health(self, payload: dict[str, Any]) -> None:
+        """Raise or clear an alarm as a trunk leaves or regains registration.
+
+        A carrier dropping is the commonest real telephony outage there is, and
+        it was the one condition the appliance treated as unremarkable: the
+        transition was published, the console redrew a table, and nothing else
+        happened. No alarm existed for it, so the dashboard's alarm panel stayed
+        empty and the health route went on reporting the appliance healthy while
+        the site had no dialtone. Anything polling that route -- which is the
+        obvious way to monitor an appliance -- saw green through a total loss of
+        service.
+        """
+        name = str(payload.get("trunk", "")).strip()
+        if not name:
+            return
+
+        key = f"trunk-down-{name}"
+        state = str(payload.get("to", "")).strip().lower()
+        reason = str(payload.get("reason", "")).strip()
+
+        if state in self._TRUNK_DOWN_STATES:
+            self.state.raise_alarm(
+                key,
+                "critical",
+                f"the trunk named {name} is not registered",
+                (
+                    f"calls over this trunk cannot be placed or received; the "
+                    f"engine reported the state {state}"
+                    + (f" because {reason}" if reason else "")
+                ),
+            )
+        else:
+            self.state.clear_alarm(key)
 
     # -- socket upgrade -----------------------------------------------------
 

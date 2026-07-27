@@ -380,7 +380,37 @@ class TrunkRegistry:
             trunk.registered_at = self._clock()
             trunk.attempts = 0
         self._transition(trunk, target, f"the engine reported the state {raw_state}")
+
+        # A trunk the engine has just reported as lost must have something
+        # working on it again, and until now nothing did.
+        #
+        # The driver loop returns when a registration succeeds, so the task
+        # supervising that trunk ends. When the carrier later dropped, this
+        # method moved the trunk to retrying and scheduled nothing: no task
+        # existed, no next attempt was set, and the trunk sat in a state whose
+        # own name promises otherwise. The runbook told the operator that a
+        # trunk in retrying recovers by itself, so they waited out an outage
+        # that nothing was working on.
+        if target in (TrunkState.RETRYING, TrunkState.FAILED):
+            self._resume(trunk)
+
         return trunk
+
+    def _resume(self, trunk: Trunk) -> None:
+        """Put a driver back on a trunk that has fallen out of registration."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # Applied outside a running loop, which happens in tests that drive
+            # transitions directly. There is nothing to schedule onto.
+            return
+
+        if self._start_one(trunk):
+            _LOG.info(
+                "a driver was started again for the trunk named %s after the "
+                "engine reported it lost",
+                trunk.name,
+            )
 
     # -- transitions -------------------------------------------------------
 

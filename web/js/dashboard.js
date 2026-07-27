@@ -85,6 +85,24 @@
         });
     }
 
+
+    /* The most useful line of a multi line explanation, for somewhere that can
+     * only hold one. A toast is six seconds and one line; the full text goes to
+     * the panel that stays on screen. */
+    function firstLineOf(text) {
+        var lines = String(text).split('\n').filter(function (line) {
+            return line.trim().length > 0;
+        });
+        if (!lines.length) { return ''; }
+        /* Prefer a line that reads as a cause rather than a heading. */
+        for (var index = lines.length - 1; index >= 0; index -= 1) {
+            if (/(missing|not match|failed|cannot|could not|absent|predates|no such)/i.test(lines[index])) {
+                return lines[index].trim().slice(0, 200);
+            }
+        }
+        return lines[lines.length - 1].trim().slice(0, 200);
+    }
+
     function toast(message, kind) {
         var holder = nodes.toastHolder;
         var note = element('div', 'toast ' + (kind || 'good'), numerals.sanitize(String(message)));
@@ -170,12 +188,26 @@
             : 'not connected';
         nodes.linkText.textContent = text;
 
+        /* The reason is the difference between a dead appliance and a severed
+         * uplink, and both used to read as the bare word "reconnecting".
+         *
+         * The socket client computes a specific reason on every path -- the
+         * socket is not open, the appliance has not spoken within the permitted
+         * number of intervals, a reconnection is scheduled, the socket reported
+         * an error -- and this function read only the state and discarded it.
+         * At three in the morning that is the difference between waking a site
+         * contact and raising a network ticket. */
         if (report.state === 'live') {
             nodes.linkAge.textContent = '';
-        } else if (typeof report.seconds === 'number') {
-            nodes.linkAge.textContent = '— last update ' + duration(report.seconds) + ' ago';
         } else {
-            nodes.linkAge.textContent = '';
+            var parts = [];
+            if (typeof report.seconds === 'number') {
+                parts.push('last update ' + duration(report.seconds) + ' ago');
+            }
+            if (report.reason) {
+                parts.push(report.reason);
+            }
+            nodes.linkAge.textContent = parts.length ? '— ' + parts.join('; ') : '';
         }
     }
 
@@ -686,9 +718,21 @@
             }).then(function (result) {
                 var payload = result.payload || {};
                 if (!result.ok || payload.succeeded === false) {
-                    var reason = payload.detail || payload.error || 'the operation failed';
-                    toast(reason, 'bad');
-                    return reason;
+                    /* What the helper printed is the diagnosis; detail is only
+                     * the fact that something failed.
+                     *
+                     * The precedence used to be the other way round, and it
+                     * threw away the one thing the technician needed. The
+                     * driver stage writes a real explanation -- which kernel
+                     * headers are missing, that the released driver archive
+                     * predates this kernel, which compiler is absent -- the
+                     * helper returns it, the appliance sends it, and the
+                     * console replaced it with "the helper reported a
+                     * failure". Somebody stood at the machine reading that. */
+                    var explanation = (payload.output || '').trim();
+                    var summary = payload.detail || payload.error || 'the operation failed';
+                    toast(explanation ? firstLineOf(explanation) : summary, 'bad');
+                    return explanation || summary;
                 }
                 toast('the operation named ' + verb + ' completed');
                 return payload.output || 'the operation completed';

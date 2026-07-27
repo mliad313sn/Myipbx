@@ -263,7 +263,14 @@ class SpanDocumentParsingTests(unittest.TestCase):
         self.assertEqual(span.channels[1].as_dict()["in_use"], False)
 
     def test_an_alarmed_span_is_reported_as_unhealthy(self) -> None:
-        span = parse_span_document('Span 2: TE2/0/1 "T2XXP (PCI) Card 0 Span 1" (RED)\n')
+        # The driver writes the alarm bare, after the signalling description,
+        # not inside parentheses. A fixture that parenthesises it agrees with a
+        # defect this suite once had: the parser read only inside parentheses,
+        # so a span in RED alarm reported "no alarm" and a technician fitting a
+        # card saw every span green on a dead line.
+        span = parse_span_document(
+            'Span 2: TE2/0/1 "T2XXP (PCI) Card 0 Span 1" (MASTER) HDB3/CCS/CRC4 RED\n'
+        )
         assert span is not None
         self.assertFalse(span.healthy)
         self.assertEqual(span.alarm, "RED")
@@ -272,6 +279,41 @@ class SpanDocumentParsingTests(unittest.TestCase):
         span = parse_span_document('Span 1: WCTDM/0 "A board"\n')
         assert span is not None
         self.assertTrue(span.healthy)
+
+    def test_a_bare_alarm_after_the_signalling_description_is_seen(self) -> None:
+        """The shape the driver actually emits, for each alarm it can raise.
+
+        This is the case the parser used to miss entirely, so each token is
+        asserted rather than trusting one example to stand for the rest.
+        """
+        for token in ("RED", "YELLOW", "BLUE", "LOS", "LFA", "NOTOPEN", "RECOVERING"):
+            with self.subTest(alarm=token):
+                span = parse_span_document(
+                    f'Span 1: TE4/0/1 "T4XXP (PCI) Card 0 Span 1" (MASTER) HDB3/CCS/CRC4 {token}\n'
+                )
+                self.assertIn(token, span.alarm)
+                self.assertFalse(
+                    span.healthy,
+                    f"a span reporting {token} was treated as healthy",
+                )
+
+    def test_the_signalling_description_alone_is_not_an_alarm(self) -> None:
+        """Every healthy span carries one, so reading it as a fault alarms all of them."""
+        for signalling in ("HDB3/CCS/CRC4", "B8ZS/ESF", "AMI/D4", "CCS/HDB3"):
+            with self.subTest(signalling=signalling):
+                span = parse_span_document(
+                    f'Span 1: TE4/0/1 "A board" (MASTER) {signalling}\n'
+                )
+                self.assertEqual(span.alarm, "no alarm")
+                self.assertTrue(span.healthy)
+
+    def test_several_bare_alarms_are_all_reported(self) -> None:
+        span = parse_span_document(
+            'Span 1: TE4/0/1 "A board" (MASTER) B8ZS/ESF LOS LFA\n'
+        )
+        self.assertIn("LOS", span.alarm)
+        self.assertIn("LFA", span.alarm)
+        self.assertFalse(span.healthy)
 
     def test_a_role_annotation_is_not_mistaken_for_an_alarm(self) -> None:
         """The master span of every machine carries a role annotation."""

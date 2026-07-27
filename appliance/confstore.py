@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -93,6 +94,46 @@ class DriftReport:
         return payload
 
 
+
+class DocumentRefused(ValueError):
+    """The source of truth carried something that must never be rendered."""
+
+
+#: Characters that end a line, or terminate a string, in the files rendered
+#: from this document.  A value containing one of these is not a value.
+_STRUCTURAL = re.compile(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def reject_structural_values(document: Any, _path: str = "") -> None:
+    """Refuse a document carrying a value that could become an instruction.
+
+    This is the last line rather than the first.  The entity routes validate
+    every field against the schema, and they should; this exists because the
+    rendered artefacts are loaded by root, and a defence that lives only at the
+    door somebody remembered to lock is not a defence.  Walking the whole
+    document costs nothing at the rate configurations are saved.
+
+    Refusal is deliberate rather than escaping.  There is no legitimate reason
+    for a trunk name or a route destination to contain a newline, so a document
+    that carries one is either a defect or an attack, and quietly repairing
+    either would hide it.
+    """
+    if isinstance(document, Mapping):
+        for key, value in document.items():
+            reject_structural_values(value, f"{_path}.{key}" if _path else str(key))
+    elif isinstance(document, (list, tuple)):
+        for index, value in enumerate(document):
+            reject_structural_values(value, f"{_path}[{index}]")
+    elif isinstance(document, str):
+        match = _STRUCTURAL.search(document)
+        if match:
+            where = _path or "a value"
+            raise DocumentRefused(
+                f"the value at {where} contains a character that would end a "
+                f"line in a generated file; a name or a destination cannot "
+                f"contain one"
+            )
+
 class ConfigurationStore:
     """Owns the source of truth document and the artefacts rendered from it."""
 
@@ -137,7 +178,24 @@ class ConfigurationStore:
         return document
 
     def save(self, document: Mapping[str, Any]) -> dict[str, Any]:
-        """Persist the source of truth atomically, bumping its revision."""
+        """Persist the source of truth atomically, bumping its revision.
+
+        Everything written here is later spliced, as literal text, into files
+        that root loads: the firewall ruleset and the telephony engine's
+        dialplan.  A value carrying a newline therefore stops being a value and
+        becomes a line, and a line in either of those files is an instruction.
+
+        That was not hypothetical.  A document posted to this route with a
+        newline inside a route's destination reached the dialplan as
+        ``same => n,System(...)``, which the engine executes; another with a
+        newline inside a firewall rule's name reached the ruleset as a
+        redirection chain sending call signalling to a chosen host, and it
+        passed the syntax check the privileged helper gates on because it was
+        perfectly valid syntax. The entity routes validated their input against
+        the schema and this one did not, so the same value refused at one door
+        was accepted at the other.
+        """
+        reject_structural_values(document)
         payload = dict(document)
         payload["revision"] = int(payload.get("revision", 0)) + 1
         payload["updated_at"] = time.time()
@@ -151,8 +209,15 @@ class ConfigurationStore:
     # -- rendering ----------------------------------------------------------
 
     def artefacts(self, document: Mapping[str, Any] | None = None) -> dict[str, str]:
-        """Render every engine configuration artefact into memory."""
+        """Render every engine configuration artefact into memory.
+
+        The document is checked again here, not only when it was saved. A
+        document can reach this point without passing through save -- edited on
+        disk during a recovery, restored from a backup, or written by a future
+        route -- and rendering is the moment before root reads the result.
+        """
         source = document if document is not None else self.load()
+        reject_structural_values(source)
         return {
             "pjsip.conf": render_endpoints(source, self.secrets),
             "extensions.conf": render_dialplan(source),

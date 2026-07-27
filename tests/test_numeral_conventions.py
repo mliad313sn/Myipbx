@@ -52,6 +52,10 @@ SENT_AS_NUMBERS = {
     "/api/hardware.channel_count",
     "/api/hardware.span_count",
     "/api/state.active_calls",
+    # How long an alarm has stood. The console spells this itself through the
+    # same duration helper the trunk tiles use, so that "three minutes" and
+    # "one hour" read the same wherever they appear.
+    "/api/state.alarms[].age_seconds",
     "/api/state.answered_calls",
     "/api/state.calls_completed",
     "/api/state.calls_started",

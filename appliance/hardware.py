@@ -71,6 +71,11 @@ _ALARM_TOKENS = frozenset(
     }
 )
 
+#: The line coding and framing a span was configured with, such as
+#: ``HDB3/CCS/CRC4`` or ``B8ZS/ESF``.  It appears on every healthy span and
+#: says nothing about health, so it must not be read as a fault.
+_SIGNALLING_DESCRIPTION = re.compile(r"^[A-Z0-9]+(/[A-Z0-9]+)+$")
+
 #: Annotations that describe the span's role rather than its health.  The
 #: master span of every machine carries one, so mistaking these for alarms
 #: would raise a false alarm on essentially every real appliance.
@@ -327,20 +332,56 @@ class HardwareInventory:
 def _classify_annotations(trailer: str) -> str:
     """Separate genuine span alarms from role annotations.
 
-    The driver appends parenthesised annotations to the span header.  Some of
-    them are faults and some of them merely describe the span's role, so the
-    tokens are classified rather than being taken wholesale as an alarm.  An
-    unrecognised token is reported as an alarm, because failing towards
+    The whole trailer is read, not only the parenthesised part of it, and that
+    distinction is the entire point of this function.
+
+    The driver writes the span's role in parentheses and its alarm bare:
+
+        Span 1: TE4/0/1 "T4XXP (PCI) Card 0 Span 1" (MASTER) HDB3/CCS/CRC4 RED
+
+    An earlier version scanned only inside parentheses.  It therefore saw
+    ``MASTER``, classified it as a role, and reported "no alarm" -- on a span
+    in RED alarm, which is a span with no line on it.  A technician fitting a
+    card saw every span green and concluded the cabling was good.  An appliance
+    that asserts health on a dead line is worse than one that says nothing.
+
+    The set of alarm tokens below existed the whole time and was never
+    consulted, and the test fixture wrote the alarm inside parentheses, so the
+    suite agreed with the defect.  Both are corrected.
+
+    An unrecognised token is reported as an alarm, because failing towards
     visibility is the correct bias for a fault indicator.
     """
+    text = trailer or ""
     tokens: list[str] = []
-    for annotation in _ANNOTATION.findall(trailer or ""):
+
+    # Inside parentheses first, then everything outside them, so that a role
+    # marker and a bare alarm on the same line are both seen.
+    for annotation in _ANNOTATION.findall(text):
         tokens.extend(part.strip().upper() for part in annotation.split(",") if part.strip())
 
-    alarms = [token for token in tokens if token not in _ROLE_TOKENS]
+    outside = _ANNOTATION.sub(" ", text)
+    for part in re.split(r"[\s,]+", outside):
+        cleaned = part.strip().upper()
+        if cleaned:
+            tokens.append(cleaned)
+
+    # The signalling description is not a health report.  It names the line
+    # coding and framing the span was configured with, and it appears on every
+    # healthy span, so it is not evidence of anything.
+    alarms = [
+        token
+        for token in tokens
+        if token not in _ROLE_TOKENS and not _SIGNALLING_DESCRIPTION.match(token)
+    ]
     if not alarms:
         return "no alarm"
-    return " ".join(alarms)
+
+    # Ordered so the reader sees the same words the driver used, without
+    # repeating one that appeared both inside and outside the parentheses.
+    seen: set[str] = set()
+    ordered = [token for token in alarms if not (token in seen or seen.add(token))]
+    return " ".join(ordered)
 
 
 def _read_identifier(path: Path) -> int | None:
