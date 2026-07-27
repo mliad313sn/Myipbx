@@ -40,9 +40,11 @@ test-concurrency: ## run only the one hundred concurrent session scenarios
 check: check-shell check-python check-browser ## run every syntax gate
 
 .PHONY: check-shell
-check-shell: ## check every staging script for a syntax fault
-	@for script in scripts/*.sh scripts/lib/*.sh tests/*.sh iso/*.sh iso/lib/*.sh iso/stages/*.sh; do \
-		[ -f "$$script" ] || continue; \
+check-shell: ## check every shell script in the repository for a syntax fault
+	@# Found rather than listed. A list of directories has to be extended by
+	@# whoever adds a new one, and the disk installer was written into a new
+	@# directory and went unchecked until somebody noticed.
+	@find scripts iso tests -type f -name '*.sh' -print | sort | while read -r script; do \
 		bash -n "$$script" || exit 1; \
 		printf '  the script at %s is well formed\n' "$$script"; \
 	done

@@ -30,11 +30,13 @@ printf '\n'
 # operator midway through an installation, so it is caught here first.
 
 printf '  checking the shell scripts\n'
-for script in "${REPOSITORY_ROOT}"/scripts/*.sh "${REPOSITORY_ROOT}"/scripts/lib/*.sh \
-            "${REPOSITORY_ROOT}"/iso/*.sh "${REPOSITORY_ROOT}"/iso/lib/*.sh "${REPOSITORY_ROOT}"/iso/stages/*.sh; do
-    [[ -f "${script}" ]] || continue
+# Every script is found rather than listed by directory.  A list has to be
+# extended by whoever adds a directory, and one written into a new directory
+# went unchecked until somebody noticed it was missing.
+while IFS= read -r script; do
     bash -n "${script}" || { printf '  the script at %s has a syntax fault\n' "${script}"; exit 1; }
-done
+done < <(find "${REPOSITORY_ROOT}/scripts" "${REPOSITORY_ROOT}/iso" "${REPOSITORY_ROOT}/tests" \
+             -type f -name '*.sh' -print | sort)
 
 printf '  checking the control plane sources\n'
 python3 -m compileall -q "${REPOSITORY_ROOT}/appliance" >/dev/null

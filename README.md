@@ -194,6 +194,37 @@ enumerated, cards are named in plain language, drivers are compiled and loaded
 as an observable staged operation with plain language failure reasons, and
 detected spans are mapped to logical trunks by choosing rather than typing.
 
+## What this product is deliberately not for
+
+A product that will not say what it is not for cannot be evaluated. Each item
+below is a resource freed for the two places this appliance can actually be
+first: legacy hardware bring-up, and managing a fleet of appliances at sites
+with no senior administrator.
+
+- **Multi-tenancy.** One organisation per appliance, permanently.
+- **Unified communications.** No chat, presence, video or meetings. This is a
+  telephony appliance for sites where the phone line is the reliable channel
+  and the internet is not.
+- **Feature parity with mature PBX distributions.** They have a decade of
+  accumulated features and communities of thousands. That race cannot be won,
+  and attempting it would mean competing everywhere and winning nowhere.
+- **Fax handling, and an end-user self-service portal.**
+- **Greenfield sites with good internet.** Those should buy a hosted service,
+  and this document would rather say so than sell them something.
+
+## What has not been proved
+
+Stated here rather than buried, because the gap between what this appliance is
+designed to do and what has been demonstrated is real.
+
+- **No real interface card has ever been driven by this code.** Every hardware
+  test uses a simulated fixture. The drivers are compiled into the image and
+  the bring-up path is written, but no B410P or TDM410P has been brought up.
+- **The console still speaks plain HTTP.** An administrator password crosses
+  the site network in clear text. This is a known blocking defect.
+- **The disk installer is proved in rehearsal only.** It runs end to end and
+  writes nothing; it has not yet laid an appliance down on a real disk.
+
 ## Development
 
 ```bash

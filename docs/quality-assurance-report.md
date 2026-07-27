@@ -417,6 +417,18 @@ created in the image so the scripts do their work quietly, and the disc no
 longer describes itself as a package disc, which stops the machinery trying to
 read package indexes that were never there.
 
+A related fault was found the same way and was not cosmetic. The live session
+account name was being passed as a boot argument, and it was set to the
+appliance's own name — which the image already uses for the system account that
+owns the control plane. The live boot stopped and reported that the user already
+existed. The name is no longer passed; only the host name is, which was the part
+that was needed.
+
+Two warnings remain, both emitted by the live boot machinery's own scripts using
+a deprecated form of an ownership command. They are inside the boot image, which
+this build deliberately does not rebuild, so they cannot be removed from here.
+They are recorded rather than hidden.
+
 This is presentation rather than function. It is recorded because a console
 full of errors during a normal boot teaches an operator to ignore errors, and
 an operator who ignores errors will ignore the one that matters.
