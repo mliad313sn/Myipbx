@@ -237,7 +237,7 @@
             item.classList.toggle('active', here);
             /* The fill says which section is open to somebody looking at it.
              * This says the same thing to somebody who is not: without it the
-             * navigation announces twenty-one identical buttons and none of
+             * navigation announces twenty-two identical buttons and none of
              * them is the one you are in. */
             if (here) {
                 item.setAttribute('aria-current', 'page');
@@ -500,6 +500,58 @@
                     body.appendChild(row);
                 });
             });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* who changed what                                                    */
+    /* ------------------------------------------------------------------ */
+
+    function loadJournal() {
+        return request('/api/journal?limit=200').then(function (result) {
+            var payload = result.payload || {};
+            var holder = nodes.journalTable;
+            clear(holder);
+
+            var entries = payload.entries || [];
+            var table = element('table', 'grid');
+            var head = element('thead');
+            var headRow = element('tr');
+            ['when', 'how long ago', 'who', 'from', 'what', 'where', 'outcome']
+                .forEach(function (label) {
+                    headRow.appendChild(element('th', null, label));
+                });
+            head.appendChild(headRow);
+            table.appendChild(head);
+
+            var body = element('tbody');
+            if (!entries.length) {
+                emptyRow(body, 7, 'nothing has been recorded on this appliance yet');
+            }
+            entries.forEach(function (entry) {
+                var row = element('tr');
+                /* The moment, the account and the address are identifiers, so
+                 * they keep their digits. The age is a duration and arrives
+                 * already spelled. */
+                cell(row, entry.at || '');
+                cell(row, entry.age || '');
+                cell(row, entry.actor || '');
+                cell(row, entry.source || '');
+                cell(row, entry.action || '');
+                cell(row, entry.target || '');
+                cell(row, numerals.sanitize(entry.outcome || ''),
+                    /^accepted|completed/.test(entry.outcome || '')
+                        ? 'registered' : 'failed');
+                body.appendChild(row);
+            });
+            table.appendChild(body);
+
+            var scroller = element('div', 'table-scroll');
+            scroller.setAttribute('tabindex', '0');
+            scroller.setAttribute('role', 'region');
+            scroller.setAttribute('aria-label', 'the record of changes');
+            scroller.appendChild(table);
+            holder.appendChild(scroller);
+        });
     }
 
     /* ------------------------------------------------------------------ */
@@ -1394,6 +1446,7 @@
         configuration: function () { loadDrift(); },
         tasks: function () { loadTasks(); },
         logs: function () { loadLogCatalogue(); },
+        journal: function () { loadJournal(); },
         backup: function () {},
         constraints: function () { loadConstraints(); }
     };
@@ -1558,6 +1611,7 @@
             ['backupButton', 'backup-button'], ['restoreForm', 'restore-form'],
             ['restoreFile', 'restore-file'], ['restoreOutcome', 'restore-outcome'],
             ['restoreCredentials', 'restore-credentials'],
+            ['journalTable', 'journal-table'], ['journalRefresh', 'journal-refresh'],
             ['constraintAllocation', 'constraint-allocation'],
             ['allocationStatement', 'allocation-statement'],
             ['allocationFindings', 'allocation-findings'],
@@ -1648,6 +1702,7 @@
 
         nodes.backupButton.addEventListener('click', downloadBackup);
         nodes.restoreForm.addEventListener('submit', restoreBackup);
+        nodes.journalRefresh.addEventListener('click', loadJournal);
 
         nodes.confirmYes.addEventListener('click', function () { settleConfirm(true); });
         nodes.confirmNo.addEventListener('click', function () { settleConfirm(false); });

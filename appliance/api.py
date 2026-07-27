@@ -56,6 +56,7 @@ def build_router(context: Any) -> Router:
     router.get("/api/trunks", guard.read(lambda request: _trunks(context)))
     router.get("/api/tasks", guard.read(lambda request: _tasks(context)))
     router.get("/api/sessions", guard.read(lambda request: _sessions(context)))
+    router.get("/api/journal", guard.read(lambda request: _journal_entries(context, request)))
     router.get("/api/constraints", guard.read(lambda request: _constraints(context)))
     router.get("/api/configuration", guard.read(lambda request: _configuration(context)))
     router.get(
@@ -141,14 +142,62 @@ class _Guard:
         return wrapped
 
     def write(self, handler: Callable[[Request], Any]) -> Callable[[Request], Any]:
+        """Authenticate, check the origin, run the handler, record what happened.
+
+        The recording lives here rather than in the handlers because there are
+        a write route for every change this console can make, and there will be more next year. A record
+        each handler had to remember to make is a record that is complete on
+        the day it is written and incomplete thereafter; one made by the thing
+        every write route already passes through cannot be forgotten.
+        """
+
         def wrapped(request: Request) -> Any:
             refusal = self._authenticate(request)
             if refusal is not None:
+                self._record(request, refusal, "refused: no valid session")
                 return refusal
             refusal = self._check_origin(request)
-            return refusal if refusal is not None else handler(request)
+            if refusal is not None:
+                self._record(request, refusal, "refused: the origin was not permitted")
+                return refusal
+            try:
+                result = handler(request)
+            except Exception as error:
+                # Recorded before it is re-raised, because an operation that
+                # ended in a fault is exactly the one somebody comes looking
+                # for afterwards.
+                self._record(request, None, f"the request raised {type(error).__name__}")
+                raise
+            self._record(request, result, "")
+            return result
 
         return wrapped
+
+    def _record(self, request: Request, result: Any, note: str) -> None:
+        journal = getattr(self._context, "journal", None)
+        if journal is None:
+            return
+
+        session = getattr(request, "session", None)
+        actor = getattr(session, "username", "") or "an unauthenticated caller"
+        status = getattr(result, "status", None)
+        if note:
+            outcome = note
+        elif isinstance(status, int):
+            outcome = "accepted" if status < 400 else f"refused with status {status}"
+        else:
+            outcome = "completed"
+
+        try:
+            journal.record(
+                actor=actor,
+                source=getattr(request, "peer", "") or "an unrecorded address",
+                action=request.method,
+                target=request.path,
+                outcome=outcome,
+            )
+        except Exception:  # pragma: no cover - a journal must never break a change
+            _LOG.warning("an operation could not be recorded in the journal")
 
     def unauthenticated_write(
         self, handler: Callable[[Request], Any]
@@ -454,6 +503,17 @@ def _drift(context: Any) -> Response:
 # -- write handlers --------------------------------------------------------
 
 
+class _NoJournal:
+    """Stands in when a context has none, so nothing here has to test for it."""
+
+    def record(self, **_: Any) -> None:
+        return None
+
+
+def _journal(context: Any) -> Any:
+    return getattr(context, "journal", None) or _NoJournal()
+
+
 def _sign_in(context: Any, request: Request) -> Response:
     source = request.peer
 
@@ -475,6 +535,17 @@ def _sign_in(context: Any, request: Request) -> Response:
     if not context.credentials.verify(username, password):
         locked = context.throttle.record_failure(source)
         _LOG.warning("a sign in attempt from %s was refused", source)
+        # A refused attempt is the entry an operator investigating an intrusion
+        # comes looking for first, so it is recorded with the account that was
+        # tried. The password is not, and never is.
+        _journal(context).record(
+            actor=username or "an unnamed account",
+            source=source,
+            action="POST",
+            target="/api/session",
+            outcome="refused: the credentials were not accepted",
+            detail="this address is now locked out temporarily" if locked else "",
+        )
         return Response.error(
             401,
             "the credentials were not accepted"
@@ -488,6 +559,13 @@ def _sign_in(context: Any, request: Request) -> Response:
     context.throttle.record_success(source)
     token = context.sessions.create(username, source)
     _LOG.info("the administrator named %s signed in from %s", username, source)
+    _journal(context).record(
+        actor=username,
+        source=source,
+        action="POST",
+        target="/api/session",
+        outcome="accepted",
+    )
 
     attributes = [
         f"{SESSION_COOKIE_NAME}={token}",
@@ -502,6 +580,38 @@ def _sign_in(context: Any, request: Request) -> Response:
     return Response.json(
         {"signed_in": True, "username": username},
         headers={"Set-Cookie": "; ".join(attributes)},
+    )
+
+
+def _journal_entries(context: Any, request: Request) -> Response:
+    """The record of who changed what, newest first.
+
+    Reading this needs a session, like every other read on this appliance. It
+    is deliberately not open to monitoring: the record names accounts and the
+    addresses they worked from, which is more than an unauthenticated health
+    check has any business knowing.
+    """
+    journal = getattr(context, "journal", None)
+    if journal is None:
+        return Response.json({"entries": [], "count": numerals.spell_integer(0)})
+
+    try:
+        limit = int(request.query.get("limit", "100"))
+    except (TypeError, ValueError):
+        limit = 100
+
+    entries = journal.recent(limit=limit)
+    return Response.json(
+        {
+            "entries": entries,
+            "count": numerals.spell_integer(len(entries)),
+            "note": (
+                "this record names the account and the address behind every "
+                "change. it is a record of operations, not an evidentiary "
+                "chain: anybody who has become the administrator of this "
+                "machine can edit the file it is kept in."
+            ),
+        }
     )
 
 

@@ -24,6 +24,7 @@ from .entities import SecretStore
 from . import firewall as firewall_module
 from .httpd import HttpServer, Request, Response
 from .logging_setup import configure_logging, get_logger
+from .audit import AuditJournal
 from .netaudit import AddressAllocationAudit, AddressAllocationDetected
 from .security import CredentialStore, LoginThrottle, PasswordHasher, SessionStore
 from .state import ApplianceState
@@ -70,6 +71,10 @@ class Appliance:
             attempt_limit=self.config.login_attempt_limit,
             lockout_seconds=self.config.login_lockout_seconds,
         )
+        # Who changed what, and from where. Written by the guard that fronts
+        # every write route, so a route added later is recorded without anybody
+        # having to remember to record it.
+        self.journal = AuditJournal(self.config.journal_path)
 
         # -- live model ----------------------------------------------------
         self.state = ApplianceState()

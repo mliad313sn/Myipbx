@@ -39,7 +39,7 @@
 
 /* The first thing the keyboard reaches, and invisible until it does. A console
  * with a long navigation column is otherwise a console an operator has to tab
- * through twenty-one times to reach the thing they came for. */
+ * through twenty-two times to reach the thing they came for. */
 .mx-skip-link {
   position: absolute;
   left: var(--mx-space-8);

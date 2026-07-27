@@ -222,6 +222,11 @@ class ApplianceConfig:
     def credentials_path(self) -> Path:
         return self.state_path / "credentials.json"
 
+    @property
+    def journal_path(self) -> Path:
+        """Where the record of who changed what is kept."""
+        return self.state_path / "operations.jsonl"
+
     # -- validation --------------------------------------------------------
 
     def validate(self) -> None:

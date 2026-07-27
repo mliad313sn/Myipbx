@@ -13,7 +13,7 @@
 </head>
 <body>
 
-<!-- The console offers twenty-one sections in one column, so a keyboard
+<!-- The console offers twenty-two sections in one column, so a keyboard
      reaching the page lands in front of all of them. This is the way past. -->
 <a class="mx-skip-link" href="#main-content">skip to the console</a>
 
@@ -77,6 +77,7 @@
       <button type="button" class="nav-item" data-view="configuration">configuration</button>
       <button type="button" class="nav-item" data-view="tasks">tasks</button>
       <button type="button" class="nav-item" data-view="logs">logs</button>
+      <button type="button" class="nav-item" data-view="journal">who changed what</button>
       <button type="button" class="nav-item" data-view="backup">backup</button>
       <button type="button" class="nav-item" data-view="constraints">constraints</button>
     </nav>
@@ -411,6 +412,29 @@
             <button type="submit">read</button>
           </form>
           <pre class="log-view" id="log-view">choose a log and read it</pre>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-journal" hidden>
+        <section class="panel">
+          <h2>who changed what</h2>
+          <p class="hint">
+            every change made through this console, newest first, with the
+            account that asked for it and the address they asked from. request
+            bodies are never recorded: they carry telephone passwords, carrier
+            credentials and private keys, and a record of them would be a
+            second copy of every secret on this appliance.
+          </p>
+          <p class="hint">
+            this is a record of operations, not an evidentiary chain. anybody
+            who has become the administrator of this machine can edit the file
+            it is kept in.
+          </p>
+          <div class="actions">
+            <button type="button" id="journal-refresh">read the record</button>
+          </div>
+          <div id="journal-table"></div>
         </section>
       </section>
 
