@@ -432,10 +432,27 @@
           <p class="hint">
             restoring replaces this appliance's configuration and secrets with
             those in the archive. the appliance should be restarted afterwards.
+            the way this appliance secures itself — whether the console is
+            served over a secured transport, and the exclusion of address
+            allocation — is kept as it is now, so that recovering a dial plan
+            cannot quietly undo it.
           </p>
           <form id="restore-form" class="inline-form" autocomplete="off">
             <label for="restore-file">archive</label>
             <input type="file" id="restore-file" accept=".gz,.tgz,application/gzip" required>
+            <div class="field field-inline">
+              <label for="restore-credentials">
+                <input type="checkbox" id="restore-credentials"
+                       aria-describedby="restore-credentials-help">
+                also restore the administrator credential
+              </label>
+              <p class="field-help" id="restore-credentials-help">
+                left unticked, the password you sign in with now is kept. tick
+                this only when recovering an appliance whose password is lost,
+                because it puts back the password of the day the archive was
+                taken.
+              </p>
+            </div>
             <button type="submit" class="caution">restore from this archive</button>
           </form>
           <p class="notice" id="restore-outcome" hidden></p>

@@ -680,6 +680,122 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(restored["revision"], 3)
         self.assertTrue((self.root / "state/secrets.json").is_file())
 
+    # -- what a restore is not allowed to move ------------------------------
+
+    def test_an_archive_cannot_put_the_console_back_on_plain_transport(self) -> None:
+        """A backup taken before the certificate was installed carries the
+        appliance's settings as they were that day, including transport
+        security switched off. Restoring it to recover a dial plan put the
+        console back on plain transport at the next start, silently, and
+        nothing in the outcome said so. The site comes from the archive; the
+        posture stays where the operator left it.
+        """
+        (self.root / "appliance.json").write_text(
+            json.dumps({
+                "revision": 3,
+                "appliance": {"tls_enabled": True, "listen_port": 8443},
+            }),
+            encoding="utf-8",
+        )
+        self.context = _BackupContext(self.root)
+
+        hostile = self._archive({
+            "appliance.json": json.dumps({
+                "revision": 9,
+                "extensions": [{"number": "201"}],
+                "appliance": {"tls_enabled": False, "listen_port": 8088},
+            }).encode("utf-8"),
+        })
+
+        outcome = backup_module.restore(self.context, hostile)
+
+        settled = json.loads((self.root / "appliance.json").read_text(encoding="utf-8"))
+        self.assertIs(
+            settled["appliance"]["tls_enabled"], True,
+            "an uploaded archive switched transport security off",
+        )
+        # The rest of the archive still arrived: this holds one value back, it
+        # does not refuse the restore.
+        self.assertEqual(settled["revision"], 9)
+        self.assertEqual(settled["appliance"]["listen_port"], 8088)
+        self.assertIn("tls_enabled", outcome["held_back"])
+
+    def test_an_archive_cannot_switch_off_the_address_allocation_check(self) -> None:
+        """The one thing this product is built around is not negotiable by
+        upload."""
+        (self.root / "appliance.json").write_text(
+            json.dumps({
+                "revision": 1,
+                "appliance": {"fail_on_address_allocation_server": True},
+            }),
+            encoding="utf-8",
+        )
+        self.context = _BackupContext(self.root)
+
+        hostile = self._archive({
+            "appliance.json": json.dumps({
+                "revision": 2,
+                "appliance": {"fail_on_address_allocation_server": False},
+            }).encode("utf-8"),
+        })
+
+        backup_module.restore(self.context, hostile)
+
+        settled = json.loads((self.root / "appliance.json").read_text(encoding="utf-8"))
+        self.assertIs(settled["appliance"]["fail_on_address_allocation_server"], True)
+
+    def test_the_administrator_credential_is_kept_unless_it_is_asked_for(self) -> None:
+        """Recovering a dial plan and recovering a password are two decisions.
+
+        An archive is a file an operator can be handed. A restore that always
+        replaced the credential would let anyone holding last year's backup put
+        last year's password back onto a running appliance, locking out the
+        administrator who had changed it since.
+        """
+        payload, _ = backup_module.create(self.context)
+
+        credentials = self.root / "state/credentials.json"
+        credentials.write_text(
+            json.dumps({"username": "administrator", "credential": "the-current-one"}),
+            encoding="utf-8",
+        )
+
+        outcome = backup_module.restore(self.context, payload)
+
+        kept = json.loads(credentials.read_text(encoding="utf-8"))
+        self.assertEqual(
+            kept["credential"], "the-current-one",
+            "an archive replaced the password the administrator signs in with",
+        )
+        self.assertNotIn("credentials.json", outcome["written"])
+        self.assertIn("the administrator credential", outcome["held_back"])
+
+    def test_the_administrator_credential_is_restored_when_it_is_asked_for(self) -> None:
+        """An appliance whose password is lost has to be recoverable."""
+        payload, _ = backup_module.create(self.context)
+
+        credentials = self.root / "state/credentials.json"
+        credentials.write_text(
+            json.dumps({"username": "administrator", "credential": "the-current-one"}),
+            encoding="utf-8",
+        )
+
+        outcome = backup_module.restore(
+            self.context, payload, replace_credentials=True
+        )
+
+        put_back = json.loads(credentials.read_text(encoding="utf-8"))
+        self.assertEqual(put_back["credential"], "a-derivation")
+        self.assertIn("credentials.json", outcome["written"])
+
+    def test_an_archive_carrying_no_settings_block_restores_unchanged(self) -> None:
+        """The guard must not invent a settings block that was never there."""
+        payload, _ = backup_module.create(self.context)
+        outcome = backup_module.restore(self.context, payload)
+        settled = json.loads((self.root / "appliance.json").read_text(encoding="utf-8"))
+        self.assertNotIn("appliance", settled)
+        self.assertEqual(outcome["held_back"], ["the administrator credential"])
+
     def test_a_restored_file_is_owner_readable_only(self) -> None:
         payload, _ = backup_module.create(self.context)
         backup_module.restore(self.context, payload)

@@ -1278,14 +1278,22 @@
             return;
         }
 
+        var replaceCredentials = Boolean(
+            nodes.restoreCredentials && nodes.restoreCredentials.checked
+        );
+
         confirmAction(
             'restore from this archive',
-            'the configuration and secrets on this appliance will be replaced by those in the archive.'
+            'the configuration and secrets on this appliance will be replaced by those in the archive. ' +
+            (replaceCredentials
+                ? 'the administrator password will also be put back to what it was when the archive was taken, and the password you signed in with will stop working.'
+                : 'the password you signed in with is kept, as is the way this appliance secures itself.')
         ).then(function (answer) {
             if (!answer) {
                 return;
             }
-            return request('/api/restore', {
+            return request('/api/restore?replace_credentials=' +
+                (replaceCredentials ? 'yes' : 'no'), {
                 method: 'POST',
                 body: file,
                 headers: { 'Content-Type': 'application/gzip' }
@@ -1299,8 +1307,16 @@
                     return;
                 }
                 nodes.restoreOutcome.className = 'notice';
+                /* What was held back is said out loud. A restore that quietly
+                 * ignores part of what it was handed is as surprising as one
+                 * that quietly accepts all of it. */
+                var held = result.payload.held_back || [];
                 nodes.restoreOutcome.textContent = numerals.sanitize(
-                    'the backup was restored. ' + (result.payload.next_step || '')
+                    'the backup was restored. ' +
+                    (held.length
+                        ? 'kept as it was: ' + held.join(', ') + '. '
+                        : '') +
+                    (result.payload.next_step || '')
                 );
                 toast('the backup was restored');
             });
@@ -1541,6 +1557,7 @@
             ['logForm', 'log-form'], ['logView', 'log-view'],
             ['backupButton', 'backup-button'], ['restoreForm', 'restore-form'],
             ['restoreFile', 'restore-file'], ['restoreOutcome', 'restore-outcome'],
+            ['restoreCredentials', 'restore-credentials'],
             ['constraintAllocation', 'constraint-allocation'],
             ['allocationStatement', 'allocation-statement'],
             ['allocationFindings', 'allocation-findings'],

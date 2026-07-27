@@ -1023,8 +1023,17 @@ def _restore(context: Any, request: Request) -> Response:
     if not request.body:
         return Response.error(400, "the request carried no archive to restore")
 
+    # Replacing the administrator credential is a separate decision from
+    # recovering a configuration, so it is a separate answer. It arrives as a
+    # query value rather than in the body, because the body is the archive.
+    replace_credentials = str(
+        request.query.get("replace_credentials", "")
+    ).strip().lower() in {"yes", "true", "on"}
+
     try:
-        outcome = backup.restore(context, request.body)
+        outcome = backup.restore(
+            context, request.body, replace_credentials=replace_credentials
+        )
     except backup.RestoreRefused as error:
         return Response.error(422, str(error))
     except OSError as error:

@@ -185,15 +185,87 @@ def inspect(payload: bytes) -> dict[str, Any]:
     return {"members": found, "manifest": manifest}
 
 
-def restore(context: Any, payload: bytes) -> dict[str, Any]:
+#: Settings that describe how this appliance defends itself, rather than how
+#: this site's telephony is arranged. They are read out of the same document a
+#: backup carries, and they are the ones an archive must not be able to move.
+#:
+#: A backup taken before transport security was configured carries
+#: ``tls_enabled: false``. Restoring it put the console back on plain transport
+#: at the next start, silently, as a side effect of an operator recovering
+#: their dial plan. Nobody chose that, and nothing said it had happened. The
+#: same applies to the exclusion this product is built around: an archive must
+#: not be able to switch off the check that keeps an address allocation service
+#: from running here.
+PROTECTED_SETTINGS = (
+    "tls_enabled",
+    "tls_certificate",
+    "tls_private_key",
+    "fail_on_address_allocation_server",
+    "password_iterations",
+    "session_idle_seconds",
+    "maximum_sessions",
+)
+
+
+def _preserve_protected_settings(
+    document: dict[str, Any], context: Any
+) -> tuple[dict[str, Any], list[str]]:
+    """Keep this appliance's own defences across a restore.
+
+    The archive supplies the site: its trunks, its extensions, its routes. The
+    running appliance keeps its posture. Anything held back is named, because a
+    restore that quietly ignores part of what was handed to it is as
+    surprising as one that quietly accepts all of it.
+    """
+    incoming = document.get("appliance")
+    if not isinstance(incoming, dict):
+        return document, []
+
+    current_path = Path(context.config.configuration_document)
+    current: dict[str, Any] = {}
+    if current_path.is_file():
+        try:
+            loaded = json.loads(current_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = {}
+        if isinstance(loaded, dict) and isinstance(loaded.get("appliance"), dict):
+            current = loaded["appliance"]
+
+    held: list[str] = []
+    for name in PROTECTED_SETTINGS:
+        if name not in incoming:
+            continue
+        running = current.get(name, getattr(context.config, name, None))
+        if incoming[name] == running:
+            continue
+        held.append(name)
+        if name in current:
+            incoming[name] = current[name]
+        else:
+            del incoming[name]
+
+    return document, held
+
+
+def restore(
+    context: Any, payload: bytes, *, replace_credentials: bool = False
+) -> dict[str, Any]:
     """Validate an archive completely, then write it.
 
     Nothing is written until every member has passed inspection, so a bad
     archive cannot leave the appliance half restored.
+
+    The administrator credential is held back unless it is asked for by name.
+    An archive is a file an operator can be handed, and a restore that always
+    replaced the credential would make anyone holding an old backup able to put
+    the password of that day back onto a running appliance -- and would lock
+    out the administrator who had changed it since. Recovering a dial plan and
+    recovering a credential are two decisions, so they are asked as two.
     """
     description = inspect(payload)
     targets = _sources(context)
     written: list[str] = []
+    held_back: list[str] = []
 
     with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
         # Read every member into memory first.  A backup is small, and this
@@ -218,6 +290,15 @@ def restore(context: Any, payload: bytes) -> dict[str, Any]:
         if not isinstance(document, dict):
             raise RestoreRefused("the configuration document in the archive is not a mapping")
 
+        document, held_settings = _preserve_protected_settings(document, context)
+        if held_settings:
+            staged["appliance.json"] = json.dumps(document, indent=2).encode("utf-8")
+            held_back.extend(held_settings)
+
+        if not replace_credentials and "credentials.json" in staged:
+            del staged["credentials.json"]
+            held_back.append("the administrator credential")
+
         for name, content in staged.items():
             destination = targets.get(name)
             if destination is None:
@@ -226,15 +307,19 @@ def restore(context: Any, payload: bytes) -> dict[str, Any]:
             written.append(name)
 
     _LOG.warning(
-        "a backup was restored, replacing %d file or files; the appliance should "
-        "now be restarted so that every component reads the restored state",
+        "a backup was restored, replacing %d file or files and holding %d value or "
+        "values back; the appliance should now be restarted so that every "
+        "component reads the restored state",
         len(written),
+        len(held_back),
     )
 
     return {
         "restored": True,
         "written": written,
         "written_count": numerals.spell_integer(len(written)),
+        "held_back": held_back,
+        "held_back_count": numerals.spell_integer(len(held_back)),
         "created_at": description["manifest"].get("created_at", "an unrecorded time"),
         "next_step": (
             "restart the appliance so that every component reads the restored "

@@ -630,6 +630,27 @@ button.caution {
   outline-offset: var(--mx-focus-ring-offset);
 }
 
+/* A tick box inside a form that is otherwise a row of controls. The label
+ * wraps the box so the words are part of the target, which matters most for
+ * the operator standing at a rack rather than sitting at a desk. */
+.field-inline {
+  display: block;
+  margin: 0.4rem 0;
+}
+
+.field-inline label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.field-inline input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
 .form-holder { border-left: 3px solid var(--accent); }
 
 /* -- wizard -------------------------------------------------------------- */
