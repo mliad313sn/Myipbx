@@ -369,8 +369,11 @@
     }
 
     function renderEntityView(kind) {
+        return renderEntityViewInto(kind, byId('view-' + kind));
+    }
+
+    function renderEntityViewInto(kind, view) {
         var spec = specFor(kind);
-        var view = byId('view-' + kind);
         if (!spec || !view) {
             return Promise.resolve();
         }
@@ -755,6 +758,47 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* firewall                                                            */
+    /* ------------------------------------------------------------------ */
+
+    function loadFirewall() {
+        /* The rules themselves are an ordinary object list, so the same
+         * generated table and form serve them. */
+        renderEntityViewInto('firewall_rules', nodes.firewallRulesPanel);
+
+        return request('/api/firewall').then(function (result) {
+            if (!result.ok) {
+                return;
+            }
+            var payload = result.payload || {};
+            nodes.firewallExplanation.textContent = numerals.sanitize(
+                payload.explanation || ''
+            );
+
+            var readings = nodes.firewallReadings;
+            clear(readings);
+            [
+                ['rules declared', payload.rule_count],
+                ['rules active', payload.active_count],
+                ['open to anywhere', payload.open_to_anywhere_count],
+                ['default policy', payload.default_policy],
+                ['ruleset generated', payload.generated ? 'yes' : 'not yet'],
+                ['advice', payload.advice]
+            ].forEach(function (entry) {
+                if (entry[1] === undefined || entry[1] === null) {
+                    return;
+                }
+                readings.appendChild(element('dt', null, entry[0]));
+                readings.appendChild(element('dd', null, numerals.sanitize(String(entry[1]))));
+            });
+
+            nodes.firewallPreview.textContent = payload.preview
+                ? numerals.sanitize(payload.preview)
+                : numerals.sanitize(payload.error || 'no ruleset could be generated');
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
     /* configuration reconciliation                                        */
     /* ------------------------------------------------------------------ */
 
@@ -1046,6 +1090,7 @@
         time_conditions: function () { renderEntityView('time_conditions'); },
         hardware: function () { loadHardware(); renderWizard(); },
         system: function () { loadSystem(); },
+        firewall: function () { loadFirewall(); },
         configuration: function () { loadDrift(); },
         tasks: function () { loadTasks(); },
         logs: function () { loadLogCatalogue(); },
@@ -1152,6 +1197,14 @@
 
     function bind() {
         [
+            ['firewallExplanation', 'firewall-explanation'],
+            ['firewallReadings', 'firewall-readings'],
+            ['firewallPreview', 'firewall-preview'],
+            ['firewallRulesPanel', 'firewall-rules-panel'],
+            ['firewallRender', 'firewall-render'],
+            ['firewallApply', 'firewall-apply'],
+            ['firewallStatus', 'firewall-status'],
+            ['firewallClear', 'firewall-clear'],
             ['signInPanel', 'sign-in-panel'], ['signInForm', 'sign-in-form'],
             ['signInFailure', 'sign-in-failure'], ['signInButton', 'sign-in-button'],
             ['username', 'username'], ['password', 'password'],
@@ -1252,6 +1305,19 @@
         nodes.logForm.addEventListener('submit', function (event) {
             event.preventDefault();
             readLog();
+        });
+
+        nodes.firewallRender.addEventListener('click', function () {
+            runTask('render-firewall').then(loadFirewall);
+        });
+        nodes.firewallApply.addEventListener('click', function () {
+            runOperation('firewall-apply', {}, false).then(loadFirewall);
+        });
+        nodes.firewallStatus.addEventListener('click', function () {
+            runOperation('firewall-status', {}, false);
+        });
+        nodes.firewallClear.addEventListener('click', function () {
+            runOperation('firewall-clear', {}, true).then(loadFirewall);
         });
 
         nodes.backupButton.addEventListener('click', downloadBackup);

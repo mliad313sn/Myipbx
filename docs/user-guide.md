@@ -22,7 +22,7 @@ to a machine.
 
 **Legacy hardware** — [what is fitted](#what-is-fitted) · [guided bring up](#guided-bring-up) · [spans and channels](#spans-and-channels) · [when a card will not appear](#when-a-card-will-not-appear)
 
-**The machine** — [readings](#machine-readings) · [network addressing](#network-addressing) · [identity and time](#identity-and-time) · [services](#services) · [restart and shutdown](#restart-and-shutdown)
+**The machine** — [readings](#machine-readings) · [network addressing](#network-addressing) · [identity and time](#identity-and-time) · [firewall](#firewall) · [services](#services) · [restart and shutdown](#restart-and-shutdown)
 
 **Keeping it running** — [applying configuration](#applying-configuration) · [reconciliation](#reconciliation) · [automated tasks](#automated-tasks) · [backup](#backup) · [restore](#restore)
 
@@ -66,6 +66,7 @@ bottom.
 | time conditions | different destinations inside and outside business hours |
 | hardware | interface cards, spans, and guided bring up |
 | system | the machine: addressing, identity, services, power |
+| firewall | which services are reachable, and from where |
 | configuration | rendering the engine configuration, and reconciliation |
 | tasks | automated jobs, and running one now |
 | logs | the appliance's and the engine's logs |
@@ -401,6 +402,48 @@ Set the host name and the time zone, and apply. **Synchronise the clock** steps
 the clock from the configured time source; telephony behaves badly when the
 clock jumps, so prefer doing this during a quiet period.
 
+### Firewall
+
+A telephony system visible from an untrusted network is scanned continuously
+and found within hours. The appliance therefore generates a complete ruleset
+from what you declare rather than leaving the machine open.
+
+**How it works.** You declare rules — a service and the networks it should be
+reachable from. The appliance generates the ruleset; its helper loads it.
+Nothing you type is turned into a rule by the privileged side, which is why
+this is safe to operate from a browser.
+
+**The console is always reachable.** That rule is emitted before any rule you
+wrote, so a firewall cannot lock you out of the appliance you applied it from.
+
+**Everything not named is dropped.** The loopback interface, traffic this
+machine started, and the diagnostic messages a network genuinely needs are
+allowed. Nothing else, unless a rule says so.
+
+| Service | What it opens |
+| --- | --- |
+| session protocol | call signalling, in the clear |
+| secure session protocol | call signalling, encrypted |
+| media | the audio of calls in progress |
+| secure shell | administrative access at the command line |
+| name resolution | answering name lookups, which this appliance does not do |
+
+There is deliberately no way to open an address allocation port, because there
+is nothing on this appliance listening on one.
+
+**Working order.** Declare your rules, press **generate the ruleset**, read the
+preview at the bottom of the section, then press **apply it**. The preview is
+the exact text that will be loaded — read it before applying, particularly the
+first time.
+
+**Reachable from** takes a network in prefix notation, or the word `any`. The
+section counts how many of your rules are open to anywhere and says so, because
+that is nearly always worth narrowing.
+
+**Unload it** removes the appliance's rules and leaves the machine unfiltered
+by them. Only the appliance's own table is touched, so a site with its own
+rules keeps them.
+
 ### Services
 
 Start, restart or stop the telephony engine, the appliance itself, or the
@@ -553,6 +596,6 @@ exist:
 - it will never overwrite a generated file you edited without asking;
 - it will never print a digit in a log;
 - it will never ship with a default password;
-- it does not provision handsets, host multiple tenants, record calls, or
-  manage the machine's firewall. See the competitive benchmark for the full
-  and honest account of what it does not have.
+- it does not provision handsets, host multiple tenants, or record calls. See
+  the competitive benchmark for the full and honest account of what it does
+  not have.

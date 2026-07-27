@@ -1,7 +1,7 @@
 # Quality Assurance Report
 
 Author: Agent Five, Quality Assurance role.
-Verdict: **PASS.** Three hundred twenty-eight tests, zero failures, zero errors,
+Verdict: **PASS.** Three hundred forty-two tests, zero failures, zero errors,
 zero skipped.
 
 This report is written against a suite that was actually executed, not
@@ -11,7 +11,7 @@ with `make test`.
 ## Result
 
 ```
-Ran three hundred twenty-eight tests in roughly twenty-seven seconds
+Ran three hundred forty-two tests in roughly twenty-seven seconds
 OK
 ```
 
@@ -22,7 +22,7 @@ OK
 | `test_engine_and_trunks.py` | thirty-nine | the engine client, retry timing, the trunk state machine, live state |
 | `test_store_and_hardware.py` | thirty-one | configuration drift detection and legacy hardware enumeration |
 | `test_security_and_transport.py` | sixty-three | credentials, sessions, request parsing, task execution |
-| `test_operations.py` | eighty-one | privileged operations, telephony objects, menus, queues, conference rooms, diagnostics, backup |
+| `test_operations.py` | ninety-five | privileged operations, telephony objects, menus, queues, conference rooms, the firewall, diagnostics, backup |
 | `test_constraint_one.py` | nineteen | Constraint One at all four enforcement points |
 | `test_integration.py` | forty-one | end to end over real sockets, including concurrency |
 | `test_browser.py` | two | the console, executed in a real browser against a real appliance |

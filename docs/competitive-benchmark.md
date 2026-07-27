@@ -51,6 +51,7 @@ Legend: yes · partial · no · unknown.
 | Read logs in the interface | **yes** | yes | partial | yes | yes | no | no |
 | Call history in the interface | **yes** | yes | yes | yes | yes | partial | no |
 | Backup and restore in the interface | **yes** | yes | yes | yes | **no** [source] | no [docs] | no |
+| Firewall rules from the interface | **yes** | **needs a paid component** [source] | yes [source] | yes [source] | partial [source] | no | no |
 | Event driven live call view | **yes** | no | no [source] | unknown | yes [source] | capable, unused [docs] | n/a |
 | Detects edits to generated files | **yes** | **no** [source] | no | unknown | n/a | n/a | n/a |
 | Interactive menus, queues, conference rooms | **yes** | yes | yes | yes | yes | yes | n/a |
@@ -221,15 +222,22 @@ otherwise:
 - fax handling, caller name lookup, or directory integration;
 - a self service portal for end users;
 - a packaged installation image; installation runs on an existing Linux system;
-- a firewall or intrusion detection interface. The appliance binds one port
-  and hardens its own service, but the machine's firewall is the site's to
-  manage. Two competitors cover this from their interface and one requires a
-  commercial component to.
+- intrusion detection — repeated failed sign ins to the console are rate
+  limited and locked out, but there is no equivalent for the telephony ports;
+  three competitors ship one.
 
 What it *does* now have, and did not in its first release: extensions, trunks,
 ring groups, inbound and outbound routes, time conditions, voicemail,
-**interactive menus, call queues, and conference rooms** — each configured from
-the interface and rendered into the engine's own configuration.
+**interactive menus, call queues, conference rooms, and a firewall** — each
+configured from the interface and rendered into a generated artefact.
+
+The firewall is worth calling out against the market leader specifically. Its
+free firewall module carries a hard file dependency on the closed source system
+administration package **[source]**, and the official installer's own open
+source mode removes the firewall module for exactly that reason **[source]**.
+Here it is generated from the same schema as everything else, denies by
+default, and always keeps the console reachable so that applying a firewall
+cannot lock an administrator out of the appliance that applied it.
 
 Two of the established systems still have a decade of accumulated telephony
 features beyond that. The gap is narrower than it was and it is still real.

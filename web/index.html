@@ -60,6 +60,7 @@
       <p class="nav-heading">the machine</p>
       <button type="button" class="nav-item" data-view="hardware">hardware</button>
       <button type="button" class="nav-item" data-view="system">system</button>
+      <button type="button" class="nav-item" data-view="firewall">firewall</button>
       <button type="button" class="nav-item" data-view="configuration">configuration</button>
       <button type="button" class="nav-item" data-view="tasks">tasks</button>
       <button type="button" class="nav-item" data-view="logs">logs</button>
@@ -269,6 +270,28 @@
             <button type="button" id="reboot-button" class="caution">restart the machine</button>
             <button type="button" id="power-off-button" class="caution">shut the machine down</button>
           </div>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-firewall" hidden>
+        <section class="panel">
+          <h2>firewall</h2>
+          <p class="hint" id="firewall-explanation">loading</p>
+          <dl class="readings" id="firewall-readings"></dl>
+          <div class="actions">
+            <button type="button" id="firewall-render">generate the ruleset</button>
+            <button type="button" id="firewall-apply">apply it</button>
+            <button type="button" id="firewall-status">check what is loaded</button>
+            <button type="button" id="firewall-clear" class="caution">unload it</button>
+          </div>
+        </section>
+
+        <section class="panel" id="firewall-rules-panel"></section>
+
+        <section class="panel">
+          <h2>the ruleset this would load</h2>
+          <pre class="log-view" id="firewall-preview">loading</pre>
         </section>
       </section>
 

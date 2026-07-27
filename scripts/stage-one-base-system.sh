@@ -20,10 +20,10 @@ STAGE="stage-one-base-system"
 
 BUILD_PACKAGES_APT=(build-essential linux-headers-"$(uname -r)" libnewt-dev libssl-dev
                     libncurses5-dev libsqlite3-dev libjansson-dev uuid-dev
-                    libxml2-dev libedit-dev pkg-config wget curl python3)
+                    libxml2-dev libedit-dev pkg-config wget curl python3 nftables git)
 BUILD_PACKAGES_RPM=(gcc gcc-c++ make kernel-devel newt-devel openssl-devel
                     ncurses-devel sqlite-devel jansson-devel libuuid-devel
-                    libxml2-devel libedit-devel pkgconfig wget curl python3)
+                    libxml2-devel libedit-devel pkgconfig wget curl python3 nftables git)
 
 install_build_toolchain() {
     local manager

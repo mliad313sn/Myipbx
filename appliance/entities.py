@@ -49,6 +49,8 @@ _TIME_PATTERN = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
 #: because both sides are dialled values rather than prose.
 _MAP_PATTERN = re.compile(r"^\s*[0-9*#]\s*=\s*[A-Za-z0-9_-]+\s*(,\s*[0-9*#]\s*=\s*[A-Za-z0-9_-]+\s*)*$")
 _SOUND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$")
+#: A network in prefix notation, or the word naming everywhere.
+_SOURCE_PATTERN = re.compile(r"^(any|anywhere|(\d{1,3}\.){3}\d{1,3}(/([0-9]|[12][0-9]|3[0-2]))?)$", re.IGNORECASE)
 
 
 class ValidationError(ValueError):
@@ -403,6 +405,30 @@ _register(
             Field("enabled", "enabled", "boolean", default=True),
         ),
         referenced_by=(("inbound_routes", "destination_value"),),
+    )
+)
+
+
+_register(
+    EntitySpec(
+        kind="firewall_rules",
+        singular="firewall rule",
+        plural="firewall rules",
+        key="name",
+        description="which service is reachable, and from where",
+        fields=(
+            Field("name", "rule name", required=True, pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="a rule name uses letters, digits, and the marks period, underscore, and hyphen"),
+            Field("service", "service", "choice", required=True,
+                  choices=("session protocol", "secure session protocol", "media",
+                           "secure shell", "name resolution"),
+                  help="what this rule opens; the console itself is always reachable"),
+            Field("source", "reachable from", required=True, default="any",
+                  pattern=_SOURCE_PATTERN,
+                  pattern_help="a source is a network in prefix notation, or the word any",
+                  help="name the networks that need it rather than opening it to everywhere"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
     )
 )
 

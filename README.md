@@ -38,9 +38,10 @@ From the console: extensions, trunks, ring groups, interactive menus, call
 queues, conference rooms, inbound and outbound routes, time conditions and
 voicemail; live call monitoring and call history; the
 machine's static addressing, host name, time zone and clock; starting and
-restarting services; **compiling the legacy interface card drivers against the
-running kernel**; generating span configuration; reading logs; backup and
-restore; and restarting or shutting down the machine.
+restarting services; a deny by default **firewall** generated from declared
+rules; **compiling the legacy interface card drivers against the running
+kernel**; generating span configuration; reading logs; backup and restore; and
+restarting or shutting down the machine.
 
 The one procedure that deliberately still needs a terminal is resetting a lost
 administrator password, because an interface that could do that without
@@ -59,7 +60,7 @@ appliance/     the control plane -- standard library only, no dependencies
 web/           the console -- vanilla markup and scripting, no build step
 scripts/       the staging scripts, the exclusion audit, the privileged helper
 config/        engine, service, network, privilege, and appliance templates
-tests/         the quality assurance suite -- three hundred twenty-eight tests
+tests/         the quality assurance suite -- three hundred forty-two tests
 docs/          vision, benchmarks, architecture, user guide, runbook, assurance
 ```
 

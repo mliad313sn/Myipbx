@@ -21,6 +21,7 @@ from .config import ApplianceConfig
 from .confstore import ConfigurationStore, DriftDetected
 from .diagnostics import CallRecordReader, LogReader
 from .entities import SecretStore
+from . import firewall as firewall_module
 from .httpd import HttpServer, Request, Response
 from .logging_setup import configure_logging, get_logger
 from .netaudit import AddressAllocationAudit, AddressAllocationDetected
@@ -257,6 +258,11 @@ class Appliance:
             "ask the engine to reload its configuration",
         )
         self.tasks.register(
+            "render-firewall",
+            self._task_render_firewall,
+            "generate the firewall ruleset from the declared rules",
+        )
+        self.tasks.register(
             "backup-state",
             self._task_backup_state,
             "write a timestamped copy of the source of truth to the state directory",
@@ -332,6 +338,37 @@ class Appliance:
             raise RuntimeError("the telephony engine manager interface is not connected")
         response = await self.manager.send_action("Reload")
         return {"accepted": bool(response.is_success)}
+
+    async def _task_render_firewall(self) -> dict[str, Any]:
+        """Write the ruleset the helper will load.
+
+        The control plane generates it and the helper loads it, so no value an
+        operator typed is ever turned into a rule by the privileged side.
+        """
+        document = self.store.load()
+        rules = document.get("firewall_rules", []) or []
+
+        ruleset = firewall_module.render_ruleset(
+            rules,
+            management_port=self.http.bound_port or self.config.listen_port,
+            management_sources=document.get("firewall_management_sources", ["0.0.0.0/0"]),
+        )
+
+        destination = self.config.state_path / "firewall.nft"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(destination.name + ".partial")
+        temporary.write_text(ruleset, encoding="utf-8")
+        temporary.replace(destination)
+
+        _LOG.info(
+            "the firewall ruleset was generated from %d declared rule or rules",
+            len(rules),
+        )
+        return {
+            "path": str(destination),
+            "rule_count": len(rules),
+            "next_step": "apply the ruleset to load it",
+        }
 
     def _task_backup_state(self) -> dict[str, Any]:
         """Blocking by design: dispatched to the worker pool, not the loop."""

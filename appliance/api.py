@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from . import backup, entities, numerals, sysops
+from . import backup, entities, firewall, numerals, sysops
 from .confstore import DriftDetected
 from .httpd import Request, Response, Router
 from .logging_setup import get_logger
@@ -98,6 +98,7 @@ def build_router(context: Any) -> Router:
     )
 
     # -- diagnostics --------------------------------------------------------
+    router.get("/api/firewall", guard.read(lambda request: _firewall(context)))
     router.get("/api/logs", guard.read(lambda request: _log_catalogue(context)))
     router.get("/api/logs/{key}", guard.read(lambda request: _log_read(context, request)))
     router.get("/api/calls", guard.read(lambda request: _call_records(context, request)))
@@ -636,6 +637,35 @@ async def _run_operation(context: Any, request: Request) -> Response:
         return Response.error(400, str(error))
 
     return Response.json(outcome.as_dict(), status=200 if outcome.succeeded else 500)
+
+
+def _firewall(context: Any) -> Response:
+    """Describe the ruleset the appliance would generate, and its state."""
+    document = context.store.load()
+    rules = document.get("firewall_rules", []) or []
+    port = context.http.bound_port or context.config.listen_port
+
+    payload = firewall.summarise(rules, port)
+    ruleset_path = context.config.state_path / "firewall.nft"
+    payload["generated"] = ruleset_path.is_file()
+    payload["explanation"] = (
+        "the appliance generates the ruleset and its helper loads it, so nothing "
+        "typed here is ever turned into a rule by the privileged side. the "
+        "console remains reachable whatever else is declared, so a firewall "
+        "cannot lock you out of the appliance that applied it"
+    )
+
+    try:
+        payload["preview"] = firewall.render_ruleset(
+            rules,
+            management_port=port,
+            management_sources=document.get("firewall_management_sources", ["0.0.0.0/0"]),
+        )
+    except firewall.FirewallError as error:
+        payload["preview"] = ""
+        payload["error"] = str(error)
+
+    return Response.json(payload)
 
 
 # -- diagnostics -----------------------------------------------------------

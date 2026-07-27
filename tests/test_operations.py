@@ -19,6 +19,7 @@ from pathlib import Path
 import support  # noqa: F401  (path setup)
 
 from appliance import backup as backup_module
+from appliance import firewall
 from appliance import numerals
 from appliance.diagnostics import CallRecordReader, LogReader, LogSource
 from appliance.entities import (
@@ -917,3 +918,132 @@ class MenuQueueAndConferenceTests(unittest.TestCase):
         dialplan = self._render()["extensions.conf"]
         for value in ("500", "700", "800"):
             self.assertIn(f"Goto(internal,{value},1)", dialplan)
+
+
+class FirewallTests(unittest.TestCase):
+    """The ruleset the appliance generates and its helper loads."""
+
+    def _rules(self, *entries: dict) -> list[dict]:
+        return list(entries)
+
+    def test_the_console_is_always_reachable(self) -> None:
+        """A firewall must not lock out the console that applied it."""
+        ruleset = firewall.render_ruleset([], management_port=8088)
+        self.assertIn("tcp dport 8088 accept", ruleset)
+        self.assertIn("the appliance console", ruleset)
+
+    def test_the_policy_denies_by_default(self) -> None:
+        ruleset = firewall.render_ruleset([], management_port=8088)
+        self.assertIn("type filter hook input priority 0; policy drop;", ruleset)
+        self.assertIn("type filter hook forward priority 0; policy drop;", ruleset)
+
+    def test_established_traffic_and_the_loopback_are_allowed(self) -> None:
+        ruleset = firewall.render_ruleset([], management_port=8088)
+        self.assertIn("ct state established,related accept", ruleset)
+        self.assertIn("iif lo accept", ruleset)
+        self.assertIn("ct state invalid drop", ruleset)
+
+    def test_a_declared_service_is_opened_on_its_own_ports(self) -> None:
+        ruleset = firewall.render_ruleset(
+            self._rules({"name": "carrier", "service": "session protocol",
+                         "source": "203.0.113.0/24"}),
+            management_port=8088,
+        )
+        self.assertIn("ip saddr 203.0.113.0/24 udp dport 5060 accept", ruleset)
+        self.assertIn("ip saddr 203.0.113.0/24 tcp dport 5060 accept", ruleset)
+
+    def test_a_port_range_is_rendered_as_a_range(self) -> None:
+        ruleset = firewall.render_ruleset(
+            self._rules({"name": "audio", "service": "media", "source": "any"}),
+            management_port=8088,
+        )
+        self.assertIn("udp dport 10000-20000 accept", ruleset)
+
+    def test_a_disabled_rule_opens_nothing(self) -> None:
+        ruleset = firewall.render_ruleset(
+            self._rules({"name": "shell", "service": "secure shell",
+                         "source": "any", "enabled": False}),
+            management_port=8088,
+        )
+        self.assertNotIn("dport 22", ruleset)
+
+    def test_an_unrecognised_service_is_refused(self) -> None:
+        with self.assertRaises(firewall.FirewallError):
+            firewall.render_ruleset(
+                self._rules({"name": "anything", "service": "everything",
+                             "source": "any"}),
+                management_port=8088,
+            )
+
+    def test_a_malformed_source_is_refused(self) -> None:
+        for source in ("not-a-network", "999.1.1.1/24", "10.0.0.0/99", "; reboot"):
+            with self.subTest(source=source):
+                with self.assertRaises(firewall.FirewallError):
+                    firewall.render_ruleset(
+                        self._rules({"name": "rule", "service": "secure shell",
+                                     "source": source}),
+                        management_port=8088,
+                    )
+
+    def test_an_invalid_management_port_is_refused(self) -> None:
+        for port in (0, -1, 70000):
+            with self.subTest(port=port):
+                with self.assertRaises(firewall.FirewallError):
+                    firewall.render_ruleset([], management_port=port)
+
+    def test_the_ruleset_opens_no_address_allocation_port(self) -> None:
+        """Constraint One, in the firewall."""
+        ruleset = firewall.render_ruleset(
+            self._rules(
+                {"name": "carrier", "service": "session protocol", "source": "any"},
+                {"name": "audio", "service": "media", "source": "any"},
+                {"name": "shell", "service": "secure shell", "source": "any"},
+            ),
+            management_port=8088,
+        )
+        for port in ("dport 67", "dport 68", "dport 547"):
+            self.assertNotIn(port, ruleset)
+        self.assertIn("assigns no addresses", ruleset)
+
+    def test_only_the_appliance_table_is_touched(self) -> None:
+        ruleset = firewall.render_ruleset([], management_port=8088)
+        self.assertIn("table inet myipbx {", ruleset)
+        self.assertEqual(ruleset.count("table inet"), 1)
+
+    def test_the_summary_spells_its_figures_and_warns_about_exposure(self) -> None:
+        summary = firewall.summarise(
+            self._rules({"name": "shell", "service": "secure shell", "source": "any"}),
+            management_port=8088,
+        )
+        self.assertEqual(summary["rule_count"], "one")
+        self.assertEqual(summary["open_to_anywhere_count"], "one")
+        self.assertIn("prefer naming the networks", summary["advice"])
+        for value in (summary["rule_count"], summary["active_count"],
+                      summary["open_to_anywhere_count"]):
+            self.assertFalse(numerals.contains_digit(value))
+
+    def test_a_ruleset_limited_to_named_networks_is_not_warned_about(self) -> None:
+        summary = firewall.summarise(
+            self._rules({"name": "shell", "service": "secure shell",
+                         "source": "203.0.113.0/24"}),
+            management_port=8088,
+        )
+        self.assertIn("limited to declared networks", summary["advice"])
+
+    def test_a_firewall_rule_is_validated_by_the_same_schema(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="myipbx-fw-") as name:
+            store = EntityStore({"firewall_rules": []}, SecretStore(Path(name) / "s.json"))
+            with self.assertRaises(ValidationError):
+                store.create("firewall_rules",
+                             {"name": "bad", "service": "everything", "source": "any"})
+            with self.assertRaises(ValidationError):
+                store.create("firewall_rules",
+                             {"name": "bad", "service": "secure shell",
+                              "source": "not-a-network"})
+
+            rule = store.create(
+                "firewall_rules",
+                {"name": "carrier", "service": "session protocol",
+                 "source": "203.0.113.0/24"},
+            )
+            self.assertEqual(rule["source"], "203.0.113.0/24")

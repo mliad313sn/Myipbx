@@ -108,6 +108,18 @@ OPERATIONS: dict[str, Operation] = {
             disruptive=True,
             timeout_seconds=300.0,
         ),
+        Operation(
+            "firewall-apply",
+            "load the firewall ruleset the appliance generated",
+            disruptive=False,
+            timeout_seconds=60.0,
+        ),
+        Operation("firewall-status", "report whether the appliance ruleset is loaded"),
+        Operation(
+            "firewall-clear",
+            "unload the appliance ruleset, leaving the machine unfiltered",
+            disruptive=True,
+        ),
         Operation("hostname-set", "set the machine's host name", ("hostname",)),
         Operation("timezone-set", "set the machine's time zone", ("timezone",)),
         Operation("time-synchronise", "synchronise the clock with the configured source"),
