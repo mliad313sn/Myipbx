@@ -16,6 +16,8 @@ import re
 import subprocess
 import tempfile
 import unittest
+
+from support import quantities_left_as_digits
 from pathlib import Path
 
 from support import REPOSITORY_ROOT, ApplianceHarness, build_fixture_root
@@ -280,9 +282,13 @@ class AuditScriptTests(unittest.TestCase):
             timeout=120,
         )
         combined = completed.stdout + completed.stderr
-        self.assertFalse(
-            re.search(r"\d", combined),
-            f"the audit script emitted a digit character: {combined!r}",
+        # Quantities are spelled; the timestamp each line carries is an
+        # identifier and keeps its digits on purpose.
+        offenders = quantities_left_as_digits(combined)
+        self.assertEqual(
+            offenders,
+            [],
+            f"the audit script emitted a quantity as digits: {offenders!r}",
         )
 
     def test_the_installer_refuses_an_out_of_range_stage_selection(self) -> None:

@@ -93,8 +93,88 @@ spell_integer() {
     printf '%s%s' "${sign}" "${rendered[*]}"
 }
 
-# Replace every run of digit characters in the argument with its words.
+# Shapes that are identifiers rather than quantities, and are left alone.
+#
+# The rule is the difference between a number an operator reads and a number an
+# operator uses.  "Twelve active calls" is a quantity and reads better spelled.
+# An address, a port, a version, a device name or a response code is an
+# identifier: the operator types it, matches it against a label on a cable, or
+# searches for it, and spelling it makes it unusable rather than clearer.
+#
+# This was not theoretical.  The preflight check told a technician to configure
+# the interface named "ethzero" when the interface is called eth0.
+#
+# Held identical to the lists in the control plane and in the browser; a test
+# asserts all three agree.
+_IDENTIFIER_SHAPES=(
+    '([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}'
+    '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{1,5}'
+    '([0-9]{1,3}\.){3}[0-9]{1,3}'
+    '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
+    '[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]'
+    '[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}(:[0-9]{2})?)?'
+    '[0-9]{2}:[0-9]{2}(:[0-9]{2})?'
+    'v?[0-9]+\.[0-9]+(\.[0-9]+)*'
+    '(eth|en[a-z0-9]*|wl[a-z0-9]*|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)[0-9]+'
+    '(/[A-Za-z0-9._-]*[0-9][A-Za-z0-9._-]*)+'
+    '(SIP|HTTP|status|code|error)[[:space:]]+[0-9]{3}'
+    'port([[:space:]]+number)?[[:space:]]+[0-9]{1,5}'
+    '(TDM|TE|AEX|HA|HB|B)[0-9]+[A-Z]?'
+    'extension[[:space:]]+[0-9]+'
+)
+
+# Replace every run of digit characters in the argument with its words, leaving
+# the identifier shapes above as they are.
 spell_all() {
+    local text="$1"
+
+    # Hold each identifier aside, spell what remains, then put them back.  The
+    # marker carries a letter index rather than a number, because it passes
+    # through the spelling below and a numeric index would be spelled with
+    # everything else and could never be matched again.
+    local -a held=()
+    local shape marker label
+    local -i index=0
+
+    for shape in "${_IDENTIFIER_SHAPES[@]}"; do
+        while [[ "${text}" =~ (${shape}) ]]; do
+            label=""
+            local -i remaining=$(( index + 1 )) remainder
+            while (( remaining > 0 )); do
+                remainder=$(( (remaining - 1) % 26 ))
+                remaining=$(( (remaining - 1) / 26 ))
+                # shellcheck disable=SC2059
+                label="$(printf "\\$(printf '%03o' $(( 97 + remainder )))")${label}"
+            done
+            held+=("${BASH_REMATCH[1]}")
+            marker="@@${label}@@"
+            text="${text//"${BASH_REMATCH[1]}"/"${marker}"}"
+            index+=1
+        done
+    done
+
+    text="$(_spell_every_run "${text}")"
+
+    local position
+    for (( position = 0; position < ${#held[@]}; position++ )); do
+        label=""
+        local -i left=$(( position + 1 )) rest
+        while (( left > 0 )); do
+            rest=$(( (left - 1) % 26 ))
+            left=$(( (left - 1) / 26 ))
+            # shellcheck disable=SC2059
+            label="$(printf "\\$(printf '%03o' $(( 97 + rest )))")${label}"
+        done
+        text="${text//"@@${label}@@"/"${held[position]}"}"
+    done
+
+    printf '%s' "${text}"
+}
+
+# The unconditional form: every run of digits becomes words, identifiers and
+# all.  Kept separate so the exemption above is a wrapper around it rather than
+# a special case inside it.
+_spell_every_run() {
     local text="$1"
     local rendered=""
     local prefix run remainder stripped leading

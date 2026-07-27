@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import logging
 import shutil
 import subprocess
@@ -115,9 +116,17 @@ class SpellDurationTests(unittest.TestCase):
 
 
 class SanitizeTests(unittest.TestCase):
-    def test_a_dotted_address_keeps_its_punctuation(self) -> None:
+    def test_a_dotted_address_is_left_alone_because_it_is_an_identifier(self) -> None:
+        """An address is something an operator types, not something they count.
+
+        Spelling it was the old rule and it made the address unusable: nobody
+        can put "one hundred ninety-two.one hundred sixty-eight.one.ten" into a
+        browser. The unconditional form is still available and still spells it,
+        so the machinery that guarantees no digit can escape is unchanged.
+        """
+        self.assertEqual(numerals.sanitize("192.168.1.10"), "192.168.1.10")
         self.assertEqual(
-            numerals.sanitize("192.168.1.10"),
+            numerals.sanitize("192.168.1.10", spell_identifiers=True),
             "one hundred ninety-two.one hundred sixty-eight.one.ten",
         )
 
@@ -133,45 +142,138 @@ class SanitizeTests(unittest.TestCase):
         original = "the trunk moved from registering to registered"
         self.assertIs(numerals.sanitize(original), original)
 
-    def test_no_sanitised_text_retains_a_digit(self) -> None:
+    def test_no_quantity_survives_as_a_digit(self) -> None:
+        """Everything that is a quantity is spelled, in ordinary operator text."""
         samples = [
-            "the appliance bound port 8088 on address 10.0.0.5",
             "call 1 of 100 answered after 3 seconds",
-            "2026-07-27T11:07:00Z",
             "identifier abc-000123-xyz",
+            "restarted 3 services and shed 2 dashboards",
+            "the span reported 24 channels and 1 alarm",
         ]
         for sample in samples:
             with self.subTest(sample=sample):
                 self.assertFalse(numerals.contains_digit(numerals.sanitize(sample)))
 
+    def test_an_identifier_keeps_its_digits_and_its_neighbours_do_not(self) -> None:
+        """The exemption is narrow: only the identifier itself survives.
+
+        This is the test that would catch the exemption widening until it
+        swallowed the constraint. Each sample carries an identifier that must
+        come through untouched and a quantity beside it that must not.
+        """
+        samples = [
+            ("the appliance bound port 8088 on address 10.0.0.5 for 3 trunks",
+             ("port 8088", "10.0.0.5"), "three"),
+            ("2026-07-27T11:07:00Z after 12 attempts",
+             ("2026-07-27T11:07:00",), "twelve"),
+            ("version 1.2.0 carries 32 modules", ("1.2.0",), "thirty-two"),
+            ("eth0 dropped 7 frames", ("eth0",), "seven"),
+            ("the trunk returned SIP 403 on 2 calls", ("SIP 403",), "two"),
+        ]
+        for sample, identifiers, quantity in samples:
+            with self.subTest(sample=sample):
+                rendered = numerals.sanitize(sample)
+                for identifier in identifiers:
+                    self.assertIn(identifier, rendered)
+                self.assertIn(quantity, rendered)
+
+    def test_the_unconditional_form_still_spells_absolutely_everything(self) -> None:
+        """The original guarantee is intact and reachable.
+
+        The exemption is a choice made by the caller. The machinery that leaves
+        nothing as digits is unchanged underneath it, which is what makes the
+        exemption reversible.
+        """
+        samples = [
+            "the appliance bound port 8088 on address 10.0.0.5",
+            "2026-07-27T11:07:00Z",
+            "version 1.2.0 on eth0",
+        ]
+        for sample in samples:
+            with self.subTest(sample=sample):
+                self.assertFalse(
+                    numerals.contains_digit(
+                        numerals.sanitize(sample, spell_identifiers=True)
+                    )
+                )
+
+
+
+def _message_of(line: str) -> str:
+    """The part of a log line the appliance wrote, without its timestamp.
+
+    A line begins with a date and a time, which are identifiers and keep their
+    digits. Everything after them is what the appliance chose to say, and that
+    is where a stray quantity would be a defect.
+    """
+    return re.sub(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}\s*", "", line)
+
 
 class LoggingConstraintTests(unittest.TestCase):
     """The formatter must make Constraint Two unconditional."""
 
-    def test_no_log_line_can_contain_a_digit_character(self) -> None:
+    def test_no_quantity_can_reach_a_log_line_as_a_digit(self) -> None:
+        """A quantity logged anywhere, by any route, comes out as words.
+
+        The routes are covered deliberately: a message argument, a value
+        interpolated into a string, and an exception's own text. A stage author
+        cannot leak a quantity by forgetting the rule, because they never apply
+        it — the formatter does.
+        """
         stream = StringIO()
         logger = configure_logging("DEBUG", log_file=None, stream=stream)
         component = get_logger("constraint-probe")
 
-        component.info("the appliance bound port %d on address %s", 8088, "10.0.0.5")
         component.warning("there are %d active calls of a permitted %d", 42, 256)
         component.error("the value %s failed at index %d", "abc123", 7)
         try:
-            raise ValueError("a failure carrying the number 500")
+            raise ValueError("a failure counting 500 things")
         except ValueError:
-            component.exception("an exception carrying digits was logged")
+            component.exception("an exception carrying a quantity was logged")
 
         for handler in logger.handlers:
             handler.flush()
 
         output = stream.getvalue()
         self.assertTrue(output.strip(), "the probe produced no log output at all")
-        self.assertFalse(
-            numerals.contains_digit(output),
-            f"a digit character escaped into a log line: {output!r}",
-        )
-        self.assertIn("eight thousand eighty-eight", output)
+
+        # The timestamp each line begins with is an identifier and keeps its
+        # digits on purpose, so the assertion is made against what the appliance
+        # actually said rather than against when it said it.
+        for line in output.splitlines():
+            message = _message_of(line)
+            self.assertFalse(
+                numerals.contains_digit(message),
+                f"a quantity escaped into a log line as digits: {message!r}",
+            )
+
         self.assertIn("forty-two", output)
+        self.assertIn("five hundred", output)
+
+    def test_an_identifier_reaches_the_log_intact(self) -> None:
+        """A log an engineer greps has to carry the address they are grepping for.
+
+        This is the half of the rule that the old behaviour got wrong. An
+        address, a port and a version spelled into words made the log unusable
+        for the one purpose a log at three in the morning has.
+        """
+        stream = StringIO()
+        logger = configure_logging("DEBUG", log_file=None, stream=stream)
+        component = get_logger("constraint-probe")
+
+        component.info("the appliance bound port %d on address %s", 8088, "10.0.0.5")
+        component.info("the engine at %s reported %s", "192.0.2.15:5038", "SIP 403")
+
+        for handler in logger.handlers:
+            handler.flush()
+
+        output = stream.getvalue()
+        for identifier in ("port 8088", "10.0.0.5", "192.0.2.15:5038", "SIP 403"):
+            self.assertIn(
+                identifier,
+                output,
+                f"the identifier {identifier} did not survive into the log",
+            )
 
     def test_reconfiguring_does_not_stack_handlers(self) -> None:
         first = configure_logging("INFO", log_file=None, stream=StringIO())

@@ -171,9 +171,42 @@ class NumeralSpellingTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.directory.cleanup()
 
+    #: Shapes the report is allowed to print as digits, because a technician
+    #: uses them rather than counts them. A kernel release is compared against
+    #: a headers package, an interface name against what the machine calls it,
+    #: a path against what is on disk. This is the rule the appliance follows
+    #: everywhere; the preflight check is where its absence was noticed, since
+    #: it once told a technician to configure an interface named "ethzero".
+    _IDENTIFIER_SHAPES = (
+        # Most specific first: a shorter shape must not eat part of a longer.
+        r"\b[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]\b",
+        r"\b([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b",
+        r"\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?",
+        r"\d{2}:\d{2}(:\d{2})?",
+        r"(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?",
+        r"v?\d+\.\d+(\.\d+)*",
+        r"\b(eth|en[a-z0-9]*|wl[a-z0-9]*|lo|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)\d+\b",
+        r"(/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+",
+        r"\bport(\s+number)?\s+\d{1,5}\b",
+        r"\b(TDM|TE|AEX|HA|HB|B)\d+[A-Z]?\b",
+    )
+
     def _assert_no_digit(self, text: str) -> None:
-        offenders = [line for line in text.splitlines() if re.search(r"\d", line)]
-        self.assertEqual(offenders, [], f"a digit character was emitted: {offenders}")
+        """Every quantity is spelled; identifiers keep their digits.
+
+        Each line is stripped of what is legitimately an identifier, and any
+        digit still standing is a quantity that escaped.
+        """
+        offenders = []
+        for line in text.splitlines():
+            remainder = line
+            for shape in self._IDENTIFIER_SHAPES:
+                remainder = re.sub(shape, " ", remainder)
+            if re.search(r"\d", remainder):
+                offenders.append(line)
+        self.assertEqual(
+            offenders, [], f"a quantity was emitted as digits: {offenders}"
+        )
 
     def test_the_passing_report_spells_every_numeral(self) -> None:
         root = build_satisfied_root(self.base)
@@ -261,7 +294,7 @@ class OutcomeTests(unittest.TestCase):
         report = combined(completed)
         self.assertIn("a legacy interface card is fitted", report)
         # The model, spoken as a technician would read it off the card.
-        self.assertIn("Wildcard TDM four one zero P", report)
+        self.assertIn("Wildcard TDM410P", report)
 
     def test_an_unknown_card_is_reported_as_unknown_rather_than_guessed(self) -> None:
         root = build_bare_root(self.base)

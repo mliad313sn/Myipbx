@@ -14,19 +14,29 @@ service of any kind. It does not ship one, install one, enable one, or tolerate
 one — it refuses to start if it finds one on the machine. The appliance is a
 guest on someone else's network and behaves like one.
 
-**Every numeral is spelled in full letters.** Every log line, every dashboard
-readout, and every operator facing string renders numbers as words. This is not
-a style guideline applied by hand; a numeral spelling module exists in the
-control plane, in the browser, and in the shell scripts, all three are held
-identical by an automated test, and the logging formatter routes every emitted
-line through it so no code path can defeat the rule by forgetting it.
+**Every quantity is spelled in full letters.** Every log line, every dashboard
+readout, and every operator facing string renders quantities as words — twelve
+active calls, three minutes, forty-seven completed. This is not a style
+guideline applied by hand; a numeral module exists in the control plane, in the
+browser, and in the shell scripts, all three are held identical by an automated
+test, and the logging formatter routes every emitted line through it so no code
+path can defeat the rule by forgetting it.
 
-The one deliberate boundary: values that a machine reads rather than a person —
-the port number in a configuration document, an address in a command you are
-meant to paste, a numeric literal in source code — remain numerals, because
-spelling them would stop them working. The constraint governs what the
-appliance *emits*: its logs, its dashboard, and its interface responses. That
-boundary is drawn on purpose and is where the automated tests draw it too.
+**Identifiers keep their digits**, and the distinction is the whole of the
+rule. A quantity is a number an operator *reads*. An identifier is a number an
+operator *uses*: an address they type into a browser, a port they open in a
+firewall, a version they match against a package, a card model they read off
+the silkscreen, a telephone number they dial, a timestamp they line a call up
+against. Spelling those does not make them clearer, it makes them unusable —
+and the appliance was doing it. It printed its own address as "one hundred
+ninety-two.one hundred sixty-eight.one hundred.ten", told a technician to
+configure an interface named "ethzero" when the interface is called eth0, and
+filled call history with "two hundred one" where the operator was looking for
+201.
+
+The identifier shapes are listed once in each of the three implementations,
+held identical by test, and the exemption is deliberately narrow: only the
+identifier itself survives, never the quantity beside it.
 
 ## Everything is done from the browser
 
@@ -61,7 +71,7 @@ web/           the console -- vanilla markup and scripting, no build step
 iso/           the bootable image build: five stages and a boot test
 scripts/       the staging scripts, the exclusion audit, the privileged helper
 config/        engine, service, network, privilege, and appliance templates
-tests/         the quality assurance suite -- four hundred eighty-five tests
+tests/         the quality assurance suite -- five hundred seven tests
 docs/          vision, benchmarks, architecture, user guide, runbook, assurance
 ```
 
@@ -91,7 +101,7 @@ so the same file can be burned to a disc or written straight to a flash device.
 
 Because the appliance never requests an address and never offers one, it has to
 arrive already reachable. It does: a documented static address, printed on the
-boot screen in words, changed from the appliance's own console once you can
+boot screen, changed from the appliance own console once you can
 reach it. That is how physical appliances have always solved this, and it is
 the only answer consistent with the exclusion.
 

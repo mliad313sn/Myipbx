@@ -382,3 +382,54 @@ def build_hardware_fixture(base: Path, with_card: bool = True) -> Path:
         "dahdi 245760 3 wctdm24xxp, Live 0x0000000000000000\n", encoding="utf-8"
     )
     return root
+
+
+# ---------------------------------------------------------------------------
+# Constraint Two, in the form the appliance now holds it
+# ---------------------------------------------------------------------------
+#
+# Quantities are spelled; identifiers keep their digits.  Several suites need
+# to assert that, and each writing out its own list of identifier shapes would
+# be four copies of one rule, drifting apart.  The rule lives here once.
+
+IDENTIFIER_SHAPES: tuple[str, ...] = (
+    # Most specific first, so a shorter shape cannot eat part of a longer one.
+    r"\b[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]\b",
+    r"\b([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b",
+    r"\b([0-9A-Fa-f]{2}:){7,}[0-9A-Fa-f]{2}\b",
+    r"\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?",
+    r"\d{2}:\d{2}(:\d{2})?",
+    r"(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?(/\d{1,2})?",
+    r"\bv?\d+\.\d+(\.\d+)*\b",
+    r"\b(eth|en[a-z0-9]*|wl[a-z0-9]*|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)\d+\b",
+    r"(/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+",
+    r"\b(SIP|HTTP|status|code|error)\s+\d{3}\b",
+    r"\bport(\s+number)?\s+\d{1,5}\b",
+    r"\b(TDM|TE|AEX|HA|HB|B)\d+[A-Z]?\b",
+    r"\bextension\s+\d+\b",
+)
+
+
+def strip_identifiers(text: str) -> str:
+    """Remove everything that is legitimately an identifier.
+
+    Whatever digits survive are quantities that escaped, which is the thing
+    worth failing a test over.
+    """
+    import re as _re
+
+    remainder = text
+    for shape in IDENTIFIER_SHAPES:
+        remainder = _re.sub(shape, " ", remainder)
+    return remainder
+
+
+def quantities_left_as_digits(text: str) -> list[str]:
+    """The lines of ``text`` in which a quantity survived as digits."""
+    import re as _re
+
+    return [
+        line
+        for line in text.splitlines()
+        if _re.search(r"\d", strip_identifiers(line))
+    ]

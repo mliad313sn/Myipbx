@@ -169,7 +169,14 @@ class PrivilegedOperationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(outcome.succeeded)
         self.assertIn("not running", outcome.detail)
 
-    async def test_the_output_of_an_operation_is_spelled(self) -> None:
+    async def test_the_output_of_an_operation_spells_its_quantities(self) -> None:
+        """What the helper printed reaches the console under the same rule.
+
+        A helper's output is operator facing text like any other, so quantities
+        in it are spelled. The port it names is an identifier and survives,
+        because an operator reading "the engine is listening on port five
+        thousand thirty-eight" cannot put that anywhere useful.
+        """
         async def noisy(command, timeout):
             return 0, "restarted 3 services on port 5038"
 
@@ -177,7 +184,9 @@ class PrivilegedOperationTests(unittest.IsolatedAsyncioTestCase):
         operations.available = lambda: True  # type: ignore[method-assign]
 
         outcome = await operations.run("engine-reload")
-        self.assertFalse(numerals.contains_digit(outcome.as_dict()["output"]))
+        rendered = outcome.as_dict()["output"]
+        self.assertIn("three services", rendered)
+        self.assertIn("port 5038", rendered)
 
     def test_every_operation_declares_whether_it_interrupts_service(self) -> None:
         for verb, operation in OPERATIONS.items():
@@ -243,11 +252,19 @@ class SystemStatusTests(unittest.TestCase):
         snapshot = self.status.snapshot()
         self.assertEqual(snapshot["uptime"], "one day one hour one minute one second")
 
-        for key in ("uptime", "kernel_release"):
-            self.assertFalse(
-                numerals.contains_digit(str(snapshot[key])),
-                f"the reading named {key} carried a digit: {snapshot[key]}",
-            )
+        # Quantities are spelled. The kernel release is not a quantity: an
+        # administrator matches it character for character against a headers
+        # package name, and "six.eighteen.five" matches nothing.
+        self.assertFalse(
+            numerals.contains_digit(str(snapshot["uptime"])),
+            f"the uptime carried a digit: {snapshot['uptime']}",
+        )
+        self.assertRegex(
+            str(snapshot["kernel_release"]),
+            r"\d",
+            "the kernel release was spelled, which makes it useless for the one "
+            "thing it is read for: matching a headers package",
+        )
         for value in snapshot["memory"].values():
             self.assertFalse(numerals.contains_digit(str(value)))
         for value in snapshot["load_average"].values():
@@ -531,7 +548,7 @@ class CallRecordTests(unittest.TestCase):
         payload = self.reader.read()
         self.assertTrue(payload["available"])
         self.assertEqual(len(payload["records"]), 2)
-        self.assertEqual(payload["records"][0]["destination"], "two hundred two")
+        self.assertEqual(payload["records"][0]["destination"], "202")
 
     def test_the_durations_are_spelled(self) -> None:
         payload = self.reader.read()
@@ -539,18 +556,58 @@ class CallRecordTests(unittest.TestCase):
         self.assertEqual(answered["talk_time"], "five minutes")
         self.assertEqual(answered["duration"], "five minutes four seconds")
 
-    def test_no_field_of_a_record_carries_a_digit(self) -> None:
+    def test_a_record_keeps_its_numbers_and_spells_its_durations(self) -> None:
+        """Call history is read to find a number, and to line a call up in time.
+
+        A telephone number spelled into words matches nothing an operator has
+        and cannot be dialled; a start time spelled into words cannot be lined
+        up against an incident. Both are identifiers and keep their digits. The
+        durations beside them are quantities and are spelled.
+        """
         payload = self.reader.read()
+        self.assertTrue(payload["records"], "the fixture produced no records")
+
         for record in payload["records"]:
-            for name, value in record.items():
-                if name == "unique_identifier":
-                    continue
+            for name in ("source", "destination", "started_at"):
                 with self.subTest(field=name):
-                    self.assertFalse(numerals.contains_digit(str(value)))
+                    self.assertTrue(
+                        numerals.contains_digit(str(record[name])),
+                        f"the identifier {name} was spelled into words, which "
+                        f"makes it useless: {record[name]!r}",
+                    )
+            for name in ("duration", "talk_time"):
+                with self.subTest(field=name):
+                    self.assertFalse(
+                        numerals.contains_digit(str(record[name])),
+                        f"the quantity {name} escaped as digits: {record[name]!r}",
+                    )
 
     def test_a_search_filters_the_records(self) -> None:
-        payload = self.reader.read(search="two hundred one")
+        """A search is made with the number the operator has in front of them.
+
+        Before the identifier rule this searched for "two hundred one", which
+        is what the appliance had turned the number into and not anything an
+        operator would ever type.
+        """
+        # A number matches wherever it appears in the fields an operator
+        # searches, so "201" finds both the call to extension 201 and the call
+        # from 2015550101.
+        self.assertEqual(len(self.reader.read(search="201")["records"]), 2)
+
+        payload = self.reader.read(search="202")
         self.assertEqual(len(payload["records"]), 1)
+        self.assertEqual(payload["records"][0]["destination"], "202")
+
+    def test_a_search_does_not_match_the_year_in_every_timestamp(self) -> None:
+        """The defect that appeared the moment timestamps kept their digits.
+
+        Every call in this decade starts with a timestamp beginning "202", so a
+        search across the whole record returned every call ever made whenever an
+        operator typed a three digit extension starting with those digits. The
+        search looks only in the fields somebody would search.
+        """
+        self.assertEqual(len(self.reader.read(search="2026")["records"]), 0)
+        self.assertEqual(len(self.reader.read(search="09:15")["records"]), 0)
 
     def test_an_absent_record_file_is_explained_rather_than_raised(self) -> None:
         reader = CallRecordReader("/var/log/asterisk/cdr-csv/Missing.csv", self.root)

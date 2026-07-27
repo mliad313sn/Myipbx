@@ -252,6 +252,22 @@ class CallRecordReader:
     def available(self) -> bool:
         return self.path.is_file()
 
+    #: The fields a search looks in.
+    #:
+    #: Deliberately not every field.  A search used to run across the whole
+    #: record, which was harmless while the appliance spelled every number into
+    #: words, and became a defect the moment it stopped: the timestamp of every
+    #: call in this decade begins with the digits of the year, so searching for
+    #: a three digit extension beginning with those digits returned every call
+    #: ever made.  An operator narrows by time with a time control, not by
+    #: typing a year into a box meant for a number.
+    SEARCHABLE = ("source", "destination", "caller_identity", "disposition")
+
+    def _matches(self, record: dict[str, Any], needle: str) -> bool:
+        return any(
+            needle in str(record.get(field, "")).lower() for field in self.SEARCHABLE
+        )
+
     def read(self, limit: int = 100, search: str = "") -> dict[str, Any]:
         """Return the most recent call records, newest first."""
         limit = max(1, min(int(limit or 100), 1000))
@@ -299,7 +315,7 @@ class CallRecordReader:
             record = self._parse(row)
             if record is None:
                 continue
-            if needle and needle not in " ".join(str(value) for value in record.values()).lower():
+            if needle and not self._matches(record, needle):
                 continue
             records.append(record)
             if len(records) >= limit:
@@ -329,11 +345,23 @@ class CallRecordReader:
         except ValueError:
             duration, billable = 0, 0
 
+        # The first four fields are identifiers, not quantities, and they are
+        # left exactly as the engine recorded them.
+        #
+        # A telephone number is the clearest case in the whole product. An
+        # operator scanning call history is looking for a number somebody rang,
+        # comparing it against a handset label or a complaint, or pasting it
+        # into a search. "Two hundred one" matches nothing they have and cannot
+        # be dialled. The same is true of the time a call started, which is
+        # read to line a call up against an incident.
+        #
+        # The durations below are quantities and are spelled, because an
+        # operator reads them rather than uses them.
         return {
-            "source": numerals.sanitize(record.get("source", "")),
-            "destination": numerals.sanitize(record.get("destination", "")),
-            "caller_identity": numerals.sanitize(record.get("caller_identity", "")),
-            "started_at": numerals.sanitize(record.get("started_at", "")),
+            "source": record.get("source", ""),
+            "destination": record.get("destination", ""),
+            "caller_identity": record.get("caller_identity", ""),
+            "started_at": record.get("started_at", ""),
             "duration": numerals.spell_duration(max(0, duration)),
             "talk_time": numerals.spell_duration(max(0, billable)),
             "disposition": record.get("disposition", "").strip().upper(),

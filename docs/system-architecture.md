@@ -276,6 +276,35 @@ through the browser side module. An automated test asserts the two
 implementations agree across the full range exercised by the product and that
 no operator facing surface emits a digit character.
 
+### What is spelled, and what is not
+
+A quantity is a number an operator reads; an identifier is a number an operator
+uses. Quantities are spelled — twelve active calls, three minutes. Identifiers
+keep their digits: addresses, ports, versions, device and interface names, card
+models, telephone numbers, timestamps, protocol response codes and filesystem
+paths.
+
+The rule replaced an earlier one that spelled everything. That rule was
+enforced perfectly and was wrong in a way only visible in use: the appliance
+printed its own address in words, so nobody could type it; it told a technician
+to configure an interface named "ethzero" when the interface is called eth0;
+and it filled call history with "two hundred one" where the operator was
+searching for 201. A constraint that makes the product unusable is not being
+upheld by being obeyed.
+
+The identifier shapes are listed in `appliance/numerals.py`, `web/js/numerals.js`
+and `scripts/lib/common.sh`, and a test holds the three identical. The exemption
+is narrow by construction: each identifier is lifted out, everything left is
+spelled, and the identifier is put back, so only the identifier survives and
+never the quantity beside it. The unconditional form remains available and is
+still tested, which is what makes the exemption reversible.
+
+A second-order defect appeared the moment identifiers kept their digits, and is
+worth recording because it is the shape of the next one: call history search ran
+across the whole record, so a search for a three digit extension beginning "202"
+matched the year in every timestamp and returned every call ever made. The
+search now looks only in the fields somebody would search.
+
 ### Where the spelling happens, and why it is not everywhere
 
 The interface serves two audiences with one set of routes, and this is the rule

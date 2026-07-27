@@ -201,26 +201,26 @@ digium_card_name() {
     local model="$2"
 
     case "${vendor}:${model}" in
-        d161:0120) printf 'Wildcard TE one two zero P, a single span digital card' ;;
-        d161:8000) printf 'Wildcard TE one two one, a single span digital card' ;;
-        d161:8001) printf 'Wildcard TE one two two, a single span digital card' ;;
-        d161:0205) printf 'Wildcard TE two zero five P, a dual span digital card' ;;
-        d161:0210) printf 'Wildcard TE two one zero P, a dual span digital card' ;;
-        d161:0220) printf 'Wildcard TE two two zero, a dual span digital card' ;;
-        d161:0405) printf 'Wildcard TE four zero five P, a quad span digital card' ;;
-        d161:0410) printf 'Wildcard TE four one zero P, a quad span digital card' ;;
-        d161:0420) printf 'Wildcard TE four two zero, a quad span digital card' ;;
-        d161:1820) printf 'Wildcard TE eight two zero, an octal span digital card' ;;
-        d161:b410) printf 'Wildcard B four one zero P, a quad basic rate card' ;;
-        d161:0800) printf 'Wildcard TDM eight zero zero P, an analogue card' ;;
-        d161:2400) printf 'Wildcard TDM two four zero zero P, an analogue card' ;;
-        d161:8005) printf 'Wildcard TDM four one zero P, an analogue card' ;;
-        d161:8002) printf 'Wildcard AEX eight zero zero, an analogue card' ;;
-        d161:8003) printf 'Wildcard AEX two four zero zero, an analogue card' ;;
-        d161:8006) printf 'Wildcard AEX four one zero, an analogue card' ;;
-        d161:8007) printf 'HA eight, an analogue card' ;;
-        d161:8008) printf 'HB eight, a mixed analogue and basic rate card' ;;
-        e159:0001) printf 'an early Tiger Jet based Wildcard, of the X one zero zero P or TDM four zero zero P family' ;;
+        d161:0120) printf 'Wildcard TE120P, a single span digital card' ;;
+        d161:8000) printf 'Wildcard TE121, a single span digital card' ;;
+        d161:8001) printf 'Wildcard TE122, a single span digital card' ;;
+        d161:0205) printf 'Wildcard TE205P, a dual span digital card' ;;
+        d161:0210) printf 'Wildcard TE210P, a dual span digital card' ;;
+        d161:0220) printf 'Wildcard TE220, a dual span digital card' ;;
+        d161:0405) printf 'Wildcard TE405P, a quad span digital card' ;;
+        d161:0410) printf 'Wildcard TE410P, a quad span digital card' ;;
+        d161:0420) printf 'Wildcard TE420, a quad span digital card' ;;
+        d161:1820) printf 'Wildcard TE820, an octal span digital card' ;;
+        d161:b410) printf 'Wildcard B410P, a quad basic rate card' ;;
+        d161:0800) printf 'Wildcard TDM800P, an analogue card' ;;
+        d161:2400) printf 'Wildcard TDM2400P, an analogue card' ;;
+        d161:8005) printf 'Wildcard TDM410P, an analogue card' ;;
+        d161:8002) printf 'Wildcard AEX800, an analogue card' ;;
+        d161:8003) printf 'Wildcard AEX2400, an analogue card' ;;
+        d161:8006) printf 'Wildcard AEX410, an analogue card' ;;
+        d161:8007) printf 'HA8, an analogue card' ;;
+        d161:8008) printf 'HB8, a mixed analogue and basic rate card' ;;
+        e159:0001) printf 'an early Tiger Jet based Wildcard, of the X100P or TDM400P family' ;;
         *) printf '' ;;
     esac
 }

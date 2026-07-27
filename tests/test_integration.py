@@ -15,6 +15,7 @@ import re
 import unittest
 
 from support import (
+    quantities_left_as_digits,
     ApplianceHarness,
     SocketTestClient,
     TEST_PASSWORD,
@@ -734,7 +735,7 @@ class SpelledOutputTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         await self.harness.stop()
 
-    async def test_no_line_in_the_appliance_log_contains_a_digit(self) -> None:
+    async def test_no_quantity_in_the_appliance_log_survives_as_digits(self) -> None:
         # Exercise the appliance so the log is not empty.
         self.appliance._on_engine_event(
             engine_event("Newchannel", uniqueid="one", channel="PJSIP/alpha")
@@ -753,10 +754,14 @@ class SpelledOutputTests(unittest.IsolatedAsyncioTestCase):
 
         content = log_file.read_text(encoding="utf-8")
         self.assertTrue(content.strip(), "the appliance produced no log output")
-        offending = [line for line in content.splitlines() if re.search(r"\d", line)]
+        # The timestamp beginning each line, and any address, port or version
+        # the appliance names, are identifiers and keep their digits. A log an
+        # engineer greps at three in the morning has to carry the address they
+        # are grepping for. What must never appear as digits is a quantity.
+        offending = quantities_left_as_digits(content)
         self.assertEqual(
             offending, [],
-            f"a digit character escaped into the appliance log: {offending[:3]}",
+            f"a quantity escaped into the appliance log as digits: {offending[:3]}",
         )
 
     async def test_the_operator_facing_figures_are_spelled(self) -> None:

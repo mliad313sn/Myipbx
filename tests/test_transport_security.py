@@ -1017,21 +1017,35 @@ class CertificateGeneratorScriptTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0)
 
-        # Every logged line is spelled. The fingerprint block is the one
-        # deliberate exception, because it exists to be compared against what a
-        # browser displays and words could not be.
+        # Every quantity this script reports is spelled. Identifiers are not,
+        # and the difference is the rule: an operator compares a fingerprint
+        # against a browser, types an address into one, and reads a timestamp
+        # to know when something happened. Words serve none of those.
+        #
+        # So the line is stripped of everything that is legitimately an
+        # identifier, and whatever digits remain are quantities that escaped.
         for line in completed.stdout.splitlines():
-            if regular_expressions.fullmatch(r"\s*([0-9A-F]{2}:)+[0-9A-F]{2}\s*", line):
-                continue
-            # The temporary directory this test runs in has digits in its name
-            # only if the operating system put them there; the script's own
-            # words are what is under test.
+            # The temporary directory this test runs in carries digits only
+            # because the operating system put them there.
             if str(root) in line or root.name in line:
                 continue
+
+            remainder = line
+            for shape in (
+                r"([0-9A-Fa-f]{2}:)+[0-9A-Fa-f]{2}",          # a fingerprint
+                r"\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?",  # a date
+                r"\d{2}:\d{2}(:\d{2})?",                      # a time
+                r"(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?",           # an address
+                r"v?\d+\.\d+(\.\d+)*",                        # a version
+                r"(/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+",      # a path
+                r"\bport(\s+number)?\s+\d{1,5}\b",           # a port
+            ):
+                remainder = regular_expressions.sub(shape, " ", remainder)
+
             with self.subTest(line=line):
                 self.assertNotRegex(
-                    line, r"\d",
-                    f"a digit reached the operator through this script: {line}",
+                    remainder, r"\d",
+                    f"a quantity reached the operator as digits: {line}",
                 )
 
 
