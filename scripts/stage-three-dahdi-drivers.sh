@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# Stage three -- the legacy Digium hardware bridging layer.
+#
+# Compiles the interface card kernel drivers directly against the running
+# kernel, installs them, loads them, and persists the module configuration so
+# the cards come back after a restart.
+#
+# This is the stage the market benchmark identified as the unguided manual
+# ritual.  Every step here is announced before it runs, is idempotent, reports
+# its failure reason in plain language rather than as a bare module load error,
+# and can be rehearsed without mutating the machine.
+#
+# Sources are expected to be present locally, because these appliances are
+# frequently air gapped.  Set APPLIANCE_SOURCE_DIR to the directory holding the
+# driver and tools archives, or set the download addresses to fetch them.
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+STAGE="stage-three-dahdi-drivers"
+
+APPLIANCE_SOURCE_DIR="${APPLIANCE_SOURCE_DIR:-/usr/local/src/myipbx}"
+APPLIANCE_BUILD_DIR="${APPLIANCE_BUILD_DIR:-/usr/local/src/myipbx/build}"
+DRIVER_ARCHIVE="${DRIVER_ARCHIVE:-}"
+TOOLS_ARCHIVE="${TOOLS_ARCHIVE:-}"
+DRIVER_ARCHIVE_URL="${DRIVER_ARCHIVE_URL:-}"
+TOOLS_ARCHIVE_URL="${TOOLS_ARCHIVE_URL:-}"
+
+# The peripheral bus vendor identifier assigned to Digium.
+DIGIUM_VENDOR="d161"
+
+report_detected_cards() {
+    log_step "enumerating the peripheral bus for legacy Digium interface cards"
+
+    local found=0
+    local device
+    for device in /sys/bus/pci/devices/*; do
+        [[ -r "${device}/vendor" ]] || continue
+        local vendor
+        vendor="$(tr -d '\n' <"${device}/vendor")"
+        if [[ "${vendor}" == "0x${DIGIUM_VENDOR}" ]]; then
+            found=$(( found + 1 ))
+            local model
+            model="$(tr -d '\n' <"${device}/device" 2>/dev/null || printf 'unknown')"
+            log_info "a Digium interface card was detected in the slot named $(basename "${device}") bearing the device identifier ${model}"
+        fi
+    done
+
+    if (( found == 0 )); then
+        log_warn "no legacy Digium interface card was detected on the peripheral bus"
+        log_warn "the drivers will still be built and installed so that a card added later is supported immediately"
+    else
+        log_info "$(spell_integer "${found}") Digium interface card or cards were detected"
+    fi
+    return 0
+}
+
+resolve_archive() {
+    local explicit="$1"
+    local url="$2"
+    local pattern="$3"
+    local description="$4"
+
+    if [[ -n "${explicit}" ]]; then
+        [[ -f "${explicit}" ]] || fail "the ${description} archive at ${explicit} does not exist"
+        printf '%s' "${explicit}"
+        return 0
+    fi
+
+    local candidate
+    candidate="$(find "${APPLIANCE_SOURCE_DIR}" -maxdepth 1 -name "${pattern}" -type f 2>/dev/null | sort | tail -n 1)"
+    if [[ -n "${candidate}" ]]; then
+        printf '%s' "${candidate}"
+        return 0
+    fi
+
+    if [[ -n "${url}" ]]; then
+        ensure_directory "${APPLIANCE_SOURCE_DIR}"
+        local target="${APPLIANCE_SOURCE_DIR}/$(basename "${url}")"
+        log_info "fetching the ${description} archive"
+        run_command curl --location --fail --output "${target}" "${url}"
+        printf '%s' "${target}"
+        return 0
+    fi
+
+    fail "the ${description} archive was not found in ${APPLIANCE_SOURCE_DIR} and no download address was supplied"
+}
+
+extract_archive() {
+    local archive="$1"
+    local destination="$2"
+
+    ensure_directory "${destination}"
+    log_info "extracting the archive at ${archive}"
+    run_command tar --extract --file "${archive}" --directory "${destination}"
+
+    if is_rehearsal; then
+        printf '%s/rehearsal' "${destination}"
+        return 0
+    fi
+
+    local extracted
+    extracted="$(find "${destination}" -maxdepth 1 -mindepth 1 -type d -newer "${archive}" 2>/dev/null | sort | tail -n 1)"
+    if [[ -z "${extracted}" ]]; then
+        extracted="$(find "${destination}" -maxdepth 1 -mindepth 1 -type d | sort | tail -n 1)"
+    fi
+    [[ -n "${extracted}" ]] || fail "the archive at ${archive} did not extract into a directory"
+    printf '%s' "${extracted}"
+}
+
+build_drivers() {
+    local source_tree="$1"
+    local release
+    release="$(uname -r)"
+
+    log_step "compiling the interface card drivers against the running kernel"
+    log_info "the running kernel release is ${release}"
+
+    if is_rehearsal; then
+        log_info "rehearsal: the drivers would be compiled and installed from ${source_tree}"
+        return 0
+    fi
+
+    local parallelism
+    parallelism="$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '1')"
+    log_info "building with $(spell_integer "${parallelism}") parallel job or jobs"
+
+    # A compilation failure here is the single most common bring up failure, so
+    # it is caught and explained rather than left as a wall of compiler output.
+    if ! ( cd "${source_tree}" && make KVERS="${release}" -j"${parallelism}" ); then
+        log_error "the interface card drivers did not compile against the running kernel"
+        log_error "the usual causes are kernel headers that do not match the running kernel, a driver release that predates this kernel, or a missing compiler"
+        fail "the driver compilation failed"
+    fi
+
+    ( cd "${source_tree}" && make install )
+    ( cd "${source_tree}" && make config ) || log_warn "the driver configuration step reported a problem and was skipped"
+}
+
+build_tools() {
+    local source_tree="$1"
+
+    log_step "building the interface card tools"
+    if is_rehearsal; then
+        log_info "rehearsal: the tools would be built and installed from ${source_tree}"
+        return 0
+    fi
+
+    if ! ( cd "${source_tree}" && ./configure && make && make install ); then
+        fail "the interface card tools did not build"
+    fi
+}
+
+load_and_persist_modules() {
+    log_step "loading the interface driver and persisting the module configuration"
+
+    if is_rehearsal; then
+        log_info "rehearsal: the interface driver would be loaded and persisted"
+        return 0
+    fi
+
+    if ! modprobe dahdi; then
+        log_error "the interface driver refused to load"
+        log_error "inspect the kernel message buffer for the reason; a driver built against a different kernel release is the most frequent cause"
+        fail "the interface driver could not be loaded"
+    fi
+    log_info "the interface driver is loaded"
+
+    local persist="/etc/modules-load.d/myipbx-dahdi.conf"
+    ensure_directory "$(dirname "${persist}")"
+    {
+        printf '# %s -- interface driver modules loaded at start up\n' "${APPLIANCE_NAME}"
+        printf 'dahdi\n'
+        printf 'dahdi_transcode\n'
+    } >"${persist}"
+    log_info "the module configuration was persisted to ${persist}"
+}
+
+generate_span_configuration() {
+    log_step "generating the span configuration from the detected hardware"
+
+    if is_rehearsal; then
+        log_info "rehearsal: the span configuration would be generated and applied"
+        return 0
+    fi
+
+    if ! have_command dahdi_genconf; then
+        log_warn "the span configuration generator is not available; map the spans from the dashboard instead"
+        return 0
+    fi
+
+    if ! dahdi_genconf; then
+        log_warn "the span configuration generator reported a problem"
+        log_warn "this is expected on a machine with no interface card fitted"
+        return 0
+    fi
+
+    if have_command dahdi_cfg; then
+        dahdi_cfg -vv || log_warn "the span configuration could not be applied; inspect the generated configuration"
+    fi
+
+    if [[ -d /proc/dahdi ]]; then
+        local span_count
+        span_count="$(find /proc/dahdi -maxdepth 1 -type f 2>/dev/null | wc -l)"
+        log_info "the interface driver now exports $(spell_integer "${span_count}") span or spans"
+    fi
+}
+
+main() {
+    banner "stage three -- the legacy Digium hardware bridging layer"
+    require_root
+
+    if skip_if_completed "${STAGE}"; then
+        return 0
+    fi
+
+    report_detected_cards
+
+    local driver_archive tools_archive
+    driver_archive="$(resolve_archive "${DRIVER_ARCHIVE}" "${DRIVER_ARCHIVE_URL}" 'dahdi-linux*.tar.gz' 'interface driver')"
+    tools_archive="$(resolve_archive "${TOOLS_ARCHIVE}" "${TOOLS_ARCHIVE_URL}" 'dahdi-tools*.tar.gz' 'interface tools')"
+
+    ensure_directory "${APPLIANCE_BUILD_DIR}"
+
+    local driver_tree tools_tree
+    driver_tree="$(extract_archive "${driver_archive}" "${APPLIANCE_BUILD_DIR}")"
+    build_drivers "${driver_tree}"
+
+    tools_tree="$(extract_archive "${tools_archive}" "${APPLIANCE_BUILD_DIR}")"
+    build_tools "${tools_tree}"
+
+    load_and_persist_modules
+    generate_span_configuration
+
+    mark_stage_completed "${STAGE}" "the interface drivers are compiled, installed, and loaded"
+    log_info "stage three is complete"
+}
+
+main "$@"

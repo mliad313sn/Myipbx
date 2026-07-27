@@ -1,0 +1,80 @@
+{
+  "_comment": [
+    "Legacy-to-Modern IPBX Appliance -- configuration document.",
+    "This file is the single source of truth. Every engine configuration file",
+    "is a rendered artefact of it, and the control plane refuses to overwrite a",
+    "rendered artefact that was modified outside the appliance.",
+    "Numbers appear here as numerals because this document is machine read.",
+    "Every human facing rendering of them is spelled in words by the appliance."
+  ],
+
+  "appliance": {
+    "listen_address": "0.0.0.0",
+    "listen_port": 8088,
+    "web_root": "/opt/myipbx/web",
+    "state_directory": "/var/lib/myipbx",
+    "asterisk_configuration_directory": "/etc/asterisk",
+    "log_file": "/var/log/myipbx/appliance.log",
+    "log_level": "INFO",
+
+    "manager_host": "127.0.0.1",
+    "manager_port": 5038,
+    "manager_username": "myipbx",
+    "manager_secret": "",
+
+    "heartbeat_interval_seconds": 5.0,
+    "heartbeat_missed_limit": 3,
+    "socket_maximum_connections": 256,
+
+    "trunk_registration_base_seconds": 2.0,
+    "trunk_registration_ceiling_seconds": 300.0,
+
+    "session_idle_seconds": 1800,
+    "login_attempt_limit": 5,
+    "login_lockout_seconds": 300,
+
+    "health_sweep_interval_seconds": 30.0,
+    "hardware_rescan_interval_seconds": 300.0,
+
+    "fail_on_address_allocation_server": true
+  },
+
+  "revision": 1,
+
+  "site": {
+    "name": "an example site",
+    "timezone": "UTC"
+  },
+
+  "trunks": [
+    {
+      "name": "carrier-primary",
+      "technology": "PJSIP",
+      "host": "sip.example.net",
+      "username": "example-account",
+      "enabled": true
+    }
+  ],
+
+  "extensions": [
+    { "number": "201", "target": "PJSIP/201" },
+    { "number": "202", "target": "PJSIP/202" }
+  ],
+
+  "dialplan": {
+    "internal_context": "internal",
+    "inbound_context": "from-trunk",
+    "inbound_target": "201"
+  },
+
+  "hardware": {
+    "spans": [
+      {
+        "number": 1,
+        "signalling": "fxo_ks",
+        "group": 1,
+        "channels": "1-4"
+      }
+    ]
+  }
+}

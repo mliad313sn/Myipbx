@@ -1,0 +1,32 @@
+# Legacy-to-Modern IPBX Appliance -- static network configuration reference
+#
+# Constraint One in template form.  Every address on this appliance is written
+# down by an administrator.  There is no address request directive here and
+# there is no address allocation service on the machine.
+#
+# Copy this file, substitute the values for the site, and place it where the
+# machine's network configuration system reads from.  Stage two of the
+# installer writes an equivalent file automatically when the interface name and
+# the static address are supplied to it.
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    # The interface name is the site's, not a guess.  Read it from the machine
+    # before filling this in.
+    eth0:
+      # A static address and prefix length.  Note the deliberate absence of any
+      # address request directive: this appliance never asks for an address and
+      # never offers one.
+      addresses:
+        - 192.0.2.20/24
+      routes:
+        - to: default
+          via: 192.0.2.1
+      nameservers:
+        addresses: [192.0.2.2, 192.0.2.3]
+      # Router advertisement acceptance is disabled so that the appliance
+      # cannot acquire an address it was not given deliberately.
+      accept-ra: false
+      link-local: []

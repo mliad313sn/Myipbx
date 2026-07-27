@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legacy-to-Modern IPBX Appliance</title>
+<link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+
+<header class="appliance-header">
+  <div class="masthead">
+    <h1>Legacy-to-Modern IPBX Appliance</h1>
+    <p class="subtitle">bare metal telephony on legacy Digium interface cards</p>
+  </div>
+  <div class="link-state" id="link-state">
+    <span class="lamp" id="link-lamp"></span>
+    <span class="link-text" id="link-text">not connected</span>
+    <span class="link-age" id="link-age"></span>
+  </div>
+</header>
+
+<main>
+
+  <section class="panel sign-in" id="sign-in-panel">
+    <h2>sign in</h2>
+    <p class="hint">
+      this appliance ships with no default credentials. the installer generated an
+      initial password and printed it once during installation.
+    </p>
+    <form id="sign-in-form" autocomplete="off">
+      <label for="username">user name</label>
+      <input type="text" id="username" name="username" required>
+      <label for="password">password</label>
+      <input type="password" id="password" name="password" required>
+      <button type="submit" id="sign-in-button">sign in</button>
+    </form>
+    <p class="failure" id="sign-in-failure" hidden></p>
+  </section>
+
+  <div id="dashboard" hidden>
+
+    <section class="tiles">
+      <article class="tile">
+        <h3>active calls</h3>
+        <p class="figure" id="figure-active-calls">zero</p>
+        <p class="caption" id="caption-answered">zero answered</p>
+      </article>
+      <article class="tile">
+        <h3>trunks registered</h3>
+        <p class="figure" id="figure-trunks">zero</p>
+        <p class="caption" id="caption-trunks">of zero declared</p>
+      </article>
+      <article class="tile">
+        <h3>interface cards</h3>
+        <p class="figure" id="figure-cards">zero</p>
+        <p class="caption" id="caption-spans">zero spans detected</p>
+      </article>
+      <article class="tile">
+        <h3>appliance uptime</h3>
+        <p class="figure small" id="figure-uptime">zero seconds</p>
+        <p class="caption" id="caption-peak">peak of zero concurrent calls</p>
+      </article>
+    </section>
+
+    <section class="panel" id="alarm-panel" hidden>
+      <h2>alarms</h2>
+      <ul class="alarm-list" id="alarm-list"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>live call activity</h2>
+      <p class="hint">
+        channel state is pushed from the telephony engine event stream as it
+        happens. nothing on this page is polled.
+      </p>
+      <table class="grid" id="channel-table">
+        <thead>
+          <tr>
+            <th>channel</th><th>state</th><th>caller</th>
+            <th>extension</th><th>duration</th><th>talk time</th>
+          </tr>
+        </thead>
+        <tbody id="channel-body">
+          <tr class="empty"><td colspan="6">no channel is active</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>trunk registration</h2>
+      <table class="grid" id="trunk-table">
+        <thead>
+          <tr>
+            <th>trunk</th><th>technology</th><th>state</th>
+            <th>attempts</th><th>in state</th><th>reason</th><th>control</th>
+          </tr>
+        </thead>
+        <tbody id="trunk-body">
+          <tr class="empty"><td colspan="7">no trunk is declared</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>legacy interface hardware</h2>
+      <p class="summary" id="hardware-summary">enumerating</p>
+      <table class="grid" id="span-table">
+        <thead>
+          <tr><th>span</th><th>description</th><th>channels</th><th>alarm</th></tr>
+        </thead>
+        <tbody id="span-body">
+          <tr class="empty"><td colspan="4">no span is exported by the interface driver</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel" id="drift-panel">
+      <h2>configuration reconciliation</h2>
+      <p class="hint" id="drift-explanation">checking</p>
+      <table class="grid" id="drift-table">
+        <thead>
+          <tr><th>file</th><th>state</th><th>decision</th></tr>
+        </thead>
+        <tbody id="drift-body"></tbody>
+      </table>
+      <div class="actions">
+        <button type="button" id="render-button">render configuration</button>
+        <button type="button" id="render-force-button" class="caution">
+          regenerate over local edits
+        </button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>automated tasks</h2>
+      <table class="grid" id="task-table">
+        <thead>
+          <tr><th>task</th><th>description</th><th>last outcome</th><th>runs</th><th>invoke</th></tr>
+        </thead>
+        <tbody id="task-body"></tbody>
+      </table>
+    </section>
+
+    <section class="panel constraints" id="constraint-panel">
+      <h2>product constraints</h2>
+      <div class="constraint" id="constraint-allocation">
+        <h3>address allocation exclusion</h3>
+        <p id="allocation-statement">checking</p>
+        <ul id="allocation-findings"></ul>
+      </div>
+      <div class="constraint">
+        <h3>spelled numerals</h3>
+        <p>
+          every figure on this page is rendered as words by the same algorithm the
+          appliance uses in its logs. no digit character is emitted.
+        </p>
+      </div>
+    </section>
+
+    <div class="actions footer-actions">
+      <button type="button" id="sign-out-button">sign out</button>
+    </div>
+
+  </div>
+</main>
+
+<footer class="appliance-footer">
+  <p id="footer-text">this appliance assigns no addresses</p>
+</footer>
+
+<script src="/js/numerals.js"></script>
+<script src="/js/socket.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

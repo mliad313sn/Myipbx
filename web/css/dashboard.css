@@ -1,0 +1,299 @@
+/* Dashboard presentation.
+ *
+ * Plain stylesheet, no build step, no external font, no remote asset.  The
+ * appliance may never reach a network that can fetch anything, so everything
+ * the interface needs is served from the appliance itself.
+ */
+
+:root {
+  --ink: #101418;
+  --ink-soft: #55606b;
+  --paper: #f4f6f8;
+  --card: #ffffff;
+  --rule: #d8dee4;
+  --accent: #1f4e79;
+  --good: #1d7a4c;
+  --warn: #9a6400;
+  --bad: #a32020;
+  --shadow: 0 1px 3px rgba(16, 20, 24, 0.10);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "DejaVu Sans", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/* -- header ------------------------------------------------------------- */
+
+.appliance-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.appliance-header h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.link-state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+}
+
+.lamp {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: #8b96a0;
+  flex: none;
+}
+
+.lamp.live { background: #46d07f; }
+.lamp.reconnecting { background: #f0b429; }
+.lamp.stale { background: #ff6b5e; }
+
+.link-age { opacity: 0.8; }
+
+/* -- layout ------------------------------------------------------------- */
+
+main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.hint, .summary {
+  margin: 0 0 1rem;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+/* -- tiles -------------------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.tile {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1rem 1.25rem;
+}
+
+.tile h3 {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.figure {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--accent);
+}
+
+.figure.small { font-size: 1.15rem; }
+
+.caption {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+/* -- tables ------------------------------------------------------------- */
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.grid th, .grid td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+.grid th {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.grid tr.empty td {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.state-pill {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: #e7ebef;
+  color: var(--ink-soft);
+}
+
+.state-pill.registered, .state-pill.answered { background: #dff3e7; color: var(--good); }
+.state-pill.registering, .state-pill.retrying, .state-pill.ringing { background: #fbf0d6; color: var(--warn); }
+.state-pill.failed, .state-pill.unknown { background: #fbe0e0; color: var(--bad); }
+
+/* -- alarms ------------------------------------------------------------- */
+
+.alarm-list { margin: 0; padding-left: 1.1rem; }
+
+.alarm-list li { margin-bottom: 0.4rem; }
+
+.alarm-list li.critical { color: var(--bad); }
+.alarm-list li.warning { color: var(--warn); }
+
+.alarm-detail { color: var(--ink-soft); font-size: 0.85rem; }
+
+/* -- forms and actions --------------------------------------------------- */
+
+.sign-in { max-width: 420px; margin: 3rem auto; }
+
+form label {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+form input {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  margin-top: 0.25rem;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:hover { filter: brightness(1.08); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+button.caution {
+  background: transparent;
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+.footer-actions { justify-content: flex-end; }
+
+.failure {
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 5px;
+  background: #fbe0e0;
+  color: var(--bad);
+  font-size: 0.87rem;
+}
+
+/* -- constraints --------------------------------------------------------- */
+
+.constraints .constraint { margin-bottom: 1rem; }
+
+.constraints h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.constraints p { margin: 0; font-size: 0.88rem; color: var(--ink-soft); }
+
+.constraints ul { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; }
+
+.constraint.satisfied h3::after {
+  content: " — satisfied";
+  color: var(--good);
+  font-weight: 500;
+}
+
+.constraint.breached h3::after {
+  content: " — breached";
+  color: var(--bad);
+  font-weight: 500;
+}
+
+/* -- footer -------------------------------------------------------------- */
+
+.appliance-footer {
+  padding: 1rem 1.5rem 2rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}

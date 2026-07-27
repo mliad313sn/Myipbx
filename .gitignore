@@ -1,0 +1,16 @@
+# Compiled interpreter artefacts
+__pycache__/
+*.py[cod]
+
+# Appliance run time state, never committed
+*.log
+*.partial
+/state/
+/backups/
+credentials.json
+rendered-digests.json
+manager.secret
+
+# Build trees created by the staging scripts
+/build/
+/src/

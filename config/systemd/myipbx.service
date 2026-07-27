@@ -1,0 +1,51 @@
+[Unit]
+Description=Legacy-to-Modern IPBX Appliance control plane
+Documentation=file:/opt/myipbx/README.md
+After=network-online.target asterisk.service
+Wants=network-online.target
+
+# Constraint One, expressed as a scheduling fact rather than only as a policy:
+# the appliance is ordered after the network is already addressed, because it
+# never participates in addressing it.
+After=dahdi.service
+
+[Service]
+Type=simple
+User=myipbx
+Group=myipbx
+WorkingDirectory=/opt/myipbx
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=MYIPBX_CONFIGURATION_DOCUMENT=/etc/myipbx/appliance.json
+ExecStart=/usr/bin/python3 -m appliance
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillMode=mixed
+
+# The control plane needs to read the engine configuration directory and its
+# own state, and nothing else.  Everything below is the smallest set of
+# privileges that leaves it able to do its job.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=no
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+ReadWritePaths=/var/lib/myipbx /var/log/myipbx /etc/asterisk
+ReadOnlyPaths=/etc/myipbx /proc/dahdi
+
+# The appliance serves the dashboard and speaks to the engine over the
+# loopback address.  It has no reason to reach anything else, and no reason
+# ever to bind an address allocation service port.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=
+
+[Install]
+WantedBy=multi-user.target
