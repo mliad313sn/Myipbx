@@ -1,0 +1,958 @@
+/* The component primitives.
+ *
+ * Everything here is built from the tokens and nothing here writes a colour.
+ * That is the rule the whole layer rests on: a component that writes a literal
+ * colour is a component that has quietly opted out of the dark theme and the
+ * high contrast theme, and it will be found by an operator in a plant room
+ * rather than by whoever wrote it.
+ *
+ * Three rules hold across every component below.
+ *
+ * A control is never smaller than the touch target for the density in force.
+ * The console is used standing at a rack as often as sitting at a desk.
+ *
+ * Every interactive element shows where the keyboard is. The ring is drawn
+ * outside the control so it sits against the page rather than against the
+ * control's own fill, which is what keeps it visible on a filled button.
+ *
+ * No state is signalled by colour alone. Every status carries a mark and a
+ * word beside its colour, and every health indicator carries a shape as well.
+ * An operator who cannot separate the green from the red still has to be able
+ * to read a trunk table.
+ */
+
+/* -- utilities ---------------------------------------------------------- */
+
+/* Present to a screen reader, absent from the screen. Used for the labels that
+ * would be noise beside an icon and obligatory in speech. */
+.mx-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The first thing the keyboard reaches, and invisible until it does. A console
+ * with a long navigation column is otherwise a console an operator has to tab
+ * through twenty-one times to reach the thing they came for. */
+.mx-skip-link {
+  position: absolute;
+  left: var(--mx-space-8);
+  top: var(--mx-space-8);
+  z-index: var(--mx-z-critical-alert);
+  padding: var(--mx-space-8) var(--mx-space-16);
+  border: 1px solid var(--mx-border-focus);
+  border-radius: var(--mx-radius-small);
+  background: var(--mx-background-surface-elevated);
+  color: var(--mx-text-link);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-small-size);
+  text-decoration: underline;
+  transform: translateY(-200%);
+  transition: transform var(--mx-motion-fast) var(--mx-motion-ease-standard);
+}
+
+.mx-skip-link:focus {
+  transform: translateY(0);
+  outline: var(--mx-focus-ring-width) solid var(--mx-border-focus);
+  outline-offset: var(--mx-focus-ring-offset);
+}
+
+/* -- button --------------------------------------------------------------
+ *
+ * The variants differ only in three local values, so a variant is three lines
+ * rather than a copy of the component. The local names are also what the
+ * loading indicator reads, which is how it stays legible on a filled button
+ * and on a transparent one without either knowing about the other.
+ */
+
+.mx-button {
+  --mx-button-ink: var(--mx-text-primary);
+  --mx-button-surface: var(--mx-background-surface);
+  --mx-button-border: var(--mx-border-strong);
+  --mx-button-height: var(--mx-density-control-height);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mx-space-8);
+  box-sizing: border-box;
+  min-height: var(--mx-density-touch-target);
+  min-height: max(var(--mx-button-height), var(--mx-density-touch-target));
+  padding: var(--mx-density-control-padding-block) var(--mx-density-control-padding-inline);
+  border: 1px solid var(--mx-button-border);
+  border-radius: var(--mx-radius-small);
+  background: var(--mx-button-surface);
+  color: var(--mx-button-ink);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-label-size);
+  font-weight: var(--mx-type-label-weight);
+  line-height: var(--mx-type-label-line);
+  letter-spacing: var(--mx-type-label-tracking);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--mx-motion-fast) var(--mx-motion-ease-standard),
+              border-color var(--mx-motion-fast) var(--mx-motion-ease-standard);
+}
+
+.mx-button:focus-visible,
+.mx-icon-button:focus-visible,
+.mx-input:focus-visible,
+.mx-select:focus-visible,
+.mx-textarea:focus-visible,
+.mx-checkbox:focus-visible,
+.mx-radio:focus-visible,
+.mx-switch:focus-visible {
+  outline: var(--mx-focus-ring-width) solid var(--mx-border-focus);
+  outline-offset: var(--mx-focus-ring-offset);
+}
+
+/* A browser without focus-visible still has to show the ring, so the ring is
+ * given to focus and withdrawn again only where focus-visible is understood
+ * and says it is not wanted. */
+.mx-button:focus,
+.mx-icon-button:focus,
+.mx-input:focus,
+.mx-select:focus,
+.mx-textarea:focus,
+.mx-checkbox:focus,
+.mx-radio:focus,
+.mx-switch:focus {
+  outline: var(--mx-focus-ring-width) solid var(--mx-border-focus);
+  outline-offset: var(--mx-focus-ring-offset);
+}
+
+.mx-button:focus:not(:focus-visible),
+.mx-icon-button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.mx-button--primary {
+  --mx-button-ink: var(--mx-brand-on-primary);
+  --mx-button-surface: var(--mx-brand-primary);
+  --mx-button-border: var(--mx-brand-primary);
+}
+
+.mx-button--primary:hover {
+  --mx-button-surface: var(--mx-brand-primary-hover);
+  --mx-button-border: var(--mx-brand-primary-hover);
+}
+
+.mx-button--primary:active {
+  --mx-button-surface: var(--mx-brand-primary-pressed);
+  --mx-button-border: var(--mx-brand-primary-pressed);
+}
+
+.mx-button--secondary {
+  --mx-button-ink: var(--mx-text-link);
+  --mx-button-surface: var(--mx-background-surface);
+  --mx-button-border: var(--mx-border-strong);
+}
+
+.mx-button--secondary:hover {
+  --mx-button-surface: var(--mx-background-hover);
+  --mx-button-border: var(--mx-border-focus);
+}
+
+.mx-button--secondary:active {
+  --mx-button-surface: var(--mx-background-pressed);
+}
+
+/* Danger is bordered rather than filled. A wall of red buttons stops being a
+ * warning; one red outline among plain ones is still read as one. The word on
+ * the button says what it destroys, which is the part that carries the
+ * meaning when the colour cannot. */
+.mx-button--danger {
+  --mx-button-ink: var(--mx-status-critical-text);
+  --mx-button-surface: var(--mx-background-surface);
+  --mx-button-border: var(--mx-status-critical-border);
+}
+
+.mx-button--danger:hover {
+  --mx-button-surface: var(--mx-status-critical-background);
+  --mx-button-border: var(--mx-status-critical-icon);
+}
+
+.mx-button--danger:active {
+  --mx-button-surface: var(--mx-status-critical-background);
+  --mx-button-border: var(--mx-status-critical-text);
+}
+
+.mx-button--ghost {
+  --mx-button-ink: var(--mx-text-link);
+  --mx-button-surface: var(--mx-color-transparent);
+  --mx-button-border: var(--mx-color-transparent);
+}
+
+.mx-button--ghost:hover {
+  --mx-button-surface: var(--mx-background-hover);
+}
+
+.mx-button--ghost:active {
+  --mx-button-surface: var(--mx-background-pressed);
+}
+
+.mx-button--small {
+  --mx-button-height: var(--mx-space-32);
+  padding: var(--mx-space-4) var(--mx-space-12);
+  font-size: var(--mx-type-caption-size);
+}
+
+.mx-button--large {
+  --mx-button-height: var(--mx-space-48);
+  padding: var(--mx-space-12) var(--mx-space-24);
+  font-size: var(--mx-type-body-size);
+}
+
+.mx-button--block {
+  display: flex;
+  width: 100%;
+}
+
+/* A disabled control is dimmed, but dimming is a colour, so it is also
+ * unhittable and announced as disabled by the attribute that dimmed it. */
+.mx-button:disabled,
+.mx-button[aria-disabled="true"],
+.mx-icon-button:disabled {
+  --mx-button-ink: var(--mx-text-disabled);
+  --mx-button-surface: var(--mx-background-disabled);
+  --mx-button-border: var(--mx-border-disabled);
+  cursor: not-allowed;
+}
+
+/* Loading keeps the label. A button that replaces its word with a spinner
+ * leaves an operator who looked away with no idea what they started. */
+.mx-button--loading {
+  cursor: progress;
+}
+
+.mx-button--loading::before {
+  content: "";
+  width: var(--mx-space-16);
+  height: var(--mx-space-16);
+  flex: none;
+  border: 2px solid var(--mx-button-border);
+  border-top-color: var(--mx-button-ink);
+  border-radius: var(--mx-radius-full);
+  animation: mx-spin 900ms linear infinite;
+}
+
+/* -- icon button ---------------------------------------------------------
+ *
+ * Square, and never without an accessible name: an icon alone is a picture,
+ * and a picture is not a label.
+ */
+.mx-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: var(--mx-density-touch-target);
+  min-height: var(--mx-density-touch-target);
+  padding: var(--mx-space-8);
+  border: 1px solid var(--mx-color-transparent);
+  border-radius: var(--mx-radius-small);
+  background: var(--mx-color-transparent);
+  color: var(--mx-text-secondary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-size);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--mx-motion-fast) var(--mx-motion-ease-standard);
+}
+
+.mx-icon-button:hover {
+  background: var(--mx-background-hover);
+  color: var(--mx-text-primary);
+}
+
+.mx-icon-button:active {
+  background: var(--mx-background-pressed);
+}
+
+/* -- fields --------------------------------------------------------------- */
+
+.mx-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mx-space-4);
+  margin-bottom: var(--mx-density-stack-gap);
+}
+
+.mx-label {
+  color: var(--mx-text-secondary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-label-size);
+  font-weight: var(--mx-type-label-weight);
+  line-height: var(--mx-type-label-line);
+  letter-spacing: var(--mx-type-label-tracking);
+}
+
+/* A required field says so in words. An asterisk alone is a convention an
+ * operator has to already know, and it is invisible to somebody enlarging the
+ * page far enough to lose it. */
+.mx-label--required::after {
+  content: " (required)";
+  color: var(--mx-text-tertiary);
+  font-weight: var(--mx-type-body-weight);
+}
+
+.mx-input,
+.mx-select,
+.mx-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--mx-density-touch-target);
+  padding: var(--mx-density-control-padding-block) var(--mx-space-12);
+  border: 1px solid var(--mx-border-default);
+  border-radius: var(--mx-radius-small);
+  background: var(--mx-background-surface);
+  color: var(--mx-text-primary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-size);
+  line-height: var(--mx-type-body-line);
+  transition: border-color var(--mx-motion-fast) var(--mx-motion-ease-standard);
+}
+
+.mx-textarea {
+  min-height: var(--mx-space-80);
+  font-family: var(--mx-font-mono);
+  font-size: var(--mx-type-monospace-size);
+  line-height: var(--mx-type-monospace-line);
+  resize: vertical;
+}
+
+.mx-input:hover,
+.mx-select:hover,
+.mx-textarea:hover {
+  border-color: var(--mx-border-strong);
+}
+
+.mx-input::placeholder,
+.mx-textarea::placeholder {
+  color: var(--mx-text-tertiary);
+}
+
+.mx-input:disabled,
+.mx-select:disabled,
+.mx-textarea:disabled {
+  border-color: var(--mx-border-disabled);
+  background: var(--mx-background-disabled);
+  color: var(--mx-text-disabled);
+  cursor: not-allowed;
+}
+
+/* An invalid field is bordered, marked and explained. The border alone would
+ * be colour carrying meaning; the message below is the part that says what to
+ * do about it. */
+.mx-input--invalid,
+.mx-select--invalid,
+.mx-textarea--invalid,
+.mx-input[aria-invalid="true"],
+.mx-select[aria-invalid="true"],
+.mx-textarea[aria-invalid="true"] {
+  border-color: var(--mx-status-critical-border);
+  border-width: 2px;
+}
+
+.mx-help {
+  color: var(--mx-text-tertiary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-caption-size);
+  line-height: var(--mx-type-caption-line);
+}
+
+.mx-validation {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mx-space-4);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-caption-size);
+  line-height: var(--mx-type-caption-line);
+}
+
+.mx-validation::before {
+  content: var(--mx-validation-mark);
+  flex: none;
+  font-weight: 700;
+}
+
+.mx-validation--error {
+  --mx-validation-mark: var(--mx-status-critical-mark);
+  color: var(--mx-status-critical-text);
+}
+
+.mx-validation--warning {
+  --mx-validation-mark: var(--mx-status-warning-mark);
+  color: var(--mx-status-warning-text);
+}
+
+.mx-validation--success {
+  --mx-validation-mark: var(--mx-status-success-mark);
+  color: var(--mx-status-success-text);
+}
+
+/* -- choices ---------------------------------------------------------------
+ *
+ * The box is drawn rather than borrowed from the operating system, because the
+ * operating system's own box does not follow a theme and cannot be given a
+ * border thick enough to survive the high contrast one. The label wrapper
+ * carries the touch target so that the words are part of the hit area.
+ */
+
+.mx-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--mx-space-8);
+  min-height: var(--mx-density-touch-target);
+  color: var(--mx-text-primary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-size);
+  cursor: pointer;
+}
+
+.mx-checkbox,
+.mx-radio {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--mx-space-20);
+  height: var(--mx-space-20);
+  margin: 0;
+  border: 2px solid var(--mx-border-strong);
+  background: var(--mx-background-surface);
+  color: var(--mx-brand-on-primary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-caption-size);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mx-checkbox { border-radius: var(--mx-radius-small); }
+.mx-radio { border-radius: var(--mx-radius-full); }
+
+.mx-checkbox:checked,
+.mx-radio:checked {
+  border-color: var(--mx-brand-primary);
+  background: var(--mx-brand-primary);
+}
+
+/* The tick and the dot are the non-colour half of the signal: a filled box
+ * with nothing in it reads as a rendering fault. */
+.mx-checkbox:checked::after {
+  content: "\2713";
+  font-weight: 700;
+}
+
+.mx-radio:checked::after {
+  content: "";
+  width: var(--mx-space-8);
+  height: var(--mx-space-8);
+  border-radius: var(--mx-radius-full);
+  background: var(--mx-brand-on-primary);
+}
+
+.mx-checkbox:indeterminate::after {
+  content: "\2013";
+  font-weight: 700;
+}
+
+.mx-checkbox:disabled,
+.mx-radio:disabled {
+  border-color: var(--mx-border-disabled);
+  background: var(--mx-background-disabled);
+  cursor: not-allowed;
+}
+
+/* -- switch ----------------------------------------------------------------
+ *
+ * A switch says on or off by where the knob sits and by the mark printed in
+ * the track, not by turning green. Its label is always beside it, because a
+ * switch with no word next to it is a switch nobody can be sure of.
+ */
+.mx-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--mx-space-48);
+  height: var(--mx-space-24);
+  margin: 0;
+  padding: 0 var(--mx-space-4);
+  border: 1px solid var(--mx-border-strong);
+  border-radius: var(--mx-radius-full);
+  background: var(--mx-background-surface-subtle);
+  color: var(--mx-text-secondary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-caption-size);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--mx-motion-standard) var(--mx-motion-ease-standard);
+}
+
+.mx-switch::before {
+  content: "\00D7";
+  position: absolute;
+  right: var(--mx-space-8);
+  font-weight: 700;
+}
+
+.mx-switch::after {
+  content: "";
+  position: absolute;
+  left: var(--mx-space-2);
+  width: var(--mx-space-20);
+  height: var(--mx-space-20);
+  border: 1px solid var(--mx-border-strong);
+  border-radius: var(--mx-radius-full);
+  background: var(--mx-background-surface);
+  transition: transform var(--mx-motion-standard) var(--mx-motion-ease-standard);
+}
+
+.mx-switch:checked {
+  border-color: var(--mx-brand-primary);
+  background: var(--mx-brand-primary);
+  color: var(--mx-brand-on-primary);
+}
+
+.mx-switch:checked::before {
+  content: "\2713";
+  right: auto;
+  left: var(--mx-space-8);
+}
+
+.mx-switch:checked::after {
+  transform: translateX(var(--mx-space-24));
+}
+
+.mx-switch:disabled {
+  border-color: var(--mx-border-disabled);
+  background: var(--mx-background-disabled);
+  color: var(--mx-text-disabled);
+  cursor: not-allowed;
+}
+
+/* -- status badge ----------------------------------------------------------
+ *
+ * The badge is the place the no-colour-alone rule is enforced rather than
+ * remembered: the mark is drawn by the base rule from a value every modifier
+ * must set, so a modifier that forgets one draws nothing and is noticed at
+ * once.
+ */
+.mx-status {
+  --mx-status-mark: "\2022";
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--mx-space-4);
+  padding: var(--mx-space-2) var(--mx-space-8);
+  border: 1px solid var(--mx-border-default);
+  border-radius: var(--mx-radius-full);
+  background: var(--mx-background-surface-subtle);
+  color: var(--mx-text-secondary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-caption-size);
+  font-weight: var(--mx-type-label-weight);
+  line-height: var(--mx-type-caption-line);
+  white-space: nowrap;
+}
+
+.mx-status::before {
+  content: var(--mx-status-mark);
+  flex: none;
+  font-weight: 700;
+}
+
+.mx-status--success {
+  --mx-status-mark: var(--mx-status-success-mark);
+  border-color: var(--mx-status-success-border);
+  background: var(--mx-status-success-background);
+  color: var(--mx-status-success-text);
+}
+
+.mx-status--information {
+  --mx-status-mark: var(--mx-status-information-mark);
+  border-color: var(--mx-status-information-border);
+  background: var(--mx-status-information-background);
+  color: var(--mx-status-information-text);
+}
+
+.mx-status--warning {
+  --mx-status-mark: var(--mx-status-warning-mark);
+  border-color: var(--mx-status-warning-border);
+  background: var(--mx-status-warning-background);
+  color: var(--mx-status-warning-text);
+}
+
+.mx-status--critical {
+  --mx-status-mark: var(--mx-status-critical-mark);
+  border-color: var(--mx-status-critical-border);
+  background: var(--mx-status-critical-background);
+  color: var(--mx-status-critical-text);
+}
+
+.mx-status--offline {
+  --mx-status-mark: var(--mx-status-offline-mark);
+  border-color: var(--mx-status-offline-border);
+  background: var(--mx-status-offline-background);
+  color: var(--mx-status-offline-text);
+}
+
+.mx-status--unknown {
+  --mx-status-mark: var(--mx-status-unknown-mark);
+  border-color: var(--mx-status-unknown-border);
+  background: var(--mx-status-unknown-background);
+  color: var(--mx-status-unknown-text);
+}
+
+.mx-status--maintenance {
+  --mx-status-mark: var(--mx-status-maintenance-mark);
+  border-color: var(--mx-status-maintenance-border);
+  background: var(--mx-status-maintenance-background);
+  color: var(--mx-status-maintenance-text);
+}
+
+.mx-status--in-progress {
+  --mx-status-mark: var(--mx-status-in-progress-mark);
+  border-color: var(--mx-status-in-progress-border);
+  background: var(--mx-status-in-progress-background);
+  color: var(--mx-status-in-progress-text);
+}
+
+/* The telephony vocabulary, drawn by the same badge. A call's direction and a
+ * record's outcome are the two things read most often in this console, and
+ * they are read down a column at speed, which is exactly the reading that
+ * colour alone fails. */
+.mx-status--inbound {
+  --mx-status-mark: var(--mx-telephony-inbound-mark);
+  border-color: var(--mx-telephony-inbound-border);
+  background: var(--mx-telephony-inbound-background);
+  color: var(--mx-telephony-inbound-text);
+}
+
+.mx-status--outbound {
+  --mx-status-mark: var(--mx-telephony-outbound-mark);
+  border-color: var(--mx-telephony-outbound-border);
+  background: var(--mx-telephony-outbound-background);
+  color: var(--mx-telephony-outbound-text);
+}
+
+.mx-status--internal {
+  --mx-status-mark: var(--mx-telephony-internal-mark);
+  border-color: var(--mx-telephony-internal-border);
+  background: var(--mx-telephony-internal-background);
+  color: var(--mx-telephony-internal-text);
+}
+
+.mx-status--external {
+  --mx-status-mark: var(--mx-telephony-external-mark);
+  border-color: var(--mx-telephony-external-border);
+  background: var(--mx-telephony-external-background);
+  color: var(--mx-telephony-external-text);
+}
+
+.mx-status--secure {
+  --mx-status-mark: var(--mx-telephony-secure-mark);
+  border-color: var(--mx-telephony-secure-border);
+  background: var(--mx-telephony-secure-background);
+  color: var(--mx-telephony-secure-text);
+}
+
+.mx-status--encrypted {
+  --mx-status-mark: var(--mx-telephony-encrypted-mark);
+  border-color: var(--mx-telephony-encrypted-border);
+  background: var(--mx-telephony-encrypted-background);
+  color: var(--mx-telephony-encrypted-text);
+}
+
+.mx-status--recorded {
+  --mx-status-mark: var(--mx-telephony-recorded-mark);
+  border-color: var(--mx-telephony-recorded-border);
+  background: var(--mx-telephony-recorded-background);
+  color: var(--mx-telephony-recorded-text);
+}
+
+.mx-status--emergency {
+  --mx-status-mark: var(--mx-telephony-emergency-mark);
+  border-color: var(--mx-telephony-emergency-border);
+  background: var(--mx-telephony-emergency-background);
+  color: var(--mx-telephony-emergency-text);
+  border-width: 2px;
+}
+
+.mx-status--queued {
+  --mx-status-mark: var(--mx-telephony-queued-mark);
+  border-color: var(--mx-telephony-queued-border);
+  background: var(--mx-telephony-queued-background);
+  color: var(--mx-telephony-queued-text);
+}
+
+.mx-status--answered {
+  --mx-status-mark: var(--mx-telephony-answered-mark);
+  border-color: var(--mx-telephony-answered-border);
+  background: var(--mx-telephony-answered-background);
+  color: var(--mx-telephony-answered-text);
+}
+
+.mx-status--missed {
+  --mx-status-mark: var(--mx-telephony-missed-mark);
+  border-color: var(--mx-telephony-missed-border);
+  background: var(--mx-telephony-missed-background);
+  color: var(--mx-telephony-missed-text);
+}
+
+.mx-status--failed {
+  --mx-status-mark: var(--mx-telephony-failed-mark);
+  border-color: var(--mx-telephony-failed-border);
+  background: var(--mx-telephony-failed-background);
+  color: var(--mx-telephony-failed-text);
+}
+
+/* -- health indicator ------------------------------------------------------
+ *
+ * The lamp beside a trunk or a span. Here the second channel is shape rather
+ * than a mark: a circle, a diamond, a square and a hollow ring are told apart
+ * at a glance and at a distance, which is how this particular indicator is
+ * actually read — from across a room, on a wall display. The word beside it is
+ * still required, and the lamp itself is hidden from speech because the word
+ * already says it.
+ */
+.mx-health {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mx-space-8);
+  color: var(--mx-text-primary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-small-size);
+}
+
+.mx-health__lamp {
+  flex: none;
+  width: var(--mx-space-12);
+  height: var(--mx-space-12);
+  border: 2px solid var(--mx-status-offline-icon);
+  border-radius: var(--mx-radius-full);
+  background: var(--mx-status-offline-icon);
+}
+
+.mx-health--operational .mx-health__lamp {
+  border-color: var(--mx-status-success-icon);
+  background: var(--mx-status-success-icon);
+  border-radius: var(--mx-radius-full);
+}
+
+.mx-health--degraded .mx-health__lamp {
+  border-color: var(--mx-status-warning-icon);
+  background: var(--mx-status-warning-icon);
+  border-radius: var(--mx-radius-none);
+  transform: rotate(45deg);
+}
+
+.mx-health--down .mx-health__lamp {
+  border-color: var(--mx-status-critical-icon);
+  background: var(--mx-status-critical-icon);
+  border-radius: var(--mx-radius-none);
+}
+
+.mx-health--maintenance .mx-health__lamp {
+  border-color: var(--mx-status-maintenance-icon);
+  background: var(--mx-status-maintenance-background);
+  border-radius: var(--mx-radius-none);
+}
+
+.mx-health--unknown .mx-health__lamp {
+  border-color: var(--mx-status-unknown-icon);
+  background: var(--mx-background-surface);
+  border-style: dashed;
+  border-radius: var(--mx-radius-full);
+}
+
+/* -- card ------------------------------------------------------------------- */
+
+.mx-card {
+  box-sizing: border-box;
+  padding: var(--mx-density-card-padding);
+  border: 1px solid var(--mx-border-default);
+  border-radius: var(--mx-radius-large);
+  background: var(--mx-background-surface);
+  box-shadow: var(--mx-elevation-raised);
+  color: var(--mx-text-primary);
+}
+
+.mx-card--elevated {
+  background: var(--mx-background-surface-elevated);
+  box-shadow: var(--mx-elevation-floating);
+}
+
+.mx-card--flat {
+  background: var(--mx-background-surface-subtle);
+  box-shadow: var(--mx-elevation-flat);
+}
+
+.mx-card__title {
+  margin: 0 0 var(--mx-space-8);
+  color: var(--mx-text-primary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-heading-3-size);
+  font-weight: var(--mx-type-heading-3-weight);
+  line-height: var(--mx-type-heading-3-line);
+}
+
+.mx-card__body {
+  color: var(--mx-text-secondary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-size);
+  line-height: var(--mx-type-body-line);
+}
+
+/* -- the headline figure ---------------------------------------------------
+ *
+ * The quantity itself is spelled in words, as everything an operator reads on
+ * this console is. The tabular figures in the token exist for the identifier
+ * that sometimes sits under one — a port, a version, an address — where digits
+ * are what an operator needs and lining them up is what makes them readable.
+ */
+.mx-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mx-space-4);
+  box-sizing: border-box;
+  padding: var(--mx-density-card-padding);
+  border: 1px solid var(--mx-border-default);
+  border-radius: var(--mx-radius-large);
+  background: var(--mx-background-surface);
+  box-shadow: var(--mx-elevation-raised);
+}
+
+.mx-kpi__label {
+  color: var(--mx-text-tertiary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-caption-size);
+  font-weight: var(--mx-type-label-weight);
+  line-height: var(--mx-type-caption-line);
+  letter-spacing: var(--mx-type-caption-tracking);
+  text-transform: uppercase;
+}
+
+.mx-kpi__figure {
+  color: var(--mx-brand-primary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-numeric-kpi-size);
+  font-weight: var(--mx-type-numeric-kpi-weight);
+  line-height: var(--mx-type-numeric-kpi-line);
+  letter-spacing: var(--mx-type-numeric-kpi-tracking);
+  font-variant-numeric: var(--mx-type-numeric-kpi-variant);
+}
+
+.mx-kpi__caption {
+  color: var(--mx-text-secondary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-small-size);
+  line-height: var(--mx-type-body-small-line);
+}
+
+/* -- divider ----------------------------------------------------------------- */
+
+.mx-divider {
+  height: 1px;
+  margin: var(--mx-density-stack-gap) 0;
+  border: 0;
+  background: var(--mx-border-subtle);
+}
+
+.mx-divider--strong {
+  background: var(--mx-border-default);
+}
+
+.mx-divider--vertical {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+  margin: 0 var(--mx-density-inline-gap);
+}
+
+/* -- spinner and skeleton ----------------------------------------------------
+ *
+ * Both say the same thing — the appliance has been asked and has not answered
+ * yet — and both need a word beside them, because a shape that turns is not a
+ * sentence. The spinner is for an action an operator started; the skeleton is
+ * for a region that will fill in on its own.
+ */
+.mx-spinner {
+  display: inline-block;
+  width: var(--mx-space-20);
+  height: var(--mx-space-20);
+  border: 2px solid var(--mx-border-default);
+  border-top-color: var(--mx-brand-primary);
+  border-radius: var(--mx-radius-full);
+  animation: mx-spin 900ms linear infinite;
+}
+
+.mx-spinner--large {
+  width: var(--mx-space-32);
+  height: var(--mx-space-32);
+  border-width: 3px;
+}
+
+.mx-skeleton {
+  display: block;
+  height: var(--mx-space-16);
+  border-radius: var(--mx-radius-small);
+  background-color: var(--mx-background-surface-subtle);
+  background-image: linear-gradient(
+    90deg,
+    var(--mx-background-surface-subtle) 0%,
+    var(--mx-background-hover) 50%,
+    var(--mx-background-surface-subtle) 100%
+  );
+  background-size: 200% 100%;
+  animation: mx-shimmer 1400ms linear infinite;
+}
+
+.mx-skeleton--text { height: var(--mx-space-12); }
+.mx-skeleton--title { height: var(--mx-space-24); }
+.mx-skeleton--block { height: var(--mx-space-64); }
+
+@keyframes mx-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes mx-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* Reduced motion is a request to remove motion that decorates, not motion that
+ * informs. The shimmer decorates, so it stops and the placeholder simply sits
+ * there. The spinner informs — it is the only sign that a privileged operation
+ * is still running — so it is slowed to a steady quarter speed rather than
+ * frozen, since a frozen spinner reads as a hung console. */
+@media (prefers-reduced-motion: reduce) {
+  .mx-skeleton {
+    background-image: none;
+    animation: none;
+  }
+
+  .mx-spinner,
+  .mx-button--loading::before {
+    animation-duration: 3600ms;
+  }
+
+  .mx-skip-link,
+  .mx-switch,
+  .mx-switch::after {
+    transition: none;
+  }
+}

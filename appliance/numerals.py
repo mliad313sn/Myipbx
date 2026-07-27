@@ -116,6 +116,13 @@ _IDENTIFIER_SHAPES: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?:/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+"),
     # A protocol response code, named as one.
     re.compile(r"\b(?:SIP|HTTP|status|code|error)\s+\d{3}\b", re.IGNORECASE),
+    # An error number, which an engineer looks up. The operating system's own
+    # numbering is the clearest case: "Errno one hundred eleven" is not
+    # something anybody can search for.
+    re.compile(r"\b(?:errno|error\s+number)\s+\d+\b", re.IGNORECASE),
+    # The address and port pair the networking layer prints when a connection
+    # fails. The port inside it is an identifier like any other.
+    re.compile(r"\(\s*'[^']*'\s*,\s*\d{1,5}\s*\)"),
     # A port, named as one. An operator opens a port in a firewall and types it
     # into a browser, so it is something they use rather than something they
     # count.

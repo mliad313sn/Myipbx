@@ -1,0 +1,881 @@
+/* The semantic token layer.
+ *
+ * Every colour, size, duration and depth the console is allowed to use is
+ * named here once. Nothing below this file may write a literal colour, because
+ * a literal cannot follow a theme: an appliance mounted in a dark equipment
+ * room, and one read by an operator who needs high contrast, are the same
+ * console with a different set of values behind the same names.
+ *
+ * The names describe the job, not the appearance. A rule asks for the border
+ * that marks focus rather than for a particular blue, so the three themes below
+ * can disagree about the blue without any rule having to know.
+ *
+ * Nothing here is fetched. There is no font to download and no asset to
+ * resolve; the appliance is frequently on a network that can reach nothing, so
+ * the type stack names only faces that ship with an operating system, and the
+ * console renders identically with none of them present.
+ */
+
+:root {
+  /* -- type ---------------------------------------------------------------
+   *
+   * System faces only. The first two names are the faces actually present on
+   * the machines this product runs on and on the machines it is administered
+   * from; the rest are the ordinary fallbacks, ending in the generic family so
+   * that a machine carrying none of them still renders.
+   */
+  --mx-font-sans: "Segoe UI", "DejaVu Sans", system-ui, -apple-system,
+                  "Liberation Sans", Arial, sans-serif;
+  --mx-font-mono: "DejaVu Sans Mono", ui-monospace, "Liberation Mono",
+                  "Courier New", monospace;
+
+  /* The scale is expressed in rem so that an operator who has enlarged their
+   * browser's text gets a console that grows with it. The body size resolves
+   * to the fifteen pixels the console has always used. */
+  --mx-type-display-large-size: 2.5rem;
+  --mx-type-display-large-line: 1.15;
+  --mx-type-display-large-weight: 600;
+  --mx-type-display-large-tracking: -0.02em;
+
+  --mx-type-display-size: 2rem;
+  --mx-type-display-line: 1.2;
+  --mx-type-display-weight: 600;
+  --mx-type-display-tracking: -0.015em;
+
+  --mx-type-heading-1-size: 1.5rem;
+  --mx-type-heading-1-line: 1.25;
+  --mx-type-heading-1-weight: 600;
+  --mx-type-heading-1-tracking: -0.01em;
+
+  --mx-type-heading-2-size: 1.25rem;
+  --mx-type-heading-2-line: 1.3;
+  --mx-type-heading-2-weight: 600;
+  --mx-type-heading-2-tracking: 0;
+
+  --mx-type-heading-3-size: 1.0625rem;
+  --mx-type-heading-3-line: 1.35;
+  --mx-type-heading-3-weight: 600;
+  --mx-type-heading-3-tracking: 0;
+
+  --mx-type-heading-4-size: 0.9375rem;
+  --mx-type-heading-4-line: 1.4;
+  --mx-type-heading-4-weight: 600;
+  --mx-type-heading-4-tracking: 0.01em;
+
+  --mx-type-body-large-size: 1.0625rem;
+  --mx-type-body-large-line: 1.55;
+  --mx-type-body-large-weight: 400;
+
+  --mx-type-body-size: 0.9375rem;
+  --mx-type-body-line: 1.5;
+  --mx-type-body-weight: 400;
+
+  --mx-type-body-small-size: 0.875rem;
+  --mx-type-body-small-line: 1.5;
+  --mx-type-body-small-weight: 400;
+
+  --mx-type-label-size: 0.8125rem;
+  --mx-type-label-line: 1.35;
+  --mx-type-label-weight: 600;
+  --mx-type-label-tracking: 0.01em;
+
+  --mx-type-caption-size: 0.75rem;
+  --mx-type-caption-line: 1.4;
+  --mx-type-caption-weight: 400;
+  --mx-type-caption-tracking: 0.02em;
+
+  --mx-type-monospace-size: 0.8125rem;
+  --mx-type-monospace-line: 1.45;
+  --mx-type-monospace-weight: 400;
+
+  /* A headline figure is read at a glance and often compared against the
+   * figure beside it, so it is set in lining, equal width digits. The console
+   * spells its quantities in words, but an identifier — an address, a port, a
+   * version — keeps its digits, and those are what tabular figures are for. */
+  --mx-type-numeric-kpi-size: 1.75rem;
+  --mx-type-numeric-kpi-line: 1.15;
+  --mx-type-numeric-kpi-weight: 600;
+  --mx-type-numeric-kpi-tracking: -0.01em;
+  --mx-type-numeric-kpi-variant: tabular-nums lining-nums;
+
+  /* -- spacing ------------------------------------------------------------
+   *
+   * A four pixel baseline, named by the value it carries. A name that says
+   * what it measures rather than where it sits survives a redesign; a name
+   * like "gap between a label and its field" does not.
+   */
+  --mx-space-2: 2px;
+  --mx-space-4: 4px;
+  --mx-space-8: 8px;
+  --mx-space-12: 12px;
+  --mx-space-16: 16px;
+  --mx-space-20: 20px;
+  --mx-space-24: 24px;
+  --mx-space-32: 32px;
+  --mx-space-40: 40px;
+  --mx-space-48: 48px;
+  --mx-space-64: 64px;
+  --mx-space-80: 80px;
+
+  /* -- radius -------------------------------------------------------------- */
+  --mx-radius-none: 0;
+  --mx-radius-small: 4px;
+  --mx-radius-medium: 6px;
+  --mx-radius-large: 10px;
+  --mx-radius-full: 999px;
+
+  /* -- motion --------------------------------------------------------------
+   *
+   * Short by design. This is an operations console: a transition long enough
+   * to be admired is long enough to sit between an operator and the state of a
+   * telephone system. The reduced motion block at the foot of this file takes
+   * all four to nothing.
+   */
+  --mx-motion-instant: 0ms;
+  --mx-motion-fast: 90ms;
+  --mx-motion-standard: 160ms;
+  --mx-motion-slow: 280ms;
+  --mx-motion-ease-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --mx-motion-ease-entrance: cubic-bezier(0, 0, 0.2, 1);
+  --mx-motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* -- depth ---------------------------------------------------------------
+   *
+   * One ordered scale, so that two unrelated parts of the console can never
+   * argue about which of them is on top. The numbers are spread widely enough
+   * that something can be slipped between two of them later.
+   */
+  --mx-z-base: 0;
+  --mx-z-sticky: 10;
+  --mx-z-dropdown: 20;
+  --mx-z-drawer: 30;
+  --mx-z-overlay: 40;
+  --mx-z-modal: 50;
+  --mx-z-toast: 60;
+  --mx-z-critical-alert: 70;
+
+  /* -- density -------------------------------------------------------------
+   *
+   * Comfortable is the default because the console is used standing at a rack
+   * as often as sitting at a desk, and a control that cannot be hit with a
+   * finger is a control that is not there. Comfortable therefore holds every
+   * interactive element to the forty-four pixel target. Compact is for the
+   * operator watching many rows at once on a fixed screen, and gives that up
+   * knowingly.
+   */
+  --mx-density-touch-target: 44px;
+  --mx-density-control-height: 44px;
+  --mx-density-control-padding-block: var(--mx-space-8);
+  --mx-density-control-padding-inline: var(--mx-space-16);
+  --mx-density-row-padding-block: var(--mx-space-12);
+  --mx-density-row-padding-inline: var(--mx-space-12);
+  --mx-density-stack-gap: var(--mx-space-16);
+  --mx-density-inline-gap: var(--mx-space-12);
+  --mx-density-card-padding: var(--mx-space-20);
+
+  /* -- focus ---------------------------------------------------------------
+   *
+   * The ring is a token rather than a rule so that the high contrast theme can
+   * thicken it without any component knowing that it did.
+   */
+  --mx-focus-ring-width: 2px;
+  --mx-focus-ring-offset: 2px;
+
+  /* -- the absence of a colour ---------------------------------------------
+   *
+   * Named, so that a component never has to write a literal. Everything below
+   * this line is a value the themes replace.
+   */
+  --mx-color-transparent: transparent;
+
+  /* -- brand ---------------------------------------------------------------
+   *
+   * The one colour the product owns. It survives every theme because it is
+   * what an operator recognises when three appliances are open in three tabs;
+   * only its lightness moves, so that white text stays legible on it.
+   */
+  --mx-brand-primary: #1f4e79;
+  --mx-brand-primary-hover: #17395a;
+  --mx-brand-primary-pressed: #102a43;
+  --mx-brand-on-primary: #ffffff;
+  --mx-brand-subtle: #e6eef6;
+
+  /* -- background ----------------------------------------------------------- */
+  --mx-background-canvas: #f4f6f8;
+  --mx-background-surface: #ffffff;
+  --mx-background-surface-elevated: #ffffff;
+  --mx-background-surface-subtle: #eef1f4;
+  --mx-background-hover: #e7ecf1;
+  --mx-background-pressed: #dbe2e9;
+  --mx-background-selected: #dce8f4;
+  --mx-background-disabled: #eceff2;
+  --mx-background-inverse: #10171d;
+
+  /* -- text ------------------------------------------------------------------
+   *
+   * Primary against the surface is a little over fifteen to one, and tertiary
+   * — the lightest text ever used for something a person must read — is above
+   * four and a half to one. Disabled text is deliberately below that: it is a
+   * control that cannot be operated, and it is never the only sign of that.
+   */
+  --mx-text-primary: #101418;
+  --mx-text-secondary: #4a5560;
+  --mx-text-tertiary: #64707d;
+  --mx-text-disabled: #939ea9;
+  --mx-text-inverse: #f2f5f8;
+  --mx-text-link: #1f4e79;
+  --mx-text-link-hover: #16395a;
+
+  /* -- border ---------------------------------------------------------------- */
+  --mx-border-default: #d8dee4;
+  --mx-border-subtle: #e7ebef;
+  --mx-border-strong: #8e9aa5;
+  --mx-border-focus: #1f4e79;
+  --mx-border-selected: #1f4e79;
+  --mx-border-disabled: #e2e6ea;
+
+  /* -- status ----------------------------------------------------------------
+   *
+   * Eight conditions, each with the four values a component needs and a mark
+   * that is not a colour. The mark exists because colour alone must never
+   * carry meaning: an operator who cannot distinguish the green from the red
+   * still has to be able to tell a registered trunk from a failed one, and the
+   * badge that draws these puts the mark and a word beside the colour every
+   * time.
+   *
+   * The marks are ordinary characters present in every system face. Nothing is
+   * fetched to draw them.
+   */
+  --mx-status-success-text: #12613b;
+  --mx-status-success-background: #e3f3ea;
+  --mx-status-success-border: #a9d8bf;
+  --mx-status-success-icon: #1d7a4c;
+  --mx-status-success-mark: "\2713";
+
+  --mx-status-information-text: #1b4b78;
+  --mx-status-information-background: #e2eefa;
+  --mx-status-information-border: #a9c9e6;
+  --mx-status-information-icon: #1f5f96;
+  --mx-status-information-mark: "i";
+
+  --mx-status-warning-text: #7a4e00;
+  --mx-status-warning-background: #fbf0d6;
+  --mx-status-warning-border: #e2c37a;
+  --mx-status-warning-icon: #9a6400;
+  --mx-status-warning-mark: "\26A0";
+
+  --mx-status-critical-text: #8c1b1b;
+  --mx-status-critical-background: #fbe3e3;
+  --mx-status-critical-border: #e3a5a5;
+  --mx-status-critical-icon: #a32020;
+  --mx-status-critical-mark: "\00D7";
+
+  --mx-status-offline-text: #46515c;
+  --mx-status-offline-background: #eceff2;
+  --mx-status-offline-border: #cbd3da;
+  --mx-status-offline-icon: #64707d;
+  --mx-status-offline-mark: "\25CB";
+
+  --mx-status-unknown-text: #4b3f66;
+  --mx-status-unknown-background: #eeeaf5;
+  --mx-status-unknown-border: #c6bcdd;
+  --mx-status-unknown-icon: #5d4d80;
+  --mx-status-unknown-mark: "?";
+
+  --mx-status-maintenance-text: #14555c;
+  --mx-status-maintenance-background: #dff1f3;
+  --mx-status-maintenance-border: #a3cfd5;
+  --mx-status-maintenance-icon: #1b6f78;
+  --mx-status-maintenance-mark: "\25A0";
+
+  --mx-status-in-progress-text: #33357a;
+  --mx-status-in-progress-background: #e7e8fa;
+  --mx-status-in-progress-border: #b4b7e6;
+  --mx-status-in-progress-icon: #43469c;
+  --mx-status-in-progress-mark: "\25B8";
+
+  /* -- telephony -------------------------------------------------------------
+   *
+   * The vocabulary of the product itself. A call has a direction, a leg has a
+   * transport, and a record has an outcome; these are the words the engine
+   * uses and the words an operator uses, so they are named here rather than
+   * being approximated by the status set. Each one carries its own mark for
+   * the same reason the status conditions do.
+   */
+  --mx-telephony-inbound-text: #14555c;
+  --mx-telephony-inbound-background: #dff1f3;
+  --mx-telephony-inbound-border: #a3cfd5;
+  --mx-telephony-inbound-mark: "\2193";
+
+  --mx-telephony-outbound-text: #33357a;
+  --mx-telephony-outbound-background: #e7e8fa;
+  --mx-telephony-outbound-border: #b4b7e6;
+  --mx-telephony-outbound-mark: "\2191";
+
+  --mx-telephony-internal-text: #3c4a57;
+  --mx-telephony-internal-background: #eaeef2;
+  --mx-telephony-internal-border: #c4cdd6;
+  --mx-telephony-internal-mark: "\2194";
+
+  --mx-telephony-external-text: #6b3f14;
+  --mx-telephony-external-background: #f7ecdf;
+  --mx-telephony-external-border: #dcc0a0;
+  --mx-telephony-external-mark: "\2192";
+
+  --mx-telephony-secure-text: #12613b;
+  --mx-telephony-secure-background: #e3f3ea;
+  --mx-telephony-secure-border: #a9d8bf;
+  --mx-telephony-secure-mark: "\25C6";
+
+  --mx-telephony-encrypted-text: #12613b;
+  --mx-telephony-encrypted-background: #e3f3ea;
+  --mx-telephony-encrypted-border: #a9d8bf;
+  --mx-telephony-encrypted-mark: "\25C7";
+
+  --mx-telephony-recorded-text: #8c1b1b;
+  --mx-telephony-recorded-background: #fbe3e3;
+  --mx-telephony-recorded-border: #e3a5a5;
+  --mx-telephony-recorded-mark: "\25CF";
+
+  --mx-telephony-emergency-text: #8c1b1b;
+  --mx-telephony-emergency-background: #fbe3e3;
+  --mx-telephony-emergency-border: #cc6a6a;
+  --mx-telephony-emergency-mark: "\26A0";
+
+  --mx-telephony-queued-text: #7a4e00;
+  --mx-telephony-queued-background: #fbf0d6;
+  --mx-telephony-queued-border: #e2c37a;
+  --mx-telephony-queued-mark: "\2026";
+
+  --mx-telephony-answered-text: #12613b;
+  --mx-telephony-answered-background: #e3f3ea;
+  --mx-telephony-answered-border: #a9d8bf;
+  --mx-telephony-answered-mark: "\2713";
+
+  --mx-telephony-missed-text: #7a4e00;
+  --mx-telephony-missed-background: #fbf0d6;
+  --mx-telephony-missed-border: #e2c37a;
+  --mx-telephony-missed-mark: "\25CB";
+
+  --mx-telephony-failed-text: #8c1b1b;
+  --mx-telephony-failed-background: #fbe3e3;
+  --mx-telephony-failed-border: #e3a5a5;
+  --mx-telephony-failed-mark: "\00D7";
+
+  /* -- elevation -------------------------------------------------------------
+   *
+   * Five steps, and the last two are reserved for things that cover the page.
+   * A console that shadows everything reads as a pile of paper; these are used
+   * sparingly, and the high contrast theme removes them entirely in favour of
+   * the borders, which are the thing that survives being printed, projected,
+   * or read on a failing monitor in a plant room.
+   */
+  --mx-elevation-flat: none;
+  --mx-elevation-raised: 0 1px 2px rgba(16, 20, 24, 0.08),
+                         0 1px 3px rgba(16, 20, 24, 0.10);
+  --mx-elevation-floating: 0 2px 4px rgba(16, 20, 24, 0.08),
+                           0 4px 10px rgba(16, 20, 24, 0.12);
+  --mx-elevation-overlay: 0 4px 8px rgba(16, 20, 24, 0.10),
+                          0 8px 24px rgba(16, 20, 24, 0.16);
+  --mx-elevation-modal: 0 8px 16px rgba(16, 20, 24, 0.14),
+                        0 16px 48px rgba(16, 20, 24, 0.24);
+
+  /* The sheet drawn behind a modal. It is a colour rather than an opacity so
+   * that the dark theme can darken without turning the page to fog. */
+  --mx-background-scrim: rgba(16, 20, 24, 0.45);
+}
+
+/* -- compact density --------------------------------------------------------
+ *
+ * Only the measurements move. No colour, no type size and no component rule
+ * knows which density is in force, which is what keeps the two from drifting
+ * apart.
+ */
+[data-density="compact"] {
+  --mx-density-touch-target: 32px;
+  --mx-density-control-height: 32px;
+  --mx-density-control-padding-block: var(--mx-space-4);
+  --mx-density-control-padding-inline: var(--mx-space-12);
+  --mx-density-row-padding-block: var(--mx-space-4);
+  --mx-density-row-padding-inline: var(--mx-space-8);
+  --mx-density-stack-gap: var(--mx-space-8);
+  --mx-density-inline-gap: var(--mx-space-8);
+  --mx-density-card-padding: var(--mx-space-12);
+}
+
+[data-density="comfortable"] {
+  --mx-density-touch-target: 44px;
+  --mx-density-control-height: 44px;
+  --mx-density-control-padding-block: var(--mx-space-8);
+  --mx-density-control-padding-inline: var(--mx-space-16);
+  --mx-density-row-padding-block: var(--mx-space-12);
+  --mx-density-row-padding-inline: var(--mx-space-12);
+  --mx-density-stack-gap: var(--mx-space-16);
+  --mx-density-inline-gap: var(--mx-space-12);
+  --mx-density-card-padding: var(--mx-space-20);
+}
+
+/* -- the dark theme ---------------------------------------------------------
+ *
+ * Not an inversion. Inverting the light theme gives pure black behind pure
+ * white, which on the panel of a rack mounted monitor smears every edge and
+ * makes a table of trunk states harder to read at two in the morning than the
+ * thing it replaced. So the canvas is a dark slate rather than black, the
+ * surfaces sit above it rather than below, and the status colours are
+ * re-chosen light on a dim tint rather than reused: the light theme's greens
+ * and reds are dark inks and disappear against a dark panel.
+ *
+ * The values are declared once here and applied twice below, once for the
+ * operating system's own preference and once for an explicit choice, because
+ * an explicit choice has to win in both directions.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --mx-brand-primary: #2f6ea8;
+    --mx-brand-primary-hover: #3b81c1;
+    --mx-brand-primary-pressed: #275d8e;
+    --mx-brand-on-primary: #ffffff;
+    --mx-brand-subtle: #1a2c3d;
+
+    --mx-background-canvas: #12171c;
+    --mx-background-surface: #1a2027;
+    --mx-background-surface-elevated: #212930;
+    --mx-background-surface-subtle: #161c22;
+    --mx-background-hover: #262f37;
+    --mx-background-pressed: #303b45;
+    --mx-background-selected: #1e3549;
+    --mx-background-disabled: #202830;
+    --mx-background-inverse: #f4f6f8;
+    --mx-background-scrim: rgba(4, 7, 10, 0.62);
+
+    --mx-text-primary: #e7edf3;
+    --mx-text-secondary: #aab6c2;
+    --mx-text-tertiary: #93a0ad;
+    --mx-text-disabled: #6a7681;
+    --mx-text-inverse: #101418;
+    --mx-text-link: #8fc0ec;
+    --mx-text-link-hover: #b3d6f5;
+
+    --mx-border-default: #2f3a44;
+    --mx-border-subtle: #262f37;
+    --mx-border-strong: #5c6a76;
+    --mx-border-focus: #8fc0ec;
+    --mx-border-selected: #8fc0ec;
+    --mx-border-disabled: #2a333b;
+
+    --mx-status-success-text: #86daaa;
+    --mx-status-success-background: #14261d;
+    --mx-status-success-border: #2f5c42;
+    --mx-status-success-icon: #57c48c;
+
+    --mx-status-information-text: #a3cdf2;
+    --mx-status-information-background: #12212f;
+    --mx-status-information-border: #2d4c68;
+    --mx-status-information-icon: #6aaae0;
+
+    --mx-status-warning-text: #f2ca7e;
+    --mx-status-warning-background: #2a2113;
+    --mx-status-warning-border: #6a5223;
+    --mx-status-warning-icon: #d3a03c;
+
+    --mx-status-critical-text: #f4a8a8;
+    --mx-status-critical-background: #2c1717;
+    --mx-status-critical-border: #6b3131;
+    --mx-status-critical-icon: #e07070;
+
+    --mx-status-offline-text: #a7b3bf;
+    --mx-status-offline-background: #1d242b;
+    --mx-status-offline-border: #3a444e;
+    --mx-status-offline-icon: #8593a0;
+
+    --mx-status-unknown-text: #c8bce6;
+    --mx-status-unknown-background: #221e2e;
+    --mx-status-unknown-border: #453c5e;
+    --mx-status-unknown-icon: #a493d1;
+
+    --mx-status-maintenance-text: #96d6de;
+    --mx-status-maintenance-background: #12262a;
+    --mx-status-maintenance-border: #2c5257;
+    --mx-status-maintenance-icon: #5fb2bc;
+
+    --mx-status-in-progress-text: #b6b9f0;
+    --mx-status-in-progress-background: #1c1d33;
+    --mx-status-in-progress-border: #3d4076;
+    --mx-status-in-progress-icon: #9094e4;
+
+    --mx-telephony-inbound-text: #96d6de;
+    --mx-telephony-inbound-background: #12262a;
+    --mx-telephony-inbound-border: #2c5257;
+
+    --mx-telephony-outbound-text: #b6b9f0;
+    --mx-telephony-outbound-background: #1c1d33;
+    --mx-telephony-outbound-border: #3d4076;
+
+    --mx-telephony-internal-text: #b8c4d0;
+    --mx-telephony-internal-background: #1d242b;
+    --mx-telephony-internal-border: #3a444e;
+
+    --mx-telephony-external-text: #e2b98d;
+    --mx-telephony-external-background: #2a2018;
+    --mx-telephony-external-border: #64492f;
+
+    --mx-telephony-secure-text: #86daaa;
+    --mx-telephony-secure-background: #14261d;
+    --mx-telephony-secure-border: #2f5c42;
+
+    --mx-telephony-encrypted-text: #86daaa;
+    --mx-telephony-encrypted-background: #14261d;
+    --mx-telephony-encrypted-border: #2f5c42;
+
+    --mx-telephony-recorded-text: #f4a8a8;
+    --mx-telephony-recorded-background: #2c1717;
+    --mx-telephony-recorded-border: #6b3131;
+
+    --mx-telephony-emergency-text: #f4a8a8;
+    --mx-telephony-emergency-background: #2c1717;
+    --mx-telephony-emergency-border: #8c4040;
+
+    --mx-telephony-queued-text: #f2ca7e;
+    --mx-telephony-queued-background: #2a2113;
+    --mx-telephony-queued-border: #6a5223;
+
+    --mx-telephony-answered-text: #86daaa;
+    --mx-telephony-answered-background: #14261d;
+    --mx-telephony-answered-border: #2f5c42;
+
+    --mx-telephony-missed-text: #f2ca7e;
+    --mx-telephony-missed-background: #2a2113;
+    --mx-telephony-missed-border: #6a5223;
+
+    --mx-telephony-failed-text: #f4a8a8;
+    --mx-telephony-failed-background: #2c1717;
+    --mx-telephony-failed-border: #6b3131;
+
+    /* A shadow on a dark canvas has almost nothing to darken, so depth is
+     * carried mostly by the surface stepping up in lightness; the shadows stay
+     * only to keep an overlay's edge from dissolving into the page. */
+    --mx-elevation-raised: 0 1px 2px rgba(0, 0, 0, 0.40);
+    --mx-elevation-floating: 0 2px 6px rgba(0, 0, 0, 0.46);
+    --mx-elevation-overlay: 0 6px 18px rgba(0, 0, 0, 0.52);
+    --mx-elevation-modal: 0 12px 40px rgba(0, 0, 0, 0.60);
+  }
+}
+
+[data-theme="dark"] {
+  --mx-brand-primary: #2f6ea8;
+  --mx-brand-primary-hover: #3b81c1;
+  --mx-brand-primary-pressed: #275d8e;
+  --mx-brand-on-primary: #ffffff;
+  --mx-brand-subtle: #1a2c3d;
+
+  --mx-background-canvas: #12171c;
+  --mx-background-surface: #1a2027;
+  --mx-background-surface-elevated: #212930;
+  --mx-background-surface-subtle: #161c22;
+  --mx-background-hover: #262f37;
+  --mx-background-pressed: #303b45;
+  --mx-background-selected: #1e3549;
+  --mx-background-disabled: #202830;
+  --mx-background-inverse: #f4f6f8;
+  --mx-background-scrim: rgba(4, 7, 10, 0.62);
+
+  --mx-text-primary: #e7edf3;
+  --mx-text-secondary: #aab6c2;
+  --mx-text-tertiary: #93a0ad;
+  --mx-text-disabled: #6a7681;
+  --mx-text-inverse: #101418;
+  --mx-text-link: #8fc0ec;
+  --mx-text-link-hover: #b3d6f5;
+
+  --mx-border-default: #2f3a44;
+  --mx-border-subtle: #262f37;
+  --mx-border-strong: #5c6a76;
+  --mx-border-focus: #8fc0ec;
+  --mx-border-selected: #8fc0ec;
+  --mx-border-disabled: #2a333b;
+
+  --mx-status-success-text: #86daaa;
+  --mx-status-success-background: #14261d;
+  --mx-status-success-border: #2f5c42;
+  --mx-status-success-icon: #57c48c;
+
+  --mx-status-information-text: #a3cdf2;
+  --mx-status-information-background: #12212f;
+  --mx-status-information-border: #2d4c68;
+  --mx-status-information-icon: #6aaae0;
+
+  --mx-status-warning-text: #f2ca7e;
+  --mx-status-warning-background: #2a2113;
+  --mx-status-warning-border: #6a5223;
+  --mx-status-warning-icon: #d3a03c;
+
+  --mx-status-critical-text: #f4a8a8;
+  --mx-status-critical-background: #2c1717;
+  --mx-status-critical-border: #6b3131;
+  --mx-status-critical-icon: #e07070;
+
+  --mx-status-offline-text: #a7b3bf;
+  --mx-status-offline-background: #1d242b;
+  --mx-status-offline-border: #3a444e;
+  --mx-status-offline-icon: #8593a0;
+
+  --mx-status-unknown-text: #c8bce6;
+  --mx-status-unknown-background: #221e2e;
+  --mx-status-unknown-border: #453c5e;
+  --mx-status-unknown-icon: #a493d1;
+
+  --mx-status-maintenance-text: #96d6de;
+  --mx-status-maintenance-background: #12262a;
+  --mx-status-maintenance-border: #2c5257;
+  --mx-status-maintenance-icon: #5fb2bc;
+
+  --mx-status-in-progress-text: #b6b9f0;
+  --mx-status-in-progress-background: #1c1d33;
+  --mx-status-in-progress-border: #3d4076;
+  --mx-status-in-progress-icon: #9094e4;
+
+  --mx-telephony-inbound-text: #96d6de;
+  --mx-telephony-inbound-background: #12262a;
+  --mx-telephony-inbound-border: #2c5257;
+
+  --mx-telephony-outbound-text: #b6b9f0;
+  --mx-telephony-outbound-background: #1c1d33;
+  --mx-telephony-outbound-border: #3d4076;
+
+  --mx-telephony-internal-text: #b8c4d0;
+  --mx-telephony-internal-background: #1d242b;
+  --mx-telephony-internal-border: #3a444e;
+
+  --mx-telephony-external-text: #e2b98d;
+  --mx-telephony-external-background: #2a2018;
+  --mx-telephony-external-border: #64492f;
+
+  --mx-telephony-secure-text: #86daaa;
+  --mx-telephony-secure-background: #14261d;
+  --mx-telephony-secure-border: #2f5c42;
+
+  --mx-telephony-encrypted-text: #86daaa;
+  --mx-telephony-encrypted-background: #14261d;
+  --mx-telephony-encrypted-border: #2f5c42;
+
+  --mx-telephony-recorded-text: #f4a8a8;
+  --mx-telephony-recorded-background: #2c1717;
+  --mx-telephony-recorded-border: #6b3131;
+
+  --mx-telephony-emergency-text: #f4a8a8;
+  --mx-telephony-emergency-background: #2c1717;
+  --mx-telephony-emergency-border: #8c4040;
+
+  --mx-telephony-queued-text: #f2ca7e;
+  --mx-telephony-queued-background: #2a2113;
+  --mx-telephony-queued-border: #6a5223;
+
+  --mx-telephony-answered-text: #86daaa;
+  --mx-telephony-answered-background: #14261d;
+  --mx-telephony-answered-border: #2f5c42;
+
+  --mx-telephony-missed-text: #f2ca7e;
+  --mx-telephony-missed-background: #2a2113;
+  --mx-telephony-missed-border: #6a5223;
+
+  --mx-telephony-failed-text: #f4a8a8;
+  --mx-telephony-failed-background: #2c1717;
+  --mx-telephony-failed-border: #6b3131;
+
+  --mx-elevation-raised: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --mx-elevation-floating: 0 2px 6px rgba(0, 0, 0, 0.46);
+  --mx-elevation-overlay: 0 6px 18px rgba(0, 0, 0, 0.52);
+  --mx-elevation-modal: 0 12px 40px rgba(0, 0, 0, 0.60);
+}
+
+/* An explicit light choice has to be able to defeat an operating system set to
+ * dark, or the switch only works one way. */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* -- the high contrast theme -------------------------------------------------
+ *
+ * Text goes to black on white and every status colour is re-picked at full
+ * strength, but the important part is what is kept rather than what is
+ * darkened: every border stays, and the focus ring gets wider rather than
+ * disappearing. A high contrast theme that removes the outline of a field
+ * leaves an operator with a page of floating text and no way to tell what is
+ * a control.
+ *
+ * Shadows are removed rather than strengthened. A shadow is a soft edge, and a
+ * soft edge is the thing this theme exists to avoid; the borders do that work.
+ */
+[data-theme="high-contrast"] {
+  color-scheme: light;
+
+  --mx-brand-primary: #0b3d91;
+  --mx-brand-primary-hover: #062454;
+  --mx-brand-primary-pressed: #041634;
+  --mx-brand-on-primary: #ffffff;
+  --mx-brand-subtle: #ffffff;
+
+  --mx-background-canvas: #ffffff;
+  --mx-background-surface: #ffffff;
+  --mx-background-surface-elevated: #ffffff;
+  --mx-background-surface-subtle: #ffffff;
+  --mx-background-hover: #e4e4e4;
+  --mx-background-pressed: #cccccc;
+  --mx-background-selected: #d7e3f7;
+  --mx-background-disabled: #ffffff;
+  --mx-background-inverse: #000000;
+  --mx-background-scrim: rgba(0, 0, 0, 0.70);
+
+  --mx-text-primary: #000000;
+  --mx-text-secondary: #1a1a1a;
+  --mx-text-tertiary: #262626;
+  --mx-text-disabled: #565656;
+  --mx-text-inverse: #ffffff;
+  --mx-text-link: #0b3d91;
+  --mx-text-link-hover: #062454;
+
+  --mx-border-default: #000000;
+  --mx-border-subtle: #000000;
+  --mx-border-strong: #000000;
+  --mx-border-focus: #0b3d91;
+  --mx-border-selected: #000000;
+  --mx-border-disabled: #565656;
+
+  --mx-focus-ring-width: 3px;
+  --mx-focus-ring-offset: 2px;
+
+  --mx-status-success-text: #0b5c33;
+  --mx-status-success-background: #ffffff;
+  --mx-status-success-border: #0b5c33;
+  --mx-status-success-icon: #0b5c33;
+
+  --mx-status-information-text: #0b3d91;
+  --mx-status-information-background: #ffffff;
+  --mx-status-information-border: #0b3d91;
+  --mx-status-information-icon: #0b3d91;
+
+  --mx-status-warning-text: #5c3400;
+  --mx-status-warning-background: #ffffff;
+  --mx-status-warning-border: #5c3400;
+  --mx-status-warning-icon: #5c3400;
+
+  --mx-status-critical-text: #a30000;
+  --mx-status-critical-background: #ffffff;
+  --mx-status-critical-border: #a30000;
+  --mx-status-critical-icon: #a30000;
+
+  --mx-status-offline-text: #262626;
+  --mx-status-offline-background: #ffffff;
+  --mx-status-offline-border: #262626;
+  --mx-status-offline-icon: #262626;
+
+  --mx-status-unknown-text: #3b1f66;
+  --mx-status-unknown-background: #ffffff;
+  --mx-status-unknown-border: #3b1f66;
+  --mx-status-unknown-icon: #3b1f66;
+
+  --mx-status-maintenance-text: #06525a;
+  --mx-status-maintenance-background: #ffffff;
+  --mx-status-maintenance-border: #06525a;
+  --mx-status-maintenance-icon: #06525a;
+
+  --mx-status-in-progress-text: #2b2b8f;
+  --mx-status-in-progress-background: #ffffff;
+  --mx-status-in-progress-border: #2b2b8f;
+  --mx-status-in-progress-icon: #2b2b8f;
+
+  --mx-telephony-inbound-text: #06525a;
+  --mx-telephony-inbound-background: #ffffff;
+  --mx-telephony-inbound-border: #06525a;
+
+  --mx-telephony-outbound-text: #2b2b8f;
+  --mx-telephony-outbound-background: #ffffff;
+  --mx-telephony-outbound-border: #2b2b8f;
+
+  --mx-telephony-internal-text: #000000;
+  --mx-telephony-internal-background: #ffffff;
+  --mx-telephony-internal-border: #000000;
+
+  --mx-telephony-external-text: #5c3400;
+  --mx-telephony-external-background: #ffffff;
+  --mx-telephony-external-border: #5c3400;
+
+  --mx-telephony-secure-text: #0b5c33;
+  --mx-telephony-secure-background: #ffffff;
+  --mx-telephony-secure-border: #0b5c33;
+
+  --mx-telephony-encrypted-text: #0b5c33;
+  --mx-telephony-encrypted-background: #ffffff;
+  --mx-telephony-encrypted-border: #0b5c33;
+
+  --mx-telephony-recorded-text: #a30000;
+  --mx-telephony-recorded-background: #ffffff;
+  --mx-telephony-recorded-border: #a30000;
+
+  --mx-telephony-emergency-text: #a30000;
+  --mx-telephony-emergency-background: #ffffff;
+  --mx-telephony-emergency-border: #a30000;
+
+  --mx-telephony-queued-text: #5c3400;
+  --mx-telephony-queued-background: #ffffff;
+  --mx-telephony-queued-border: #5c3400;
+
+  --mx-telephony-answered-text: #0b5c33;
+  --mx-telephony-answered-background: #ffffff;
+  --mx-telephony-answered-border: #0b5c33;
+
+  --mx-telephony-missed-text: #5c3400;
+  --mx-telephony-missed-background: #ffffff;
+  --mx-telephony-missed-border: #5c3400;
+
+  --mx-telephony-failed-text: #a30000;
+  --mx-telephony-failed-background: #ffffff;
+  --mx-telephony-failed-border: #a30000;
+
+  --mx-elevation-raised: none;
+  --mx-elevation-floating: none;
+  --mx-elevation-overlay: none;
+  --mx-elevation-modal: none;
+}
+
+/* An operating system asking for more contrast is asking for this theme, and
+ * should get it without anybody having to find the switch. An explicit choice
+ * still wins, which is why this is scoped to a page that has not made one. */
+@media (prefers-contrast: more) {
+  :root:not([data-theme]) {
+    --mx-text-primary: #000000;
+    --mx-text-secondary: #1a1a1a;
+    --mx-text-tertiary: #262626;
+    --mx-text-disabled: #565656;
+    --mx-border-default: #000000;
+    --mx-border-subtle: #000000;
+    --mx-border-strong: #000000;
+    --mx-border-focus: #0b3d91;
+    --mx-focus-ring-width: 3px;
+    --mx-elevation-raised: none;
+    --mx-elevation-floating: none;
+    --mx-elevation-overlay: none;
+    --mx-elevation-modal: none;
+  }
+}
+
+/* -- reduced motion ----------------------------------------------------------
+ *
+ * Taking the durations to nothing is enough for every transition, because no
+ * rule in this design system writes its own duration. The two components that
+ * animate rather than transition — the spinner and the skeleton — are stopped
+ * where they are defined, since each needs to say something different once it
+ * has stopped moving.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mx-motion-instant: 0ms;
+    --mx-motion-fast: 0ms;
+    --mx-motion-standard: 0ms;
+    --mx-motion-slow: 0ms;
+  }
+}

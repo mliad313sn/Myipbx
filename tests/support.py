@@ -405,6 +405,8 @@ IDENTIFIER_SHAPES: tuple[str, ...] = (
     r"(/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+",
     r"\b(SIP|HTTP|status|code|error)\s+\d{3}\b",
     r"\bport(\s+number)?\s+\d{1,5}\b",
+    r"\b(errno|error\s+number)\s+\d+\b",
+    r"\(\s*'[^']*'\s*,\s*\d{1,5}\s*\)",
     r"\b(TDM|TE|AEX|HA|HB|B)\d+[A-Z]?\b",
     r"\bextension\s+\d+\b",
 )
@@ -420,7 +422,7 @@ def strip_identifiers(text: str) -> str:
 
     remainder = text
     for shape in IDENTIFIER_SHAPES:
-        remainder = _re.sub(shape, " ", remainder)
+        remainder = _re.sub(shape, " ", remainder, flags=_re.IGNORECASE)
     return remainder
 
 

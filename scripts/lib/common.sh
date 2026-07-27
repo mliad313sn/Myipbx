@@ -118,6 +118,7 @@ _IDENTIFIER_SHAPES=(
     '(eth|en[a-z0-9]*|wl[a-z0-9]*|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)[0-9]+'
     '(/[A-Za-z0-9._-]*[0-9][A-Za-z0-9._-]*)+'
     '(SIP|HTTP|status|code|error)[[:space:]]+[0-9]{3}'
+    '([Ee]rrno|[Ee]rror[[:space:]]+number)[[:space:]]+[0-9]+'
     'port([[:space:]]+number)?[[:space:]]+[0-9]{1,5}'
     '(TDM|TE|AEX|HA|HB|B)[0-9]+[A-Z]?'
     'extension[[:space:]]+[0-9]+'
