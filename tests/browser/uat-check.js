@@ -301,7 +301,12 @@ const CONTRAST_HELPERS = `
          * the same path a busy appliance takes every second, so this measures
          * the thing an operator actually meets. */
         const focused = await page.evaluate(function () {
-            var target = document.querySelector('[data-focus-key]');
+            /* An alarm's acknowledgement by preference: an alarm that is
+             * standing stays standing for the length of this check, where a
+             * trunk row can be redrawn out of existence by a transition and
+             * make the measurement about something else. */
+            var target = document.querySelector('[data-focus-key^="alarm:"]') ||
+                document.querySelector('[data-focus-key]');
             if (!target) { return null; }
             target.focus();
             return {
@@ -326,8 +331,19 @@ const CONTRAST_HELPERS = `
             await page.waitForTimeout(1200);
             focusAcrossRedraw = await page.evaluate(function (key) {
                 var active = document.activeElement;
+                var escaped = window.CSS && CSS.escape ? CSS.escape(key) : key;
+                /* Whether the control is still on the page decides whether
+                 * this measures anything. A control that genuinely went away
+                 * -- a trunk somebody deleted, an alarm that cleared -- cannot
+                 * be focused, and reporting that as a defect would make this
+                 * check fire at random on a moving appliance. The defect is
+                 * focus leaving a control that is still sitting there. */
+                var stillPresent = !!document.querySelector(
+                    '[data-focus-key="' + escaped + '"]');
                 return {
-                    tested: true,
+                    tested: stillPresent,
+                    reason: stillPresent ? null
+                        : 'the control was removed by the change, so focus could not stay on it',
                     key: key,
                     focusedBefore: true,
                     keptFocus: !!(active && active.getAttribute &&

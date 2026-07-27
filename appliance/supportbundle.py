@@ -36,7 +36,7 @@ import tarfile
 import time
 from typing import Any
 
-from . import entities, numerals
+from . import entities
 from .logging_setup import get_logger
 
 __all__ = ["create", "REDACTED", "WITHHELD_FIELDS"]
@@ -162,6 +162,13 @@ def create(context: Any) -> tuple[bytes, str]:
                 "helping you and to nobody else.\n"
                 "\n"
                 "Produced at " + stamp + " in coordinated universal time.\n"
+                "\n"
+                "The documents beside this one are machine readable, so the\n"
+                "quantities in them are written as numbers rather than spelled\n"
+                "out. That is the same rule the appliance's own interface\n"
+                "follows: the console spells what it shows a person, and the\n"
+                "data underneath stays comparable. Read this file for the\n"
+                "sentences and the others for the figures.\n"
             ).encode("utf-8"),
         )
 
@@ -174,9 +181,7 @@ def create(context: Any) -> tuple[bytes, str]:
             lambda: {
                 "product": "Legacy-to-Modern IPBX Appliance",
                 "produced_at": stamp,
-                "uptime": numerals.spell_duration(
-                    max(0, int(time.time() - context.started_at))
-                ),
+                "uptime_seconds": max(0, int(time.time() - context.started_at)),
                 "python": platform.python_version(),
                 "system": platform.platform(),
                 "kernel": platform.release(),

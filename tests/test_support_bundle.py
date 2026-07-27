@@ -214,6 +214,34 @@ class SupportBundleTests(unittest.IsolatedAsyncioTestCase):
             object.__setattr__(spec, "fields", original)
             importlib.reload(supportbundle)
 
+    def test_the_documents_carry_numbers_and_the_prose_carries_words(self) -> None:
+        """One convention per file, and the archive said which.
+
+        The bundle used to hold both: appliance.json spelled its uptime as
+        prose while state.json carried the same measure as a number, so an
+        engineer comparing two figures in one archive found them in two
+        different notations. The rule is the appliance's own -- what is shown
+        to a person is spelled, and the data underneath stays comparable -- and
+        the file at the top of the archive now says so.
+        """
+        _, members = self._bundle()
+
+        described = json.loads(members["appliance.json"])
+        self.assertIsInstance(described["uptime_seconds"], int)
+        for key, value in described.items():
+            with self.subTest(key=key):
+                self.assertNotRegex(
+                    str(value), r"\b(zero|one|two|three|four|five) (seconds|minutes|hours)\b",
+                    "a document beside the machine readable ones spells a quantity",
+                )
+
+        state = json.loads(members["state.json"])
+        self.assertIsInstance(state["uptime_seconds"], int)
+
+        readme = " ".join(members["READ-ME-FIRST.txt"].decode("utf-8").split())
+        self.assertIn("machine readable", readme)
+        self.assertIn("rather than spelled", readme)
+
     def test_the_manifest_names_every_withheld_field(self) -> None:
         _, members = self._bundle()
         manifest = json.loads(members["manifest.json"])

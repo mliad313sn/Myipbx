@@ -5,10 +5,10 @@
  * the interface needs is served from the appliance itself.
  *
  * The colours, sizes and depths this file uses now come from tokens.css, which
- * is loaded before it. The nine names below are kept as they were and pointed
+ * is loaded before it. The ten names below are kept as they were and pointed
  * at the tokens, so that the several hundred rules underneath did not have to
  * be rewritten to gain the dark and high contrast themes: they ask for the
- * same nine names and get whichever theme is in force. New work should ask for
+ * same ten names and get whichever theme is in force. New work should ask for
  * the token directly.
  */
 
