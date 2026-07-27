@@ -109,6 +109,13 @@ class Alarm:
     message: str
     raised_at: float
     detail: str = ""
+    #: When an operator said they had seen this, and who said so. An alarm is
+    #: not cleared by being acknowledged -- the condition is still there and
+    #: the appliance keeps saying so -- but a panel that cannot be worked
+    #: through is a panel that stops being read, and a standing alarm nobody
+    #: has looked at should not sit beside one somebody is already on.
+    acknowledged_at: float | None = None
+    acknowledged_by: str = ""
 
     def as_dict(self, now: float) -> dict[str, Any]:
         return {
@@ -117,7 +124,38 @@ class Alarm:
             "message": self.message,
             "detail": self.detail,
             "age_seconds": max(0, int(now - self.raised_at)),
+            "acknowledged": self.acknowledged_at is not None,
+            "acknowledged_by": self.acknowledged_by,
+            "acknowledged_age_seconds": (
+                max(0, int(now - self.acknowledged_at))
+                if self.acknowledged_at is not None
+                else None
+            ),
         }
+
+
+#: Worst first. An operator reading down the panel meets the thing that is
+#: taking calls away before the thing that is merely worth knowing, whatever
+#: order the conditions happened to arise in.
+SEVERITY_ORDER: dict[str, int] = {
+    "critical": 0,
+    "warning": 1,
+    "information": 2,
+}
+
+
+def _alarm_rank(alarm: Alarm) -> tuple[int, int, float]:
+    """Sort key: severity, then whether anybody is on it, then age.
+
+    An unacknowledged alarm sorts above an acknowledged one of the same
+    severity, and among equals the oldest is first, because the one that has
+    been standing longest is the one least likely to be in hand.
+    """
+    return (
+        SEVERITY_ORDER.get(alarm.severity, len(SEVERITY_ORDER)),
+        1 if alarm.acknowledged_at is not None else 0,
+        alarm.raised_at,
+    )
 
 
 @dataclass
@@ -286,6 +324,10 @@ class ApplianceState:
         existing = self.alarms.get(key)
         if existing is not None and existing.severity == severity and existing.message == message:
             return False
+        # A changed severity or message is a changed condition, so the new
+        # alarm arrives unacknowledged even where the old one had been seen:
+        # somebody acknowledging "the trunk is retrying" has not acknowledged
+        # "the trunk has failed".
         alarm = Alarm(
             key=key, severity=severity, message=message, raised_at=self.clock(), detail=detail
         )
@@ -306,6 +348,35 @@ class ApplianceState:
         _LOG.info("the alarm identified as %s was cleared", key)
         self.touch()
         self._publish_urgently("alarm.cleared", {"key": key})
+        return True
+
+    def acknowledge_alarm(self, key: str, actor: str) -> bool:
+        """Record that somebody has seen this alarm and is dealing with it.
+
+        Acknowledging does not clear anything. The condition is still there,
+        the alarm is still raised, and the appliance goes on saying so; the
+        only thing that clears an alarm is the condition ending. What this
+        changes is the panel: a standing alarm somebody is already working
+        sinks below one nobody has looked at, and the panel stays worth
+        reading on a machine where one condition has been true for a week.
+
+        A suppression that hid the alarm entirely was considered and not
+        built. An alarm an operator can make invisible is an alarm the next
+        operator never sees, and on a telephone system the next operator is
+        usually the one who finds out that a trunk has been down since Friday.
+        """
+        alarm = self.alarms.get(key)
+        if alarm is None:
+            return False
+        if alarm.acknowledged_at is not None:
+            return False
+        alarm.acknowledged_at = self.clock()
+        alarm.acknowledged_by = actor or "an unidentified account"
+        _LOG.info(
+            "the alarm identified as %s was acknowledged by %s",
+            key, alarm.acknowledged_by,
+        )
+        self.touch()
         return True
 
     # -- publication -------------------------------------------------------
@@ -360,7 +431,10 @@ class ApplianceState:
             else None,
             "last_event_name": self.last_event_name,
             "channels": [channel.as_dict(now) for channel in self.channels.values()],
-            "alarms": [alarm.as_dict(now) for alarm in self.alarms.values()],
+            "alarms": [
+                alarm.as_dict(now)
+                for alarm in sorted(self.alarms.values(), key=_alarm_rank)
+            ],
             "hardware": self.hardware,
         }
 

@@ -445,6 +445,20 @@
         });
     }
 
+    /* The alarm panel, worst first and workable.
+     *
+     * The appliance already orders these: critical before warning, then
+     * whatever nobody has looked at before whatever somebody is on, then
+     * oldest first. The console draws them in the order it is given and adds
+     * the one control that makes a panel usable on a machine where a condition
+     * has been true for a week -- a way for an operator to say they have seen
+     * it. That does not clear anything. The condition is still true and the
+     * alarm is still raised; it moves down, and it says who moved it.
+     *
+     * There is deliberately no way to hide one. An alarm an operator can make
+     * invisible is an alarm the next operator never sees, and on a telephone
+     * system the next operator is usually the one who finds out that a trunk
+     * has been down since Friday. */
     function renderAlarms(alarms) {
         clear(nodes.alarmList);
         if (!alarms.length) {
@@ -454,12 +468,48 @@
         nodes.alarmPanel.hidden = false;
 
         alarms.forEach(function (alarm) {
-            var item = element('li', alarm.severity || 'warning');
-            item.textContent = alarm.message + ' — raised ' + duration(alarm.age_seconds) + ' ago';
+            var classes = (alarm.severity || 'warning') +
+                (alarm.acknowledged ? ' acknowledged' : '');
+            var item = element('li', classes);
+
+            var line = element('span', 'alarm-message',
+                alarm.message + ' — raised ' + duration(alarm.age_seconds) + ' ago');
+            item.appendChild(line);
+
+            if (alarm.acknowledged) {
+                item.appendChild(element('span', 'alarm-seen',
+                    ' seen by ' + (alarm.acknowledged_by || 'somebody') +
+                    ' ' + duration(alarm.acknowledged_age_seconds) + ' ago'));
+            } else {
+                var seen = element('button', 'secondary alarm-acknowledge', 'i have seen this');
+                seen.type = 'button';
+                seen.setAttribute('aria-label',
+                    'acknowledge the alarm: ' + alarm.message);
+                seen.addEventListener('click', function () {
+                    acknowledgeAlarm(alarm.key, alarm.message);
+                });
+                item.appendChild(seen);
+            }
+
             if (alarm.detail) {
                 item.appendChild(element('div', 'alarm-detail', numerals.sanitize(alarm.detail)));
             }
             nodes.alarmList.appendChild(item);
+        });
+    }
+
+    function acknowledgeAlarm(key, message) {
+        return request('/api/alarms/' + encodeURIComponent(key) + '/acknowledge', {
+            method: 'POST'
+        }).then(function (result) {
+            if (!result.ok) {
+                toast(result.payload.error || 'the alarm could not be acknowledged', 'bad');
+                return;
+            }
+            /* Said plainly, because the word "acknowledged" reads to some
+             * operators as "dealt with" and this is neither. */
+            toast('noted; the condition is still there and the alarm stays raised');
+            loadState();
         });
     }
 

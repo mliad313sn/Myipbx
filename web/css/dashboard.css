@@ -289,6 +289,29 @@ main {
 
 .alarm-list li { margin-bottom: 0.4rem; }
 
+.alarm-acknowledge {
+  margin: 0 0 0 0.6rem;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.78rem;
+  vertical-align: baseline;
+}
+
+.alarm-seen {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* An acknowledged alarm is quieter, not gone. It keeps its severity mark and
+ * its colour, because the condition has not changed; only the weight comes
+ * down, so that the panel reads worst-and-unseen first without anything
+ * disappearing from it. */
+.alarm-list li.acknowledged .alarm-message {
+  font-weight: 400;
+  opacity: 0.85;
+}
+
 /* An alarm's severity is prefixed as well as coloured. A list where the only
  * difference between a critical alarm and a warning is the shade of the text
  * is a list that says nothing to an operator who cannot see the difference,

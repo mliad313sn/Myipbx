@@ -526,6 +526,80 @@ class StateModelTests(unittest.TestCase):
         self.assertTrue(self.state.clear_alarm("key"))
         self.assertFalse(self.state.clear_alarm("key"))
 
+    # -- what the panel looks like when several things are wrong ------------
+
+    def test_the_worst_alarm_is_first_whatever_order_they_arose_in(self) -> None:
+        """An operator reads down the panel and must meet the worst first.
+
+        Conditions arise in the order the world produces them, which is never
+        the order they matter in. A warning that a certificate expires in a
+        month should not sit above a trunk that is carrying no calls because
+        the certificate warning happened to be raised first.
+        """
+        self.state.raise_alarm("later", "information", "worth knowing")
+        self.state.raise_alarm("middle", "warning", "worth watching")
+        self.state.raise_alarm("first", "critical", "taking calls away")
+
+        keys = [alarm["key"] for alarm in self.state.snapshot()["alarms"]]
+        self.assertEqual(keys, ["first", "middle", "later"])
+
+    def test_an_alarm_nobody_has_looked_at_outranks_one_somebody_is_on(self) -> None:
+        self.state.raise_alarm("seen", "critical", "one somebody is working")
+        self.state.raise_alarm("unseen", "critical", "one nobody has read")
+        self.state.acknowledge_alarm("seen", "an operator")
+
+        keys = [alarm["key"] for alarm in self.state.snapshot()["alarms"]]
+        self.assertEqual(keys, ["unseen", "seen"])
+
+    def test_acknowledging_does_not_clear_the_alarm(self) -> None:
+        """The condition is still true, so the alarm is still raised.
+
+        This is the whole distinction. An acknowledgement that removed the
+        alarm would be a way of turning off the thing that tells the next
+        operator a trunk has been down since Friday.
+        """
+        self.state.raise_alarm("trunk-down-carrier", "critical", "the trunk is down")
+        self.assertTrue(self.state.acknowledge_alarm("trunk-down-carrier", "an operator"))
+
+        self.assertIn("trunk-down-carrier", self.state.alarms)
+        alarm = self.state.snapshot()["alarms"][0]
+        self.assertTrue(alarm["acknowledged"])
+        self.assertEqual(alarm["acknowledged_by"], "an operator")
+        self.assertEqual(alarm["message"], "the trunk is down")
+
+    def test_acknowledging_twice_changes_nothing(self) -> None:
+        self.state.raise_alarm("key", "warning", "a message")
+        self.assertTrue(self.state.acknowledge_alarm("key", "the first operator"))
+        self.assertFalse(self.state.acknowledge_alarm("key", "the second operator"))
+        self.assertEqual(
+            self.state.alarms["key"].acknowledged_by, "the first operator"
+        )
+
+    def test_acknowledging_an_alarm_that_is_not_raised_is_refused(self) -> None:
+        self.assertFalse(self.state.acknowledge_alarm("nothing", "an operator"))
+
+    def test_a_worsened_condition_arrives_unacknowledged(self) -> None:
+        """Somebody who acknowledged "retrying" has not acknowledged "failed"."""
+        self.state.raise_alarm("trunk", "warning", "the trunk is retrying")
+        self.state.acknowledge_alarm("trunk", "an operator")
+
+        self.state.raise_alarm("trunk", "critical", "the trunk has failed")
+
+        alarm = self.state.snapshot()["alarms"][0]
+        self.assertFalse(
+            alarm["acknowledged"],
+            "a condition that got worse kept the acknowledgement of the "
+            "milder one it replaced",
+        )
+
+    def test_an_alarm_that_clears_and_returns_is_unacknowledged(self) -> None:
+        self.state.raise_alarm("key", "critical", "a message")
+        self.state.acknowledge_alarm("key", "an operator")
+        self.state.clear_alarm("key")
+        self.state.raise_alarm("key", "critical", "a message")
+
+        self.assertFalse(self.state.snapshot()["alarms"][0]["acknowledged"])
+
     def test_a_failing_publisher_does_not_break_a_state_change(self) -> None:
         def bad_publisher(topic: str, payload: dict) -> None:
             raise RuntimeError("the hub is gone")

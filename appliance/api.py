@@ -66,6 +66,10 @@ def build_router(context: Any) -> Router:
     # -- authenticated writes ---------------------------------------------
     router.post("/api/session/end", guard.write(lambda request: _sign_out(context, request)))
     router.post(
+        "/api/alarms/{key}/acknowledge",
+        guard.write(lambda request: _acknowledge_alarm(context, request)),
+    )
+    router.post(
         "/api/configuration", guard.write(lambda request: _save_configuration(context, request))
     )
     router.post(
@@ -581,6 +585,32 @@ def _sign_in(context: Any, request: Request) -> Response:
         {"signed_in": True, "username": username},
         headers={"Set-Cookie": "; ".join(attributes)},
     )
+
+
+def _acknowledge_alarm(context: Any, request: Request) -> Response:
+    """Say that somebody has seen an alarm and is dealing with it.
+
+    This clears nothing. The condition is still true and the alarm is still
+    raised; what changes is where it sits in the panel, so that a standing
+    condition somebody is working does not crowd out one nobody has read.
+    """
+    key = request.parameter("key")
+    if not key:
+        return Response.error(400, "no alarm was named")
+
+    session = getattr(request, "session", None)
+    actor = getattr(session, "username", "") or "an unidentified account"
+
+    if not context.state.acknowledge_alarm(key, actor):
+        if key not in context.state.alarms:
+            return Response.error(
+                404, "no alarm by that name is raised on this appliance"
+            )
+        return Response.json(
+            {"acknowledged": True, "note": "it had already been acknowledged"}
+        )
+
+    return Response.json({"acknowledged": True, "by": actor})
 
 
 def _journal_entries(context: Any, request: Request) -> Response:
