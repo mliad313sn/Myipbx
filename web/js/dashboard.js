@@ -1444,6 +1444,31 @@
             });
     }
 
+    function downloadSupportBundle() {
+        var button = nodes.supportBundleButton;
+        if (button) {
+            button.disabled = true;
+        }
+        return request('/api/support-bundle').then(function (result) {
+            if (button) {
+                button.disabled = false;
+            }
+            if (!result.ok || !result.blob) {
+                toast('the support bundle could not be produced', 'bad');
+                return;
+            }
+            var url = URL.createObjectURL(result.blob);
+            var anchor = element('a');
+            anchor.href = url;
+            anchor.download = 'myipbx-support.tar.gz';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+            toast('the support bundle was downloaded; it carries no password, but it does describe this site');
+        });
+    }
+
     function restoreBackup(event) {
         event.preventDefault();
         var file = nodes.restoreFile.files && nodes.restoreFile.files[0];
@@ -1730,6 +1755,7 @@
             ['logSource', 'log-source'], ['logLevel', 'log-level'], ['logSearch', 'log-search'],
             ['logForm', 'log-form'], ['logView', 'log-view'],
             ['backupButton', 'backup-button'], ['backupSecrets', 'backup-secrets'],
+            ['supportBundleButton', 'support-bundle-button'],
             ['restoreForm', 'restore-form'],
             ['restoreFile', 'restore-file'], ['restoreOutcome', 'restore-outcome'],
             ['restoreCredentials', 'restore-credentials'],
@@ -1823,6 +1849,7 @@
         });
 
         nodes.backupButton.addEventListener('click', downloadBackup);
+        nodes.supportBundleButton.addEventListener('click', downloadSupportBundle);
         nodes.restoreForm.addEventListener('submit', restoreBackup);
         nodes.journalRefresh.addEventListener('click', loadJournal);
 

@@ -299,6 +299,63 @@ check_kernel_headers() {
     report_blocking "kernel headers for the running kernel release ${release} are missing, and the interface card drivers are compiled against them in stage three; install the headers package whose version matches the output of the command uname -r exactly -- the package named linux-headers followed by that release on a Debian derived system, or kernel-devel on a Red Hat derived system -- then run this check again"
 }
 
+#: The kernel release from which the released driver archive is known to fail
+#: to compile. Kept in step with the same two values in
+#: scripts/stage-three-dahdi-drivers.sh, which is where the choice is made.
+_DRIVER_TREE_REQUIRED_MAJOR=6
+_DRIVER_TREE_REQUIRED_MINOR=10
+
+# Can stage three actually get the driver source it will need?
+#
+# On a kernel from six point ten onward the released archive does not compile,
+# so the stage clones the development tree instead. At a site with no route off
+# the premises -- which is most of the sites this appliance is built for -- that
+# clone fails, and it fails in the middle of an installation, after the base
+# system has been laid down and the packages installed. The operator is then
+# holding a half built machine and a network error.
+#
+# This is the check that turns that into a sentence read beforehand.
+check_driver_source() {
+    local release major minor
+    release="$(uname -r)"
+    major="${release%%.*}"
+    minor="${release#*.}"
+    minor="${minor%%.*}"
+
+    # A local archive satisfies every path. If one is named and present, the
+    # question of reaching anything does not arise.
+    local candidate
+    for candidate in "${DRIVER_ARCHIVE:-}" "${MYIPBX_DRIVER_ARCHIVE:-}"; do
+        if [[ -n "${candidate}" && -f "${candidate}" ]]; then
+            report_pass "the interface driver source is already on this machine at ${candidate}, so stage three needs to reach nothing"
+            return 0
+        fi
+    done
+
+    local needs_tree=0
+    if [[ "${DRIVER_SOURCE_MODE:-auto}" == "git" || "${DRIVER_SOURCE_MODE:-auto}" == "tree" ]]; then
+        needs_tree=1
+    elif [[ "${DRIVER_SOURCE_MODE:-auto}" == "archive" || "${DRIVER_SOURCE_MODE:-auto}" == "release" ]]; then
+        needs_tree=0
+    elif [[ "${major}" =~ ^[0-9]+$ && "${minor}" =~ ^[0-9]+$ ]]; then
+        if (( major > _DRIVER_TREE_REQUIRED_MAJOR )) \
+            || (( major == _DRIVER_TREE_REQUIRED_MAJOR && minor >= _DRIVER_TREE_REQUIRED_MINOR )); then
+            needs_tree=1
+        fi
+    fi
+
+    if (( needs_tree )); then
+        if ! have_command git; then
+            report_blocking "the running kernel release ${release} is newer than the last tagged driver release, so stage three must build from the development tree, and the command named git is not installed on this machine; install the git package, or download the driver source elsewhere and name the file in the variable DRIVER_ARCHIVE, then run this check again"
+            return 0
+        fi
+        report_warning "the running kernel release ${release} is newer than the last tagged driver release, so stage three will clone the driver development tree from the network, and on a site with no route off the premises that clone fails partway through the installation and leaves a half built machine; if this machine has no such route, set the variable named DRIVER_ARCHIVE to a copy of the driver source fetched on a machine that has one, then run this check again"
+        return 0
+    fi
+
+    report_pass "the running kernel release ${release} predates the driver interface changes, so stage three can build from the released archive"
+}
+
 check_build_toolchain() {
     local -a missing=()
 
@@ -543,6 +600,7 @@ main() {
     check_interpreter
     check_kernel_headers
     check_build_toolchain
+    check_driver_source
     check_interface_card
     check_address_allocation
     check_disk_space

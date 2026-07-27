@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from . import backup, entities, firewall, httpd, numerals, sysops
+from . import backup, entities, firewall, httpd, numerals, supportbundle, sysops
 from .confstore import DocumentRefused, DriftDetected
 from .httpd import Request, Response, Router
 from .logging_setup import get_logger
@@ -126,6 +126,7 @@ def build_router(context: Any) -> Router:
 
     # -- backup and restore -------------------------------------------------
     router.get("/api/backup", guard.read(lambda request: _backup(context, request)))
+    router.get("/api/support-bundle", guard.read(lambda request: _support_bundle(context)))
     router.post("/api/restore", guard.write(lambda request: _restore(context, request)))
 
     router.serve_static(context.config.web_root)
@@ -1174,6 +1175,36 @@ def _backup(context: Any, request: Request) -> Response:
         headers={
             "Content-Disposition": f'attachment; filename="{name}"',
             # A backup carries secrets, so it must never sit in a cache.
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
+def _support_bundle(context: Any) -> Response:
+    """Everything a remote engineer needs, in one file.
+
+    The exchange this replaces is a dozen messages long -- what does the
+    hardware section say, which trunk is it, what is in the log, what version
+    is this -- and each round trip to a site nobody can reach costs a day.
+
+    It carries no password, no credential and no private key. It does carry
+    the addresses of this site's carriers and the numbers of its extensions,
+    which is what makes it useful, and it says so in a file at the top of the
+    archive so that whoever forwards it knows what they are forwarding.
+    """
+    try:
+        payload, name = supportbundle.create(context)
+    except OSError as error:
+        return Response.error(
+            500, f"the support bundle could not be produced: {error}"
+        )
+
+    return Response(
+        status=200,
+        body=payload,
+        content_type="application/gzip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
             "Cache-Control": "no-store, no-cache, must-revalidate, private",
         },
     )

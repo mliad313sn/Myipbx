@@ -345,6 +345,58 @@ class OutcomeTests(unittest.TestCase):
                 self.assertIn(subject, report)
 
 
+class DriverSourceTests(unittest.TestCase):
+    """Whether stage three can get the source it will need, said beforehand.
+
+    On a kernel from six point ten onward the released driver archive does not
+    compile, so the stage clones the development tree instead. At a site with
+    no route off the premises -- which is most of the sites this appliance is
+    built for -- that clone fails in the middle of an installation, after the
+    base system is down and the packages are in, and the operator is left
+    holding a half built machine and a network error.
+    """
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-driver-")
+        self.base = Path(self.directory.name)
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    def _run(self, **environment: str) -> str:
+        root = build_satisfied_root(self.base)
+        settings = {"ROOT_PREFIX": str(root), "APPLIANCE_INTERFACE": "eth0"}
+        settings.update(environment)
+        return combined(run_preflight(environment=settings))
+
+    def test_a_local_archive_settles_the_question(self) -> None:
+        """If the source is already here, nothing has to be reached."""
+        archive = self.base / "dahdi-linux-3.4.0.tar.gz"
+        archive.write_bytes(b"not really an archive, but it is present")
+        report = self._run(DRIVER_ARCHIVE=str(archive))
+        self.assertIn("already on this machine", report)
+        self.assertIn("needs to reach nothing", report)
+
+    def test_the_development_tree_is_named_as_needing_the_network(self) -> None:
+        report = self._run(DRIVER_SOURCE_MODE="git")
+        self.assertIn("clone the driver development tree from the network", report)
+        self.assertIn("DRIVER_ARCHIVE", report)
+
+    def test_asking_for_the_released_archive_raises_nothing(self) -> None:
+        report = self._run(DRIVER_SOURCE_MODE="archive")
+        self.assertIn("can build from the released archive", report)
+
+    def test_the_warning_names_the_way_out(self) -> None:
+        """A warning that says only "this may fail" is not worth printing."""
+        report = self._run(DRIVER_SOURCE_MODE="git")
+        line = [
+            item for item in report.splitlines()
+            if "development tree" in item and "worth knowing" in item
+        ]
+        self.assertTrue(line, f"the finding was not reported: {report}")
+        self.assertIn("set the variable named DRIVER_ARCHIVE", line[0])
+
+
 class RemedyTests(unittest.TestCase):
     """A finding without a remedy leaves the technician exactly where he was."""
 
