@@ -22,7 +22,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from . import addresses
 from .logging_setup import get_logger
@@ -554,11 +554,54 @@ class EntityStore:
 
     The store operates on the source of truth document. It does not write it —
     the caller saves, so that a batch of changes lands atomically.
+
+    Secrets are held back the same way, and for the same reason. They used to
+    be written to disk the moment a record was validated, before the document
+    that refers to them was saved. When the save then failed — a full disk, a
+    document the guard refused, a permission that had changed — the secret
+    stayed behind with nothing pointing at it: a carrier's password or a
+    telephone's, never displayed, never reachable, never cleaned up, and
+    carried into every backup taken afterwards. The mirror case was worse: a
+    deletion forgot the secret first, so a failed save left the record in place
+    having silently lost its password.
+
+    The pending operations below are applied by ``commit_secrets``, which the
+    caller invokes only once the document is safely written.
     """
 
     document: dict[str, Any]
     secrets: SecretStore | None = None
     _errors: dict[str, str] = field(default_factory=dict)
+    #: Secret operations earned by the changes made so far, not yet applied.
+    #: Each is a callable taking the secret store.
+    _pending_secrets: list[Callable[[SecretStore], None]] = field(default_factory=list)
+    #: Which secrets those operations will set and clear, as (kind, key, name).
+    #: A record has to report a password the operator has just typed as set,
+    #: even though it is deliberately not on disk until the document is.
+    _pending_set: set[tuple[str, str, str]] = field(default_factory=set)
+    _pending_forgotten: set[tuple[str, str]] = field(default_factory=set)
+
+    def commit_secrets(self) -> int:
+        """Apply the held secret operations. Call only after the save."""
+        if not self.secrets:
+            self._pending_secrets.clear()
+            return 0
+        applied = 0
+        for operation in self._pending_secrets:
+            operation(self.secrets)
+            applied += 1
+        self._pending_secrets.clear()
+        self._pending_set.clear()
+        self._pending_forgotten.clear()
+        return applied
+
+    def discard_secrets(self) -> int:
+        """Throw the held operations away, because the save did not happen."""
+        count = len(self._pending_secrets)
+        self._pending_secrets.clear()
+        self._pending_set.clear()
+        self._pending_forgotten.clear()
+        return count
 
     # -- reading -----------------------------------------------------------
 
@@ -584,6 +627,10 @@ class EntityStore:
             configured = bool(
                 self.secrets and self.secrets.has(spec.kind, key, item.name)
             )
+            if (spec.kind, key) in self._pending_forgotten:
+                configured = False
+            if (spec.kind, key, item.name) in self._pending_set:
+                configured = True
             record[f"{item.name}_configured"] = configured
         return record
 
@@ -623,7 +670,10 @@ class EntityStore:
         self.document[kind][index] = cleaned
         if new_key != str(key):
             if self.secrets:
-                self.secrets.rename(spec.kind, str(key), new_key)
+                self._pending_secrets.append(
+                    lambda store, kind=spec.kind, old=str(key), new=new_key:
+                    store.rename(kind, old, new)
+                )
             self._repoint_references(spec, str(key), new_key)
         self._store_secrets(spec, new_key, secrets)
         _LOG.info("the %s identified as %s was updated", spec.singular, new_key)
@@ -649,7 +699,10 @@ class EntityStore:
 
         del self.document[kind][index]
         if self.secrets:
-            self.secrets.forget(spec.kind, str(key))
+            self._pending_secrets.append(
+                lambda store, kind=spec.kind, key=str(key): store.forget(kind, key)
+            )
+            self._pending_forgotten.add((spec.kind, str(key)))
         _LOG.info("the %s identified as %s was deleted", spec.singular, key)
         return True
 
@@ -852,7 +905,12 @@ class EntityStore:
         if not self.secrets:
             return
         for name, value in secrets.items():
-            self.secrets.set(spec.kind, key, name, value)
+            self._pending_secrets.append(
+                lambda store, kind=spec.kind, key=key, name=name, value=value:
+                store.set(kind, key, name, value)
+            )
+            self._pending_set.add((spec.kind, key, name))
+            self._pending_forgotten.discard((spec.kind, key))
 
 
 def schema() -> dict[str, Any]:

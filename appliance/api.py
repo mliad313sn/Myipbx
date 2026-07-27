@@ -905,9 +905,20 @@ def _entity_context(context: Any) -> tuple[dict[str, Any], entities.EntityStore]
     return document, entities.EntityStore(document, context.secrets)
 
 
-def _commit(context: Any, document: dict[str, Any]) -> dict[str, Any]:
-    """Persist a mutated document and bring the running appliance into line."""
+def _commit(
+    context: Any, document: dict[str, Any], store: entities.EntityStore | None = None
+) -> dict[str, Any]:
+    """Persist a mutated document and bring the running appliance into line.
+
+    The document goes down first and the secrets follow it. The other order
+    left a password on disk with nothing referring to it whenever the save
+    failed, and, on a deletion, left a record in place having quietly lost the
+    password it needed. If the save raises, nothing here has touched the secret
+    file at all.
+    """
     saved = context.store.save(document)
+    if store is not None:
+        store.commit_secrets()
     context.trunks.declare_many(saved.get("trunks", []) or [])
     context.state.touch()
     return saved
@@ -963,7 +974,7 @@ def _entity_create(context: Any, request: Request) -> Response:
             {"accepted": False, "errors": error.errors}, status=422
         )
 
-    _commit(context, document)
+    _commit(context, document, store)
     return Response.json({"accepted": True, "record": record}, status=201)
 
 
@@ -982,7 +993,7 @@ def _entity_update(context: Any, request: Request) -> Response:
     except entities.ValidationError as error:
         return Response.json({"accepted": False, "errors": error.errors}, status=422)
 
-    _commit(context, document)
+    _commit(context, document, store)
     return Response.json({"accepted": True, "record": record})
 
 
@@ -1003,7 +1014,7 @@ def _entity_delete(context: Any, request: Request) -> Response:
     if not removed:
         return Response.error(404, f"there is nothing of that kind identified as {key}")
 
-    _commit(context, document)
+    _commit(context, document, store)
     return Response.json({"accepted": True, "deleted": key})
 
 

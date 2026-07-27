@@ -293,7 +293,13 @@ class EntityStoreTests(unittest.TestCase):
     def _extension(self, number: str = "201", **overrides) -> dict:
         payload = {"number": number, "name": "A Telephone", "secret": "a-long-password"}
         payload.update(overrides)
-        return self.store.create("extensions", payload)
+        record = self.store.create("extensions", payload)
+        # What the interface does after it has saved the document. Secrets are
+        # held back until the document that refers to them is safely written,
+        # so a caller that never saves never writes one -- and a test standing
+        # in for that caller has to do what it does.
+        self.store.commit_secrets()
+        return record
 
     # -- creation and validation -------------------------------------------
 
@@ -366,7 +372,51 @@ class EntityStoreTests(unittest.TestCase):
     def test_deleting_an_object_forgets_its_secret(self) -> None:
         self._extension()
         self.store.delete("extensions", "201")
+        self.store.commit_secrets()
         self.assertIsNone(self.secrets.get("extensions", "201", "secret"))
+
+    def test_a_creation_that_is_never_saved_writes_no_secret(self) -> None:
+        """The orphan the review found.
+
+        A secret used to reach disk the moment a record validated, before the
+        document referring to it was written. A save that then failed -- a full
+        disk, a document the guard refused, a permission that had changed --
+        left a carrier's password or a telephone's on disk with nothing
+        pointing at it: never displayed, never reachable, never cleaned up, and
+        carried into every backup taken afterwards.
+        """
+        record = self.store.create(
+            "extensions",
+            {"number": "301", "name": "Another Telephone", "secret": "a-second-password"},
+        )
+        # The record still reports the password as set, because the operator
+        # typed one and the caller is about to save it.
+        self.assertTrue(record["secret_configured"])
+
+        # But nothing has touched the secret file, so a caller that fails to
+        # save leaves nothing behind.
+        self.store.discard_secrets()
+        self.assertIsNone(self.secrets.get("extensions", "301", "secret"))
+        self.assertNotIn(
+            "a-second-password",
+            self.secrets.path.read_text(encoding="utf-8")
+            if self.secrets.path.is_file() else "",
+        )
+
+    def test_a_deletion_that_is_never_saved_keeps_the_secret(self) -> None:
+        """The mirror of the orphan, and the more damaging of the two.
+
+        Forgetting the secret before the document was written meant that a save
+        which then failed left the record in place having quietly lost the
+        password it needs to register. Nothing said so, and nothing could put
+        it back: the appliance never reads a secret out again.
+        """
+        self._extension()
+        self.store.delete("extensions", "201")
+        self.store.discard_secrets()
+        self.assertEqual(
+            self.secrets.get("extensions", "201", "secret"), "a-long-password"
+        )
 
     # -- referential integrity ---------------------------------------------
 
@@ -406,6 +456,7 @@ class EntityStoreTests(unittest.TestCase):
         )
 
         self.store.update("extensions", "201", {"number": "301"})
+        self.store.commit_secrets()
         group = self.store.get("ring_groups", "600")
         assert group is not None
         self.assertEqual(group["members"], ["301"])
@@ -1044,6 +1095,7 @@ class MenuQueueAndConferenceTests(unittest.TestCase):
             "conferences",
             {"number": "800", "name": "Board Room", "pin": "a-long-entry-code"},
         )
+        self.store.commit_secrets()
         artefacts = self._render()
 
         rooms = artefacts["confbridge.conf"]
