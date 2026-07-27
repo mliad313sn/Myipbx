@@ -310,7 +310,11 @@
   width: 100%;
   min-height: var(--mx-density-touch-target);
   padding: var(--mx-density-control-padding-block) var(--mx-space-12);
-  border: 1px solid var(--mx-border-default);
+  /* The strong border rather than the default one. The edge of a field is what
+   * tells an operator that there is a field there at all, so it has to hold
+   * three to one against the surface behind it; the default border is for a
+   * rule between rows, where a faint line is the point. */
+  border: 1px solid var(--mx-border-strong);
   border-radius: var(--mx-radius-small);
   background: var(--mx-background-surface);
   color: var(--mx-text-primary);

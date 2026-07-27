@@ -249,7 +249,7 @@
   /* -- border ---------------------------------------------------------------- */
   --mx-border-default: #d8dee4;
   --mx-border-subtle: #e7ebef;
-  --mx-border-strong: #8e9aa5;
+  --mx-border-strong: #767f88;
   --mx-border-focus: #1f4e79;
   --mx-border-selected: #1f4e79;
   --mx-border-disabled: #e2e6ea;
@@ -488,7 +488,7 @@
 
     --mx-border-default: #2f3a44;
     --mx-border-subtle: #262f37;
-    --mx-border-strong: #5c6a76;
+    --mx-border-strong: #75838f;
     --mx-border-focus: #8fc0ec;
     --mx-border-selected: #8fc0ec;
     --mx-border-disabled: #2a333b;
@@ -619,7 +619,7 @@
 
   --mx-border-default: #2f3a44;
   --mx-border-subtle: #262f37;
-  --mx-border-strong: #5c6a76;
+  --mx-border-strong: #75838f;
   --mx-border-focus: #8fc0ec;
   --mx-border-selected: #8fc0ec;
   --mx-border-disabled: #2a333b;
@@ -756,7 +756,7 @@
 
   --mx-border-default: #d8dee4;
   --mx-border-subtle: #e7ebef;
-  --mx-border-strong: #8e9aa5;
+  --mx-border-strong: #767f88;
   --mx-border-focus: #1f4e79;
   --mx-border-selected: #1f4e79;
   --mx-border-disabled: #e2e6ea;

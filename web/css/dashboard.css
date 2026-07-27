@@ -294,11 +294,15 @@ form label {
   color: var(--ink-soft);
 }
 
+/* The field's own edge is drawn with the strong border rather than the rule
+ * used between table rows. A boundary an operator has to find has to hold
+ * three to one against the surface behind it; a rule between two rows is meant
+ * to be faint. */
 form input {
   width: 100%;
   padding: 0.5rem 0.6rem;
   margin-top: 0.25rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--mx-border-strong);
   border-radius: 5px;
   background: var(--mx-background-surface);
   color: var(--mx-text-primary);
