@@ -200,6 +200,13 @@ class ApplianceState:
             extension=getter("exten", "") or "",
             started_at=self.clock(),
         )
+        # A channel that is already answered when the appliance first sees it —
+        # which happens when the appliance reconnects to an engine mid call —
+        # must start accruing talk time immediately rather than waiting for a
+        # state change that has already been and gone.
+        channel = self.channels[identifier]
+        if channel.state in ANSWERED_STATES:
+            channel.answered_at = channel.started_at
         self.calls_started += 1
         self.peak_concurrent_calls = max(self.peak_concurrent_calls, len(self.channels))
         return True

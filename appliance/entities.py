@@ -1,0 +1,681 @@
+"""Telephony objects: their schema, their validation, and their storage.
+
+The product's central claim is that every operation can be performed from the
+graphical interface. The way that claim is kept true over time is this file:
+one declarative schema that the server validates against and that the interface
+generates its forms from. Neither side can drift from the other, because
+neither side has its own copy of what a valid extension looks like.
+
+Adding a field here makes it appear in the interface, makes it validated on the
+way in, and makes it render into the engine configuration. There is no fourth
+place to remember.
+
+Secrets are deliberately not held in the source of truth document. They live in
+a separate owner readable file and are never returned by any read path, so a
+configuration export, a backup inspection, or a screenshot cannot disclose one.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Iterable, Mapping
+
+from .logging_setup import get_logger
+
+__all__ = [
+    "Field",
+    "EntitySpec",
+    "ENTITY_SPECS",
+    "ValidationError",
+    "EntityStore",
+    "SecretStore",
+]
+
+_LOG = get_logger("entities")
+
+_NUMBER_PATTERN = re.compile(r"^[0-9]{1,10}$")
+_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
+_IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
+_HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$")
+_PATTERN_PATTERN = re.compile(r"^[0-9NXZ._\[\]!+*-]{1,32}$")
+_ELECTRONIC_MAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_TIME_PATTERN = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+
+
+class ValidationError(ValueError):
+    """One or more submitted values were not acceptable.
+
+    Carries a field keyed mapping so that the interface can mark the offending
+    input rather than showing one message about the whole form.
+    """
+
+    def __init__(self, errors: Mapping[str, str]) -> None:
+        self.errors = dict(errors)
+        summary = "; ".join(f"{name}: {reason}" for name, reason in self.errors.items())
+        super().__init__(summary or "the submission was not acceptable")
+
+
+@dataclass(frozen=True)
+class Field:
+    """One field of one telephony object."""
+
+    name: str
+    label: str
+    kind: str = "text"          # text, number, secret, boolean, choice, list, time
+    required: bool = False
+    default: Any = None
+    help: str = ""
+    choices: tuple[str, ...] = ()
+    pattern: re.Pattern[str] | None = None
+    pattern_help: str = ""
+    maximum: int | None = None
+    minimum: int | None = None
+    #: A secret is accepted on the way in and never returned on the way out.
+    secret: bool = False
+    #: Names another entity kind whose members this field must reference.
+    references: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "label": self.label,
+            "kind": self.kind,
+            "required": self.required,
+            "default": self.default,
+            "help": self.help,
+            "choices": list(self.choices),
+            "references": self.references,
+            "secret": self.secret,
+        }
+
+
+@dataclass(frozen=True)
+class EntitySpec:
+    """One kind of telephony object."""
+
+    kind: str
+    singular: str
+    plural: str
+    key: str
+    description: str
+    fields: tuple[Field, ...]
+    #: Other kinds that may refer to this one, checked before a deletion.
+    referenced_by: tuple[tuple[str, str], ...] = ()
+
+    def field(self, name: str) -> Field | None:
+        for item in self.fields:
+            if item.name == name:
+                return item
+        return None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "singular": self.singular,
+            "plural": self.plural,
+            "key": self.key,
+            "description": self.description,
+            "fields": [item.as_dict() for item in self.fields],
+        }
+
+
+_DESTINATION_KINDS = ("extension", "ring group", "voicemail", "menu", "hang up")
+
+ENTITY_SPECS: dict[str, EntitySpec] = {}
+
+
+def _register(spec: EntitySpec) -> EntitySpec:
+    ENTITY_SPECS[spec.kind] = spec
+    return spec
+
+
+_register(
+    EntitySpec(
+        kind="extensions",
+        singular="extension",
+        plural="extensions",
+        key="number",
+        description="a telephone on this system",
+        fields=(
+            # A dial string, not a quantity: kept as text so that a leading
+            # zero survives, which an integer would silently discard.
+            Field("number", "extension number", required=True,
+                  pattern=_NUMBER_PATTERN,
+                  pattern_help="an extension number is one to ten digits",
+                  help="the number a caller dials to reach this telephone"),
+            Field("name", "display name", required=True, pattern=_NAME_PATTERN,
+                  pattern_help="a display name uses letters, digits, spaces, and the marks period, underscore, and hyphen",
+                  help="shown to other telephones on this system"),
+            Field("secret", "password", "secret", secret=True,
+                  help="set once; it is stored as a secret and never shown again"),
+            Field("technology", "technology", "choice", default="PJSIP",
+                  choices=("PJSIP", "SIP", "DAHDI"),
+                  help="the channel technology this telephone registers with"),
+            Field("voicemail", "voicemail", "boolean", default=True,
+                  help="whether unanswered calls are offered a mailbox"),
+            Field("voicemail_password", "voicemail password", "secret", secret=True,
+                  help="the code the user enters to collect messages"),
+            Field("electronic_mail", "electronic mail address", pattern=_ELECTRONIC_MAIL_PATTERN,
+                  pattern_help="an electronic mail address must contain one at sign and a domain",
+                  help="messages are announced to this address when set"),
+            Field("ring_seconds", "ring time", "number", default=20, minimum=5, maximum=300,
+                  help="how long this telephone rings before the call moves on"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+        referenced_by=(("ring_groups", "members"), ("inbound_routes", "destination_value")),
+    )
+)
+
+_register(
+    EntitySpec(
+        kind="trunks",
+        singular="trunk",
+        plural="trunks",
+        key="name",
+        description="a connection to a carrier or to another system",
+        fields=(
+            Field("name", "trunk name", required=True, pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="a trunk name uses letters, digits, and the marks period, underscore, and hyphen",
+                  help="how this trunk is named throughout the appliance"),
+            Field("technology", "technology", "choice", default="PJSIP",
+                  choices=("PJSIP", "SIP", "DAHDI"),
+                  help="the channel technology used to reach the carrier"),
+            Field("host", "carrier address", required=True, pattern=_HOST_PATTERN,
+                  pattern_help="a carrier address is a host name or an address",
+                  help="the carrier's host name or address"),
+            Field("username", "account name", pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="an account name uses letters, digits, and the marks period, underscore, and hyphen",
+                  help="the account name the carrier issued"),
+            Field("secret", "account password", "secret", secret=True,
+                  help="stored as a secret and never shown again"),
+            Field("register", "register with the carrier", "boolean", default=True,
+                  help="whether this appliance registers, or the carrier trusts the address"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+        referenced_by=(("outbound_routes", "trunk"),),
+    )
+)
+
+_register(
+    EntitySpec(
+        kind="ring_groups",
+        singular="ring group",
+        plural="ring groups",
+        key="number",
+        description="a set of telephones that ring together",
+        fields=(
+            # A dial string, not a quantity; see the note on extensions.
+            Field("number", "group number", required=True, pattern=_NUMBER_PATTERN,
+                  pattern_help="a group number is one to ten digits"),
+            Field("name", "description", required=True, pattern=_NAME_PATTERN,
+                  pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
+            Field("members", "members", "list", required=True, references="extensions",
+                  help="the extensions that ring when this group is called"),
+            Field("strategy", "ring strategy", "choice", default="ring all",
+                  choices=("ring all", "in order", "least recently called"),
+                  help="whether every telephone rings at once or one at a time"),
+            Field("ring_seconds", "ring time", "number", default=25, minimum=5, maximum=300),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+        referenced_by=(("inbound_routes", "destination_value"),),
+    )
+)
+
+_register(
+    EntitySpec(
+        kind="inbound_routes",
+        singular="inbound route",
+        plural="inbound routes",
+        key="did",
+        description="where a call arriving from a carrier is sent",
+        fields=(
+            Field("did", "number dialled", required=True, pattern=_PATTERN_PATTERN,
+                  pattern_help="a dialled number may contain digits and the pattern marks N, X, Z, period, and brackets",
+                  help="the number the caller dialled; use the pattern mark period to match anything"),
+            Field("description", "description", pattern=_NAME_PATTERN,
+                  pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
+            Field("destination_kind", "send the call to", "choice", required=True,
+                  default="extension", choices=_DESTINATION_KINDS),
+            Field("destination_value", "destination", required=True, pattern=_NUMBER_PATTERN,
+                  pattern_help="a destination is the number of an extension or a ring group",
+                  help="the extension or ring group number that answers"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+    )
+)
+
+_register(
+    EntitySpec(
+        kind="outbound_routes",
+        singular="outbound route",
+        plural="outbound routes",
+        key="name",
+        description="which trunk carries a call to a dialled number",
+        fields=(
+            Field("name", "route name", required=True, pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="a route name uses letters, digits, and the marks period, underscore, and hyphen"),
+            Field("pattern", "dialled pattern", required=True, pattern=_PATTERN_PATTERN,
+                  pattern_help="a pattern may contain digits and the pattern marks N, X, Z, period, and brackets",
+                  help="the pattern a dialled number must match for this route to carry it"),
+            Field("trunk", "carried by", "choice", required=True, references="trunks",
+                  help="the trunk this route sends the call to"),
+            Field("strip_digits", "digits to remove", "number", default=0, minimum=0, maximum=20,
+                  help="how many leading digits to remove before dialling"),
+            Field("prepend_digits", "digits to add", pattern=re.compile(r"^[0-9+]{0,16}$"),
+                  pattern_help="digits to add may contain only digits and a leading plus sign",
+                  help="digits placed in front of the number before dialling"),
+            Field("priority", "order", "number", default=10, minimum=1, maximum=999,
+                  help="routes are tried in this order; the lowest number is tried first"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+    )
+)
+
+_register(
+    EntitySpec(
+        kind="time_conditions",
+        singular="time condition",
+        plural="time conditions",
+        key="name",
+        description="sends calls to different places inside and outside business hours",
+        fields=(
+            Field("name", "condition name", required=True, pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="a condition name uses letters, digits, and the marks period, underscore, and hyphen"),
+            Field("starts_at", "opens at", "time", required=True, default="09:00",
+                  pattern=_TIME_PATTERN,
+                  pattern_help="a time is written as hours and minutes separated by a colon"),
+            Field("ends_at", "closes at", "time", required=True, default="17:30",
+                  pattern=_TIME_PATTERN,
+                  pattern_help="a time is written as hours and minutes separated by a colon"),
+            Field("days", "days", "list", required=True,
+                  default=["mon", "tue", "wed", "thu", "fri"],
+                  choices=("mon", "tue", "wed", "thu", "fri", "sat", "sun")),
+            Field("open_destination", "when open, send to", required=True,
+                  pattern=_NUMBER_PATTERN,
+                  pattern_help="a destination is the number of an extension or a ring group"),
+            Field("closed_destination", "when closed, send to", required=True,
+                  pattern=_NUMBER_PATTERN,
+                  pattern_help="a destination is the number of an extension or a ring group"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+    )
+)
+
+
+class SecretStore:
+    """Secrets, held apart from the configuration and never read back out."""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+
+    def _load(self) -> dict[str, str]:
+        if not self.path.is_file():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            _LOG.error("the secret store could not be read")
+            return {}
+        return {str(key): str(value) for key, value in data.items()} if isinstance(data, dict) else {}
+
+    def _save(self, secrets: Mapping[str, str]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_name(self.path.name + ".partial")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(dict(secrets), indent=2, sort_keys=True))
+                handle.flush()
+                os.fsync(handle.fileno())
+        except BaseException:
+            Path(temporary).unlink(missing_ok=True)
+            raise
+        os.replace(temporary, self.path)
+        os.chmod(self.path, 0o600)
+
+    @staticmethod
+    def reference(kind: str, key: str, field_name: str) -> str:
+        return f"{kind}:{key}:{field_name}"
+
+    def set(self, kind: str, key: str, field_name: str, value: str) -> None:
+        secrets = self._load()
+        secrets[self.reference(kind, key, field_name)] = value
+        self._save(secrets)
+
+    def get(self, kind: str, key: str, field_name: str) -> str | None:
+        """Read a secret. Used only when rendering engine configuration."""
+        return self._load().get(self.reference(kind, key, field_name))
+
+    def has(self, kind: str, key: str, field_name: str) -> bool:
+        return self.reference(kind, key, field_name) in self._load()
+
+    def forget(self, kind: str, key: str) -> int:
+        secrets = self._load()
+        prefix = f"{kind}:{key}:"
+        removed = [name for name in secrets if name.startswith(prefix)]
+        for name in removed:
+            del secrets[name]
+        if removed:
+            self._save(secrets)
+        return len(removed)
+
+    def rename(self, kind: str, old_key: str, new_key: str) -> None:
+        if old_key == new_key:
+            return
+        secrets = self._load()
+        prefix = f"{kind}:{old_key}:"
+        moved = {
+            f"{kind}:{new_key}:{name[len(prefix):]}": value
+            for name, value in secrets.items()
+            if name.startswith(prefix)
+        }
+        if not moved:
+            return
+        for name in list(secrets):
+            if name.startswith(prefix):
+                del secrets[name]
+        secrets.update(moved)
+        self._save(secrets)
+
+
+@dataclass
+class EntityStore:
+    """Create, read, update, and delete telephony objects.
+
+    The store operates on the source of truth document. It does not write it —
+    the caller saves, so that a batch of changes lands atomically.
+    """
+
+    document: dict[str, Any]
+    secrets: SecretStore | None = None
+    _errors: dict[str, str] = field(default_factory=dict)
+
+    # -- reading -----------------------------------------------------------
+
+    def list(self, kind: str) -> list[dict[str, Any]]:
+        spec = self._spec(kind)
+        records = self.document.get(kind) or []
+        return [self._present(spec, dict(record)) for record in records]
+
+    def get(self, kind: str, key: str) -> dict[str, Any] | None:
+        spec = self._spec(kind)
+        for record in self.document.get(kind) or []:
+            if str(record.get(spec.key, "")) == str(key):
+                return self._present(spec, dict(record))
+        return None
+
+    def _present(self, spec: EntitySpec, record: dict[str, Any]) -> dict[str, Any]:
+        """Prepare a record for the interface, withholding every secret."""
+        key = str(record.get(spec.key, ""))
+        for item in spec.fields:
+            if not item.secret:
+                continue
+            record.pop(item.name, None)
+            configured = bool(
+                self.secrets and self.secrets.has(spec.kind, key, item.name)
+            )
+            record[f"{item.name}_configured"] = configured
+        return record
+
+    # -- writing -----------------------------------------------------------
+
+    def create(self, kind: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        spec = self._spec(kind)
+        cleaned, secrets = self._validate(spec, payload, existing_key=None)
+
+        key = str(cleaned[spec.key])
+        if self._find_index(spec, key) is not None:
+            raise ValidationError(
+                {spec.key: f"a {spec.singular} with that value already exists"}
+            )
+
+        self.document.setdefault(kind, []).append(cleaned)
+        self._store_secrets(spec, key, secrets)
+        _LOG.info("a %s identified as %s was created", spec.singular, key)
+        return self._present(spec, dict(cleaned))
+
+    def update(self, kind: str, key: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+        spec = self._spec(kind)
+        index = self._find_index(spec, key)
+        if index is None:
+            raise KeyError(f"there is no {spec.singular} identified as {key}")
+
+        existing = dict((self.document.get(kind) or [])[index])
+        merged = {**existing, **dict(payload)}
+        cleaned, secrets = self._validate(spec, merged, existing_key=str(key))
+
+        new_key = str(cleaned[spec.key])
+        if new_key != str(key) and self._find_index(spec, new_key) is not None:
+            raise ValidationError(
+                {spec.key: f"a {spec.singular} with that value already exists"}
+            )
+
+        self.document[kind][index] = cleaned
+        if new_key != str(key):
+            if self.secrets:
+                self.secrets.rename(spec.kind, str(key), new_key)
+            self._repoint_references(spec, str(key), new_key)
+        self._store_secrets(spec, new_key, secrets)
+        _LOG.info("the %s identified as %s was updated", spec.singular, new_key)
+        return self._present(spec, dict(cleaned))
+
+    def delete(self, kind: str, key: str) -> bool:
+        spec = self._spec(kind)
+        index = self._find_index(spec, key)
+        if index is None:
+            return False
+
+        blocking = self._references_to(spec, str(key))
+        if blocking:
+            raise ValidationError(
+                {
+                    spec.key: (
+                        f"this {spec.singular} is still used by "
+                        + ", ".join(blocking)
+                        + "; change or remove those first"
+                    )
+                }
+            )
+
+        del self.document[kind][index]
+        if self.secrets:
+            self.secrets.forget(spec.kind, str(key))
+        _LOG.info("the %s identified as %s was deleted", spec.singular, key)
+        return True
+
+    # -- validation --------------------------------------------------------
+
+    def _validate(
+        self, spec: EntitySpec, payload: Mapping[str, Any], existing_key: str | None
+    ) -> tuple[dict[str, Any], dict[str, str]]:
+        cleaned: dict[str, Any] = {}
+        secrets: dict[str, str] = {}
+        errors: dict[str, str] = {}
+
+        for item in spec.fields:
+            raw = payload.get(item.name, None)
+
+            if item.secret:
+                # An absent secret on an update means "leave it as it was".
+                if raw is not None and str(raw) != "":
+                    text = str(raw)
+                    if len(text) < 8:
+                        errors[item.name] = "a password must be at least eight characters"
+                    elif len(text) > 128:
+                        errors[item.name] = "a password may be at most one hundred twenty-eight characters"
+                    else:
+                        secrets[item.name] = text
+                elif item.required and existing_key is None:
+                    errors[item.name] = "a password is required"
+                continue
+
+            if raw is None or raw == "":
+                if item.required:
+                    errors[item.name] = f"{item.label} is required"
+                    continue
+                if item.default is not None:
+                    cleaned[item.name] = (
+                        list(item.default) if isinstance(item.default, list) else item.default
+                    )
+                continue
+
+            try:
+                cleaned[item.name] = self._coerce(spec, item, raw)
+            except ValidationError as error:
+                errors.update(error.errors)
+
+        if errors:
+            raise ValidationError(errors)
+        return cleaned, secrets
+
+    def _coerce(self, spec: EntitySpec, item: Field, raw: Any) -> Any:
+        if item.kind == "boolean":
+            if isinstance(raw, bool):
+                return raw
+            lowered = str(raw).strip().lower()
+            if lowered in ("true", "yes", "on", "1"):
+                return True
+            if lowered in ("false", "no", "off", "0"):
+                return False
+            raise ValidationError({item.name: f"{item.label} must be yes or no"})
+
+        if item.kind == "number":
+            try:
+                value = int(str(raw).strip())
+            except (TypeError, ValueError):
+                raise ValidationError({item.name: f"{item.label} must be a whole number"}) from None
+            if item.minimum is not None and value < item.minimum:
+                raise ValidationError(
+                    {item.name: f"{item.label} is below the smallest permitted value"}
+                )
+            if item.maximum is not None and value > item.maximum:
+                raise ValidationError(
+                    {item.name: f"{item.label} is above the largest permitted value"}
+                )
+            if item.pattern is not None and not item.pattern.match(str(value)):
+                raise ValidationError({item.name: item.pattern_help or f"{item.label} is not valid"})
+            return value
+
+        if item.kind == "list":
+            values = raw if isinstance(raw, (list, tuple)) else [
+                part.strip() for part in str(raw).split(",") if part.strip()
+            ]
+            values = [str(value).strip() for value in values if str(value).strip()]
+            if not values and item.required:
+                raise ValidationError({item.name: f"{item.label} needs at least one entry"})
+            if item.choices:
+                unknown = [value for value in values if value not in item.choices]
+                if unknown:
+                    raise ValidationError(
+                        {item.name: f"{item.label} contains an unrecognised entry"}
+                    )
+            if item.references:
+                missing = [value for value in values if not self._reference_exists(item.references, value)]
+                if missing:
+                    raise ValidationError(
+                        {
+                            item.name: (
+                                f"{item.label} refers to something that does not exist: "
+                                + ", ".join(missing)
+                            )
+                        }
+                    )
+            return values
+
+        text = str(raw).strip()
+
+        if item.kind == "choice" and item.choices and text not in item.choices:
+            raise ValidationError({item.name: f"{item.label} is not one of the permitted values"})
+
+        if item.references and not self._reference_exists(item.references, text):
+            raise ValidationError(
+                {item.name: f"{item.label} refers to something that does not exist"}
+            )
+
+        if item.pattern is not None and not item.pattern.match(text):
+            raise ValidationError({item.name: item.pattern_help or f"{item.label} is not valid"})
+
+        return text
+
+    # -- referential integrity ---------------------------------------------
+
+    def _reference_exists(self, kind: str, value: str) -> bool:
+        spec = ENTITY_SPECS.get(kind)
+        if spec is None:
+            return False
+        return any(
+            str(record.get(spec.key, "")) == str(value)
+            for record in self.document.get(kind) or []
+        )
+
+    def _references_to(self, spec: EntitySpec, key: str) -> list[str]:
+        """Describe everything that would be left dangling by a deletion."""
+        blocking: list[str] = []
+        for other_kind, field_name in spec.referenced_by:
+            other = ENTITY_SPECS.get(other_kind)
+            if other is None:
+                continue
+            for record in self.document.get(other_kind) or []:
+                value = record.get(field_name)
+                matched = (
+                    key in [str(item) for item in value]
+                    if isinstance(value, list)
+                    else str(value or "") == key
+                )
+                if matched:
+                    blocking.append(
+                        f"the {other.singular} identified as {record.get(other.key, 'unnamed')}"
+                    )
+        return blocking
+
+    def _repoint_references(self, spec: EntitySpec, old_key: str, new_key: str) -> None:
+        """Follow a rename through everything that referred to the old value."""
+        for other_kind, field_name in spec.referenced_by:
+            for record in self.document.get(other_kind) or []:
+                value = record.get(field_name)
+                if isinstance(value, list):
+                    record[field_name] = [
+                        new_key if str(item) == old_key else item for item in value
+                    ]
+                elif str(value or "") == old_key:
+                    record[field_name] = new_key
+
+    # -- helpers -----------------------------------------------------------
+
+    def _spec(self, kind: str) -> EntitySpec:
+        spec = ENTITY_SPECS.get(kind)
+        if spec is None:
+            raise KeyError(f"there is no kind of object named {kind}")
+        return spec
+
+    def _find_index(self, spec: EntitySpec, key: str) -> int | None:
+        for index, record in enumerate(self.document.get(spec.kind) or []):
+            if str(record.get(spec.key, "")) == str(key):
+                return index
+        return None
+
+    def _store_secrets(self, spec: EntitySpec, key: str, secrets: Mapping[str, str]) -> None:
+        if not self.secrets:
+            return
+        for name, value in secrets.items():
+            self.secrets.set(spec.kind, key, name, value)
+
+
+def schema() -> dict[str, Any]:
+    """The complete schema, as the interface consumes it to build its forms."""
+    return {
+        "kinds": [spec.as_dict() for spec in ENTITY_SPECS.values()],
+        "explanation": (
+            "the interface builds its forms from this schema and the appliance "
+            "validates against the same schema, so the two cannot disagree about "
+            "what is acceptable"
+        ),
+    }
+
+
+def iterate_specs() -> Iterable[EntitySpec]:
+    return ENTITY_SPECS.values()

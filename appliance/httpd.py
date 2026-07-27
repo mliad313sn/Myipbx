@@ -94,6 +94,11 @@ class Request:
     query: Mapping[str, str] = field(default_factory=dict)
     body: bytes = b""
     peer: str = "unknown"
+    #: Bound by the router when a parameterised route matches.
+    path_parameters: dict[str, str] = field(default_factory=dict)
+
+    def parameter(self, name: str, default: str = "") -> str:
+        return self.path_parameters.get(name, default)
 
     def header(self, name: str, default: str = "") -> str:
         return self.headers.get(name.lower(), default)
@@ -183,14 +188,25 @@ Handler = Callable[[Request], Awaitable[Response] | Response]
 
 
 class Router:
-    """An exact match route table with a static file fallback."""
+    """A route table with parameterised paths and a static file fallback.
+
+    A path segment written as ``{name}`` matches any single segment and binds
+    it as a path parameter on the request.  Exact routes are always preferred
+    over parameterised ones, so a specific path can never be shadowed by a
+    general one registered earlier.
+    """
 
     def __init__(self) -> None:
         self._routes: dict[tuple[str, str], Handler] = {}
+        self._patterns: list[tuple[str, tuple[str, ...], Handler]] = []
         self._static_root: Path | None = None
 
     def add(self, method: str, path: str, handler: Handler) -> None:
-        self._routes[(method.upper(), path)] = handler
+        if "{" in path:
+            segments = tuple(path.strip("/").split("/"))
+            self._patterns.append((method.upper(), segments, handler))
+        else:
+            self._routes[(method.upper(), path)] = handler
 
     def get(self, path: str, handler: Handler) -> None:
         self.add("GET", path, handler)
@@ -198,25 +214,61 @@ class Router:
     def post(self, path: str, handler: Handler) -> None:
         self.add("POST", path, handler)
 
+    def put(self, path: str, handler: Handler) -> None:
+        self.add("PUT", path, handler)
+
+    def delete(self, path: str, handler: Handler) -> None:
+        self.add("DELETE", path, handler)
+
     def serve_static(self, root: str | Path) -> None:
         self._static_root = Path(root)
 
-    def resolve(self, method: str, path: str) -> Handler | None:
+    def resolve(
+        self, method: str, path: str
+    ) -> tuple[Handler, dict[str, str]] | None:
         handler = self._routes.get((method.upper(), path))
         if handler is not None:
-            return handler
-        # Report a wrong method distinctly from a missing route, so that a
-        # client bug is not misdiagnosed as a deployment problem.
-        if any(route_path == path for _, route_path in self._routes):
-            return None
+            return handler, {}
+
+        wanted = tuple(segment for segment in path.strip("/").split("/") if segment != "")
+        for route_method, segments, candidate in self._patterns:
+            if route_method != method.upper() or len(segments) != len(wanted):
+                continue
+            parameters: dict[str, str] = {}
+            for declared, actual in zip(segments, wanted):
+                if declared.startswith("{") and declared.endswith("}"):
+                    parameters[declared[1:-1]] = actual
+                elif declared != actual:
+                    break
+            else:
+                return candidate, parameters
         return None
 
     def path_exists(self, path: str) -> bool:
-        return any(route_path == path for _, route_path in self._routes)
+        """Report whether any method serves this path.
+
+        Used to distinguish a wrong method from a missing route, so that a
+        client defect is not misdiagnosed as a deployment problem.
+        """
+        if any(route_path == path for _, route_path in self._routes):
+            return True
+
+        wanted = tuple(segment for segment in path.strip("/").split("/") if segment != "")
+        for _, segments, _ in self._patterns:
+            if len(segments) != len(wanted):
+                continue
+            for declared, actual in zip(segments, wanted):
+                if not (declared.startswith("{") and declared.endswith("}")) and declared != actual:
+                    break
+            else:
+                return True
+        return False
 
     async def dispatch(self, request: Request) -> Response:
-        handler = self.resolve(request.method, request.path)
-        if handler is not None:
+        resolved = self.resolve(request.method, request.path)
+        if resolved is not None:
+            handler, parameters = resolved
+            request.path_parameters = parameters
             outcome = handler(request)
             if asyncio.iscoroutine(outcome):
                 return await outcome

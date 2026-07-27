@@ -38,14 +38,19 @@ RestrictSUIDSGID=yes
 RestrictRealtime=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
-ReadWritePaths=/var/lib/myipbx /var/log/myipbx /etc/asterisk
-ReadOnlyPaths=/etc/myipbx /proc/dahdi
+# A path prefixed with a leading dash is ignored when it is absent.  The
+# engine configuration directory does not exist until stage four has run, and
+# the interface driver's exported tree does not exist until a card is fitted
+# and its driver is loaded.  Without the dash, systemd refuses to set up the
+# mount namespace and the appliance fails to start on exactly the machines it
+# is meant to be brought up on first.
+ReadWritePaths=/var/lib/myipbx /var/log/myipbx -/etc/asterisk
+ReadOnlyPaths=-/etc/myipbx -/proc/dahdi
 
 # The appliance serves the dashboard and speaks to the engine over the
-# loopback address.  It has no reason to reach anything else, and no reason
-# ever to bind an address allocation service port.
+# loopback address.  It has no reason for any other address family, and no
+# reason ever to bind an address allocation service port.
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-IPAddressDeny=
 
 [Install]
 WantedBy=multi-user.target

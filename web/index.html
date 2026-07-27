@@ -13,10 +13,13 @@
     <h1>Legacy-to-Modern IPBX Appliance</h1>
     <p class="subtitle">bare metal telephony on legacy Digium interface cards</p>
   </div>
-  <div class="link-state" id="link-state">
-    <span class="lamp" id="link-lamp"></span>
-    <span class="link-text" id="link-text">not connected</span>
-    <span class="link-age" id="link-age"></span>
+  <div class="header-right">
+    <div class="link-state" id="link-state">
+      <span class="lamp" id="link-lamp"></span>
+      <span class="link-text" id="link-text">not connected</span>
+      <span class="link-age" id="link-age"></span>
+    </div>
+    <button type="button" id="sign-out-button" class="header-button" hidden>sign out</button>
   </div>
 </header>
 
@@ -30,140 +33,374 @@
     </p>
     <form id="sign-in-form" autocomplete="off">
       <label for="username">user name</label>
-      <input type="text" id="username" name="username" required>
+      <input type="text" id="username" name="username" required autocomplete="username">
       <label for="password">password</label>
-      <input type="password" id="password" name="password" required>
+      <input type="password" id="password" name="password" required autocomplete="current-password">
       <button type="submit" id="sign-in-button">sign in</button>
     </form>
     <p class="failure" id="sign-in-failure" hidden></p>
   </section>
 
-  <div id="dashboard" hidden>
+  <div id="console" class="console" hidden>
 
-    <section class="tiles">
-      <article class="tile">
-        <h3>active calls</h3>
-        <p class="figure" id="figure-active-calls">zero</p>
-        <p class="caption" id="caption-answered">zero answered</p>
-      </article>
-      <article class="tile">
-        <h3>trunks registered</h3>
-        <p class="figure" id="figure-trunks">zero</p>
-        <p class="caption" id="caption-trunks">of zero declared</p>
-      </article>
-      <article class="tile">
-        <h3>interface cards</h3>
-        <p class="figure" id="figure-cards">zero</p>
-        <p class="caption" id="caption-spans">zero spans detected</p>
-      </article>
-      <article class="tile">
-        <h3>appliance uptime</h3>
-        <p class="figure small" id="figure-uptime">zero seconds</p>
-        <p class="caption" id="caption-peak">peak of zero concurrent calls</p>
-      </article>
-    </section>
+    <nav class="navigation" id="navigation" aria-label="sections">
+      <button type="button" class="nav-item" data-view="overview">overview</button>
+      <button type="button" class="nav-item" data-view="calls">live calls</button>
+      <button type="button" class="nav-item" data-view="history">call history</button>
+      <p class="nav-heading">telephony</p>
+      <button type="button" class="nav-item" data-view="extensions">extensions</button>
+      <button type="button" class="nav-item" data-view="trunks">trunks</button>
+      <button type="button" class="nav-item" data-view="ring_groups">ring groups</button>
+      <button type="button" class="nav-item" data-view="inbound_routes">inbound routes</button>
+      <button type="button" class="nav-item" data-view="outbound_routes">outbound routes</button>
+      <button type="button" class="nav-item" data-view="time_conditions">time conditions</button>
+      <p class="nav-heading">the machine</p>
+      <button type="button" class="nav-item" data-view="hardware">hardware</button>
+      <button type="button" class="nav-item" data-view="system">system</button>
+      <button type="button" class="nav-item" data-view="configuration">configuration</button>
+      <button type="button" class="nav-item" data-view="tasks">tasks</button>
+      <button type="button" class="nav-item" data-view="logs">logs</button>
+      <button type="button" class="nav-item" data-view="backup">backup</button>
+      <button type="button" class="nav-item" data-view="constraints">constraints</button>
+    </nav>
 
-    <section class="panel" id="alarm-panel" hidden>
-      <h2>alarms</h2>
-      <ul class="alarm-list" id="alarm-list"></ul>
-    </section>
+    <div class="views" id="views">
 
-    <section class="panel">
-      <h2>live call activity</h2>
-      <p class="hint">
-        channel state is pushed from the telephony engine event stream as it
-        happens. nothing on this page is polled.
-      </p>
-      <table class="grid" id="channel-table">
-        <thead>
-          <tr>
-            <th>channel</th><th>state</th><th>caller</th>
-            <th>extension</th><th>duration</th><th>talk time</th>
-          </tr>
-        </thead>
-        <tbody id="channel-body">
-          <tr class="empty"><td colspan="6">no channel is active</td></tr>
-        </tbody>
-      </table>
-    </section>
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-overview">
+        <section class="tiles">
+          <article class="tile">
+            <h3>active calls</h3>
+            <p class="figure" id="figure-active-calls">zero</p>
+            <p class="caption" id="caption-answered">zero answered</p>
+          </article>
+          <article class="tile">
+            <h3>trunks registered</h3>
+            <p class="figure" id="figure-trunks">zero</p>
+            <p class="caption" id="caption-trunks">of zero declared</p>
+          </article>
+          <article class="tile">
+            <h3>interface cards</h3>
+            <p class="figure" id="figure-cards">zero</p>
+            <p class="caption" id="caption-spans">zero spans detected</p>
+          </article>
+          <article class="tile">
+            <h3>appliance uptime</h3>
+            <p class="figure small" id="figure-uptime">zero seconds</p>
+            <p class="caption" id="caption-peak">peak of zero concurrent calls</p>
+          </article>
+        </section>
 
-    <section class="panel">
-      <h2>trunk registration</h2>
-      <table class="grid" id="trunk-table">
-        <thead>
-          <tr>
-            <th>trunk</th><th>technology</th><th>state</th>
-            <th>attempts</th><th>in state</th><th>reason</th><th>control</th>
-          </tr>
-        </thead>
-        <tbody id="trunk-body">
-          <tr class="empty"><td colspan="7">no trunk is declared</td></tr>
-        </tbody>
-      </table>
-    </section>
+        <section class="panel" id="alarm-panel" hidden>
+          <h2>alarms</h2>
+          <ul class="alarm-list" id="alarm-list"></ul>
+        </section>
 
-    <section class="panel">
-      <h2>legacy interface hardware</h2>
-      <p class="summary" id="hardware-summary">enumerating</p>
-      <table class="grid" id="span-table">
-        <thead>
-          <tr><th>span</th><th>description</th><th>channels</th><th>alarm</th></tr>
-        </thead>
-        <tbody id="span-body">
-          <tr class="empty"><td colspan="4">no span is exported by the interface driver</td></tr>
-        </tbody>
-      </table>
-    </section>
+        <section class="panel">
+          <h2>trunk registration</h2>
+          <table class="grid" id="trunk-table">
+            <thead>
+              <tr>
+                <th>trunk</th><th>technology</th><th>state</th>
+                <th>attempts</th><th>in state</th><th>reason</th><th>control</th>
+              </tr>
+            </thead>
+            <tbody id="trunk-body">
+              <tr class="empty"><td colspan="7">no trunk is declared</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
 
-    <section class="panel" id="drift-panel">
-      <h2>configuration reconciliation</h2>
-      <p class="hint" id="drift-explanation">checking</p>
-      <table class="grid" id="drift-table">
-        <thead>
-          <tr><th>file</th><th>state</th><th>decision</th></tr>
-        </thead>
-        <tbody id="drift-body"></tbody>
-      </table>
-      <div class="actions">
-        <button type="button" id="render-button">render configuration</button>
-        <button type="button" id="render-force-button" class="caution">
-          regenerate over local edits
-        </button>
-      </div>
-    </section>
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-calls" hidden>
+        <section class="panel">
+          <h2>live call activity</h2>
+          <p class="hint">
+            channel state is pushed from the telephony engine event stream as it
+            happens. nothing on this page is polled.
+          </p>
+          <table class="grid" id="channel-table">
+            <thead>
+              <tr>
+                <th>channel</th><th>state</th><th>caller</th>
+                <th>extension</th><th>duration</th><th>talk time</th>
+              </tr>
+            </thead>
+            <tbody id="channel-body">
+              <tr class="empty"><td colspan="6">no channel is active</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </section>
 
-    <section class="panel">
-      <h2>automated tasks</h2>
-      <table class="grid" id="task-table">
-        <thead>
-          <tr><th>task</th><th>description</th><th>last outcome</th><th>runs</th><th>invoke</th></tr>
-        </thead>
-        <tbody id="task-body"></tbody>
-      </table>
-    </section>
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-history" hidden>
+        <section class="panel">
+          <h2>call history</h2>
+          <p class="hint" id="history-explanation">loading</p>
+          <div class="actions">
+            <input type="search" id="history-search" placeholder="search the history">
+            <button type="button" id="history-refresh">refresh</button>
+          </div>
+          <table class="grid" id="history-table">
+            <thead>
+              <tr>
+                <th>started</th><th>from</th><th>to</th>
+                <th>duration</th><th>talk time</th><th>outcome</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </section>
+      </section>
 
-    <section class="panel constraints" id="constraint-panel">
-      <h2>product constraints</h2>
-      <div class="constraint" id="constraint-allocation">
-        <h3>address allocation exclusion</h3>
-        <p id="allocation-statement">checking</p>
-        <ul id="allocation-findings"></ul>
-      </div>
-      <div class="constraint">
-        <h3>spelled numerals</h3>
-        <p>
-          every figure on this page is rendered as words by the same algorithm the
-          appliance uses in its logs. no digit character is emitted.
-        </p>
-      </div>
-    </section>
+      <!-- one view per kind of telephony object, built from the schema -->
+      <section class="view" id="view-extensions" hidden></section>
+      <section class="view" id="view-trunks" hidden></section>
+      <section class="view" id="view-ring_groups" hidden></section>
+      <section class="view" id="view-inbound_routes" hidden></section>
+      <section class="view" id="view-outbound_routes" hidden></section>
+      <section class="view" id="view-time_conditions" hidden></section>
 
-    <div class="actions footer-actions">
-      <button type="button" id="sign-out-button">sign out</button>
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-hardware" hidden>
+        <section class="panel">
+          <h2>legacy interface hardware</h2>
+          <p class="summary" id="hardware-summary">enumerating</p>
+          <table class="grid" id="card-table">
+            <thead>
+              <tr><th>slot</th><th>card</th><th>driver</th><th>bound</th></tr>
+            </thead>
+            <tbody id="card-body"></tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>spans and channels</h2>
+          <table class="grid" id="span-table">
+            <thead>
+              <tr><th>span</th><th>description</th><th>channels</th><th>alarm</th></tr>
+            </thead>
+            <tbody id="span-body">
+              <tr class="empty"><td colspan="4">no span is exported by the interface driver</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>guided bring up</h2>
+          <p class="hint">
+            bringing a legacy interface card into service is the step every other
+            system leaves to the command line. each stage below is performed by
+            the appliance, reports its own outcome, and may be repeated safely.
+          </p>
+          <ol class="wizard" id="hardware-wizard"></ol>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-system" hidden>
+        <section class="panel">
+          <h2>this machine</h2>
+          <dl class="readings" id="system-readings"></dl>
+        </section>
+
+        <section class="panel">
+          <h2>network interfaces</h2>
+          <p class="hint">
+            this appliance assigns no addresses and requests none. every address
+            below was written down by an administrator.
+          </p>
+          <table class="grid" id="interface-table">
+            <thead>
+              <tr><th>interface</th><th>state</th><th>carrier</th><th>hardware address</th></tr>
+            </thead>
+            <tbody id="interface-body"></tbody>
+          </table>
+
+          <h3 class="subheading">apply a static configuration</h3>
+          <form id="network-form" class="inline-form" autocomplete="off">
+            <label for="network-interface">interface</label>
+            <select id="network-interface" required></select>
+            <label for="network-address">address</label>
+            <input type="text" id="network-address" required placeholder="the address to assign">
+            <label for="network-prefix">prefix length</label>
+            <select id="network-prefix" required></select>
+            <label for="network-gateway">gateway</label>
+            <input type="text" id="network-gateway" placeholder="optional">
+            <button type="submit" class="caution">apply and interrupt the network</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>identity and time</h2>
+          <form id="identity-form" class="inline-form" autocomplete="off">
+            <label for="system-hostname">host name</label>
+            <input type="text" id="system-hostname" required>
+            <label for="system-timezone">time zone</label>
+            <input type="text" id="system-timezone" required>
+            <button type="submit">apply</button>
+            <button type="button" id="time-sync-button" class="secondary">synchronise the clock</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h2>services</h2>
+          <table class="grid" id="service-table">
+            <thead><tr><th>service</th><th>control</th></tr></thead>
+            <tbody id="service-body"></tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>power</h2>
+          <p class="hint">
+            every call in progress is lost when the machine restarts or shuts
+            down. both actions ask for confirmation first.
+          </p>
+          <div class="actions">
+            <button type="button" id="reboot-button" class="caution">restart the machine</button>
+            <button type="button" id="power-off-button" class="caution">shut the machine down</button>
+          </div>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-configuration" hidden>
+        <section class="panel" id="drift-panel">
+          <h2>configuration reconciliation</h2>
+          <p class="hint" id="drift-explanation">checking</p>
+          <table class="grid" id="drift-table">
+            <thead>
+              <tr><th>file</th><th>state</th><th>decision</th></tr>
+            </thead>
+            <tbody id="drift-body"></tbody>
+          </table>
+          <div class="actions">
+            <button type="button" id="render-button">render the engine configuration</button>
+            <button type="button" id="render-force-button" class="caution">
+              regenerate over local edits
+            </button>
+            <button type="button" id="engine-reload-button" class="secondary">
+              reload the telephony engine
+            </button>
+          </div>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-tasks" hidden>
+        <section class="panel">
+          <h2>automated tasks</h2>
+          <table class="grid" id="task-table">
+            <thead>
+              <tr><th>task</th><th>description</th><th>last outcome</th><th>runs</th><th>invoke</th></tr>
+            </thead>
+            <tbody id="task-body"></tbody>
+          </table>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-logs" hidden>
+        <section class="panel">
+          <h2>logs</h2>
+          <p class="hint">
+            every line is spelled before it reaches this page, so no digit
+            character appears here either.
+          </p>
+          <form id="log-form" class="inline-form" autocomplete="off">
+            <label for="log-source">log</label>
+            <select id="log-source"></select>
+            <label for="log-level">level</label>
+            <select id="log-level">
+              <option value="">every level</option>
+              <option value="error">error</option>
+              <option value="warning">warning</option>
+              <option value="information">information</option>
+              <option value="debug">debug</option>
+            </select>
+            <label for="log-search">containing</label>
+            <input type="search" id="log-search" placeholder="optional">
+            <button type="submit">read</button>
+          </form>
+          <pre class="log-view" id="log-view">choose a log and read it</pre>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-backup" hidden>
+        <section class="panel">
+          <h2>backup</h2>
+          <p class="hint">
+            a backup carries this appliance's configuration, its secrets, and its
+            administrator credential. store it as you would store a password.
+          </p>
+          <div class="actions">
+            <button type="button" id="backup-button">download a backup</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>restore</h2>
+          <p class="hint">
+            restoring replaces this appliance's configuration and secrets with
+            those in the archive. the appliance should be restarted afterwards.
+          </p>
+          <form id="restore-form" class="inline-form" autocomplete="off">
+            <label for="restore-file">archive</label>
+            <input type="file" id="restore-file" accept=".gz,.tgz,application/gzip" required>
+            <button type="submit" class="caution">restore from this archive</button>
+          </form>
+          <p class="notice" id="restore-outcome" hidden></p>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <section class="view" id="view-constraints" hidden>
+        <section class="panel constraints" id="constraint-panel">
+          <h2>product constraints</h2>
+          <div class="constraint" id="constraint-allocation">
+            <h3>address allocation exclusion</h3>
+            <p id="allocation-statement">checking</p>
+            <ul id="allocation-findings"></ul>
+          </div>
+          <div class="constraint satisfied">
+            <h3>spelled numerals</h3>
+            <p>
+              every figure on this page is rendered as words by the same algorithm
+              the appliance uses in its logs. no digit character is emitted.
+            </p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>privileged operations</h2>
+          <p class="hint" id="operations-explanation">loading</p>
+          <table class="grid" id="operations-table">
+            <thead><tr><th>operation</th><th>what it does</th><th>interrupts service</th></tr></thead>
+            <tbody id="operations-body"></tbody>
+          </table>
+        </section>
+      </section>
+
     </div>
-
   </div>
 </main>
+
+<div class="toast-holder" id="toast-holder" aria-live="polite"></div>
+
+<div class="confirm-shade" id="confirm-shade" hidden>
+  <div class="confirm-box" role="alertdialog" aria-modal="true">
+    <h3 id="confirm-title">confirm</h3>
+    <p id="confirm-message"></p>
+    <div class="actions">
+      <button type="button" id="confirm-yes" class="caution">go ahead</button>
+      <button type="button" id="confirm-no" class="secondary">cancel</button>
+    </div>
+  </div>
+</div>
 
 <footer class="appliance-footer">
   <p id="footer-text">this appliance assigns no addresses</p>
@@ -171,6 +408,7 @@
 
 <script src="/js/numerals.js"></script>
 <script src="/js/socket.js"></script>
+<script src="/js/forms.js"></script>
 <script src="/js/dashboard.js"></script>
 </body>
 </html>

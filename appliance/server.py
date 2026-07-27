@@ -19,11 +19,14 @@ from . import api, hardware as hardware_module, httpd, numerals, wsproto
 from .ami import ManagerClient, ManagerMessage
 from .config import ApplianceConfig
 from .confstore import ConfigurationStore, DriftDetected
+from .diagnostics import CallRecordReader, LogReader
+from .entities import SecretStore
 from .httpd import HttpServer, Request, Response
 from .logging_setup import configure_logging, get_logger
 from .netaudit import AddressAllocationAudit, AddressAllocationDetected
 from .security import CredentialStore, LoginThrottle, PasswordHasher, SessionStore
 from .state import ApplianceState
+from .sysops import PrivilegedOperations, SystemStatus
 from .tasks import TaskScheduler
 from .trunks import TrunkRegistry
 from .wsserver import SocketConnection, SocketHub
@@ -45,10 +48,14 @@ class Appliance:
         self.audit = AddressAllocationAudit()
 
         # -- persistence ---------------------------------------------------
+        # Secrets live apart from the source of truth and are read only when an
+        # engine configuration file is actually rendered.
+        self.secrets = SecretStore(self.config.state_path / "secrets.json")
         self.store = ConfigurationStore(
             document_path=self.config.configuration_document,
             output_directory=self.config.asterisk_configuration_directory,
             digest_path=self.config.digest_path,
+            secrets=self.secrets,
         )
 
         # -- security ------------------------------------------------------
@@ -66,6 +73,12 @@ class Appliance:
         # -- live model ----------------------------------------------------
         self.state = ApplianceState()
         self.hardware = hardware_module.HardwareInventory()
+
+        # -- the machine, and the operations the interface may perform on it -
+        self.system = SystemStatus()
+        self.operations = PrivilegedOperations(self.config.privileged_helper)
+        self.logs = LogReader()
+        self.calls = CallRecordReader(self.config.call_record_file)
 
         # -- transport -----------------------------------------------------
         self.hub = SocketHub(

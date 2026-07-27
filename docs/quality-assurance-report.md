@@ -1,7 +1,7 @@
 # Quality Assurance Report
 
 Author: Agent Five, Quality Assurance role.
-Verdict: **PASS.** Two hundred forty-three tests, zero failures, zero errors,
+Verdict: **PASS.** Three hundred twelve tests, zero failures, zero errors,
 zero skipped.
 
 This report is written against a suite that was actually executed, not
@@ -11,7 +11,7 @@ with `make test`.
 ## Result
 
 ```
-Ran two hundred forty-three tests in roughly sixteen seconds
+Ran three hundred twelve tests in roughly twenty-five seconds
 OK
 ```
 
@@ -20,10 +20,12 @@ OK
 | `test_numerals.py` | twenty-five | Constraint Two across all three implementations |
 | `test_wsproto.py` | twenty-seven | the socket protocol, including every malformed input path |
 | `test_engine_and_trunks.py` | thirty-nine | the engine client, retry timing, the trunk state machine, live state |
-| `test_store_and_hardware.py` | twenty-nine | configuration drift detection and legacy hardware enumeration |
+| `test_store_and_hardware.py` | thirty-one | configuration drift detection and legacy hardware enumeration |
 | `test_security_and_transport.py` | sixty-three | credentials, sessions, request parsing, task execution |
+| `test_operations.py` | sixty-five | privileged operations, telephony objects, diagnostics, backup |
 | `test_constraint_one.py` | nineteen | Constraint One at all four enforcement points |
 | `test_integration.py` | forty-one | end to end over real sockets, including concurrency |
+| `test_browser.py` | two | the console, executed in a real browser against a real appliance |
 
 ## The specification's named test cases
 
@@ -176,6 +178,94 @@ assertion that tested the wrong property of the field injection defence, and a
 log assertion that was silently skipping rather than proving its claim. A test
 that skips is not a test that passes, and it is not counted as one here.
 
+## The graphical interface, executed rather than described
+
+The product's central claim is that every operation can be performed from the
+browser. A claim of that shape cannot be verified by testing the appliance
+alone, so it is verified in a browser.
+
+A real Chromium instance loads the served console against a real appliance on a
+real socket, signs in through the form, walks all sixteen sections, creates an
+extension through the generated form, submits an invalid value first to prove
+the refusal reaches the offending field, deletes the extension through the
+confirmation dialogue, and watches a call pushed by the appliance appear while
+the page is open. Every error the page raises — an exception, a rejected
+promise, a failed request — is collected and fails the run.
+
+Constraint Two is checked there too, against what a person can actually see:
+every visible text node on the rendered page is walked and asserted to contain
+no digit character.
+
+The console's own link classification is exercised separately and
+deterministically, because inducing genuine staleness against a live appliance
+would mean wedging its event loop. The three way distinction — live,
+reconnecting, stale — is asserted at its boundaries, along with the retry
+schedule's growth, its ceiling, and the presence of jitter.
+
+The console sources also pass static analysis, which is what caught the
+implicit global declarations that the shipping page relied on.
+
+## Second recursive pass — the defect log
+
+Extending the product to cover every operation from the interface produced a
+second round of failures, repaired the same way. Two of them were serious and
+neither was reachable from the server side.
+
+### Defect five — an invisible sheet swallowed every click on the console
+
+**Severity: critical.** The confirmation dialogue's backdrop is a fixed
+position element covering the whole viewport, hidden by the `hidden` attribute
+and revealed by script. Its stylesheet rule set `display: flex`, which
+overrides what the `hidden` attribute does, so the backdrop was **never
+hidden** — it was merely transparent. An invisible sheet lay over the entire
+console intercepting every click. The product was completely unusable, and no
+server side test could have seen it.
+
+**Repair.** A single rule now forces any element carrying the `hidden`
+attribute to stay hidden regardless of what a later rule sets, so no future
+element can repeat the mistake. Found by the browser run, which reported that
+the sign in button could not be clicked because a hidden element was
+intercepting pointer events.
+
+### Defect six — an extension number was stored as a quantity
+
+**Severity: significant.** Extension and ring group numbers were declared as
+numeric fields and coerced to integers on the way in. An extension numbered
+with a leading zero would have had it silently discarded, renaming the
+extension and breaking every reference to it.
+
+**Repair.** Both are now text fields with a digits only pattern. They are dial
+strings, not quantities, and are stored as written.
+
+### Defect seven — the service unit would have refused to start
+
+**Severity: significant.** The unit's hardening listed the engine configuration
+directory and the interface driver's exported tree as accessible paths. Neither
+exists before the engine is installed or before a card's driver is loaded, and
+a service unit naming a path that does not exist fails to set up its namespace
+and does not start. The appliance would have failed to start on precisely the
+machines it is meant to be brought up on first.
+
+**Repair.** Those paths now carry the marker that makes an absent path ignored.
+
+### Defect eight — a call already answered accrued no talk time
+
+**Severity: minor.** A channel first seen in the answered state — which happens
+when the appliance reconnects to an engine mid call — never recorded when it
+was answered, so it accrued no talk time for its whole life.
+
+**Repair.** A channel that is already answered when first seen starts its talk
+timer immediately.
+
+### Defect nine — asking whether you are signed in was an error
+
+**Severity: minor, but user facing.** The console probed for an existing
+session by requesting a protected route, so every signed out page load wrote a
+failed request into the browser's console. Training an administrator to ignore
+red entries in the console is a poor way to prepare them for a real fault.
+
+**Repair.** A dedicated route now answers the question successfully either way.
+
 ## Standing observations
 
 These are not failures. They are the limits of what this environment can prove,
@@ -198,4 +288,6 @@ absolute constraints are enforced structurally and verified mechanically. All
 defects surfaced by the loop have been repaired and are covered by tests that
 would catch their return.
 
-**PASS.** The recursive loop terminates.
+**PASS.** The recursive loop terminates. Nine product defects were found
+and repaired across two passes; each is covered by a test that would catch
+its return.

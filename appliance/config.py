@@ -39,6 +39,8 @@ class ApplianceConfig:
     configuration_document: str = "/etc/myipbx/appliance.json"
     asterisk_configuration_directory: str = "/etc/asterisk"
     log_file: str = "/var/log/myipbx/appliance.log"
+    privileged_helper: str = "/opt/myipbx/bin/myipbx-privileged-helper.sh"
+    call_record_file: str = "/var/log/asterisk/cdr-csv/Master.csv"
     log_level: str = "INFO"
 
     # --- Telephony engine manager interface ------------------------------

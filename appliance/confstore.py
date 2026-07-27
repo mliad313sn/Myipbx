@@ -49,6 +49,10 @@ _DEFAULT_DOCUMENT: dict[str, Any] = {
     "site": {"name": "an unnamed site", "timezone": "UTC"},
     "trunks": [],
     "extensions": [],
+    "ring_groups": [],
+    "inbound_routes": [],
+    "outbound_routes": [],
+    "time_conditions": [],
     "dialplan": {"inbound_context": "from-trunk", "internal_context": "internal"},
     "hardware": {"spans": []},
 }
@@ -94,10 +98,14 @@ class ConfigurationStore:
         document_path: str | Path,
         output_directory: str | Path,
         digest_path: str | Path,
+        secrets: Any = None,
     ) -> None:
         self.document_path = Path(document_path)
         self.output_directory = Path(output_directory)
         self.digest_path = Path(digest_path)
+        #: Secrets are held apart from the source of truth and are read only
+        #: here, at the moment an artefact is rendered.
+        self.secrets = secrets
 
     # -- the source of truth ------------------------------------------------
 
@@ -143,8 +151,9 @@ class ConfigurationStore:
         """Render every engine configuration artefact into memory."""
         source = document if document is not None else self.load()
         return {
-            "pjsip.conf": render_trunk_configuration(source),
+            "pjsip.conf": render_endpoints(source, self.secrets),
             "extensions.conf": render_dialplan(source),
+            "voicemail.conf": render_voicemail(source, self.secrets),
             "chan_dahdi.conf": render_hardware_channels(source),
             "manager.conf": render_manager_interface(source),
         }
@@ -302,80 +311,322 @@ def _header(title: str) -> str:
     )
 
 
-def render_trunk_configuration(document: Mapping[str, Any]) -> str:
-    """Render the trunk definitions for the session protocol channel driver."""
-    lines = [_header("trunk definitions")]
+def _secret_for(secrets: Any, kind: str, key: str, field_name: str) -> str | None:
+    if secrets is None:
+        return None
+    try:
+        return secrets.get(kind, key, field_name)
+    except Exception:  # noqa: BLE001 - a secret store fault must not stop a render
+        _LOG.error("a secret could not be read while rendering; the entry is omitted")
+        return None
+
+
+def _enabled(record: Mapping[str, Any]) -> bool:
+    return bool(record.get("enabled", True))
+
+
+def render_endpoints(document: Mapping[str, Any], secrets: Any = None) -> str:
+    """Render every trunk and every telephone for the session channel driver."""
+    dialplan = document.get("dialplan", {}) or {}
+    inbound_context = str(dialplan.get("inbound_context", "from-trunk"))
+    internal_context = str(dialplan.get("internal_context", "internal"))
+
+    lines = [_header("trunks and telephones")]
     lines.append("[global]\n")
     lines.append("type = global\n")
     lines.append("user_agent = Legacy-to-Modern IPBX Appliance\n\n")
 
+    lines.append("; ------------------------------------------------------------\n")
+    lines.append("; trunks\n")
+    lines.append("; ------------------------------------------------------------\n\n")
+
     for trunk in document.get("trunks", []) or []:
         name = str(trunk.get("name", "")).strip()
-        if not name:
+        if not name or not _enabled(trunk):
             continue
+        if str(trunk.get("technology", "PJSIP")).upper() != "PJSIP":
+            lines.append(f"; the trunk named {name} uses another channel technology\n\n")
+            continue
+
         host = str(trunk.get("host", "")).strip()
         username = str(trunk.get("username", "")).strip()
+        secret = _secret_for(secrets, "trunks", name, "secret")
 
-        lines.append(f"[{name}]\n")
-        lines.append("type = registration\n")
-        lines.append(f"outbound_auth = {name}-auth\n")
-        lines.append(f"server_uri = sip:{host}\n")
-        lines.append(f"client_uri = sip:{username}@{host}\n")
-        lines.append("retry_interval = 60\n")
-        lines.append("forbidden_retry_interval = 600\n")
-        lines.append("expiration = 3600\n\n")
+        if trunk.get("register", True) and username:
+            lines.append(f"[{name}]\n")
+            lines.append("type = registration\n")
+            lines.append(f"outbound_auth = {name}-auth\n")
+            lines.append(f"server_uri = sip:{host}\n")
+            lines.append(f"client_uri = sip:{username}@{host}\n")
+            lines.append("retry_interval = 60\n")
+            lines.append("forbidden_retry_interval = 600\n")
+            lines.append("expiration = 3600\n\n")
 
-        lines.append(f"[{name}-auth]\n")
-        lines.append("type = auth\n")
-        lines.append("auth_type = userpass\n")
-        lines.append(f"username = {username}\n")
-        lines.append("; the secret is injected at deployment time and is never rendered here\n\n")
+        if username:
+            lines.append(f"[{name}-auth]\n")
+            lines.append("type = auth\n")
+            lines.append("auth_type = userpass\n")
+            lines.append(f"username = {username}\n")
+            if secret:
+                lines.append(f"password = {secret}\n")
+            else:
+                lines.append("; no password has been set for this trunk yet\n")
+            lines.append("\n")
 
         lines.append(f"[{name}-endpoint]\n")
         lines.append("type = endpoint\n")
-        lines.append(
-            f"context = {document.get('dialplan', {}).get('inbound_context', 'from-trunk')}\n"
-        )
+        lines.append(f"context = {inbound_context}\n")
         lines.append("disallow = all\n")
         lines.append("allow = ulaw,alaw\n")
-        lines.append(f"outbound_auth = {name}-auth\n")
-        lines.append(f"aors = {name}-aor\n\n")
+        if username:
+            lines.append(f"outbound_auth = {name}-auth\n")
+        lines.append(f"aors = {name}-aor\n")
+        lines.append("direct_media = no\n\n")
 
         lines.append(f"[{name}-aor]\n")
         lines.append("type = aor\n")
-        lines.append(f"contact = sip:{host}\n\n")
+        lines.append(f"contact = sip:{host}\n")
+        lines.append("qualify_frequency = 60\n\n")
+
+        lines.append(f"[{name}-identify]\n")
+        lines.append("type = identify\n")
+        lines.append(f"endpoint = {name}-endpoint\n")
+        lines.append(f"match = {host}\n\n")
+
+    lines.append("; ------------------------------------------------------------\n")
+    lines.append("; telephones\n")
+    lines.append("; ------------------------------------------------------------\n\n")
+
+    for extension in document.get("extensions", []) or []:
+        number = str(extension.get("number", "")).strip()
+        if not number or not _enabled(extension):
+            continue
+        if str(extension.get("technology", "PJSIP")).upper() != "PJSIP":
+            lines.append(f"; the extension numbered {number} uses another channel technology\n\n")
+            continue
+
+        name = str(extension.get("name", "")).strip() or f"extension {number}"
+        secret = _secret_for(secrets, "extensions", number, "secret")
+
+        lines.append(f"[{number}]\n")
+        lines.append("type = endpoint\n")
+        lines.append(f"context = {internal_context}\n")
+        lines.append("disallow = all\n")
+        lines.append("allow = ulaw,alaw\n")
+        lines.append(f"auth = {number}-auth\n")
+        lines.append(f"aors = {number}\n")
+        lines.append(f"callerid = {name} <{number}>\n")
+        if extension.get("voicemail", True):
+            lines.append(f"mailboxes = {number}@default\n")
+        lines.append("direct_media = no\n\n")
+
+        lines.append(f"[{number}-auth]\n")
+        lines.append("type = auth\n")
+        lines.append("auth_type = userpass\n")
+        lines.append(f"username = {number}\n")
+        if secret:
+            lines.append(f"password = {secret}\n")
+        else:
+            lines.append("; no password has been set for this telephone yet\n")
+        lines.append("\n")
+
+        lines.append(f"[{number}]\n")
+        lines.append("type = aor\n")
+        lines.append("max_contacts = 2\n")
+        lines.append("remove_existing = yes\n\n")
 
     return "".join(lines)
 
 
+_DAY_NAMES = {
+    "mon": "mon", "tue": "tue", "wed": "wed", "thu": "thu",
+    "fri": "fri", "sat": "sat", "sun": "sun",
+}
+
+
+def _destination_lines(kind: str, value: str, internal: str) -> list[str]:
+    """Render a jump to whatever destination an operator chose."""
+    kind = (kind or "extension").strip().lower()
+    value = str(value or "").strip()
+
+    if kind == "hang up" or not value:
+        return [" same => n,Hangup()\n"]
+    if kind == "voicemail":
+        return [f" same => n,VoiceMail({value}@default,u)\n", " same => n,Hangup()\n"]
+    # An extension, a ring group, and a menu are all reached by their number in
+    # the internal context, which is what keeps this table small.
+    return [f" same => n,Goto({internal},{value},1)\n"]
+
+
 def render_dialplan(document: Mapping[str, Any]) -> str:
-    """Render the dialplan from the declared extensions."""
+    """Render the complete dialplan from every declared object."""
     dialplan = document.get("dialplan", {}) or {}
     internal = str(dialplan.get("internal_context", "internal"))
     inbound = str(dialplan.get("inbound_context", "from-trunk"))
 
     lines = [_header("dialplan")]
+
+    # -- telephones ------------------------------------------------------
     lines.append(f"[{internal}]\n")
-    for entry in document.get("extensions", []) or []:
-        number = str(entry.get("number", "")).strip()
-        target = str(entry.get("target", "")).strip()
-        if not number or not target:
+    lines.append("; telephones\n")
+    for extension in document.get("extensions", []) or []:
+        number = str(extension.get("number", "")).strip()
+        if not number or not _enabled(extension):
             continue
+        technology = str(extension.get("technology", "PJSIP")).upper()
+        ring = int(extension.get("ring_seconds", 20) or 20)
+
         lines.append(f"exten => {number},1,NoOp(a call to the extension {number})\n")
-        lines.append(f" same => n,Dial({target},20)\n")
-        lines.append(" same => n,Voicemail(${EXTEN}@default,u)\n")
+        lines.append(f" same => n,Dial({technology}/{number},{ring})\n")
+        if extension.get("voicemail", True):
+            lines.append(f" same => n,VoiceMail({number}@default,u)\n")
         lines.append(" same => n,Hangup()\n\n")
 
-    lines.append(f"\n[{inbound}]\n")
-    inbound_target = str(dialplan.get("inbound_target", "")).strip()
-    if inbound_target:
-        lines.append("exten => _.,1,NoOp(an inbound call from a trunk)\n")
-        lines.append(f" same => n,Goto({internal},{inbound_target},1)\n\n")
-    else:
-        lines.append("exten => _.,1,NoOp(an inbound call with no destination configured)\n")
+    # -- ring groups -------------------------------------------------------
+    groups = [group for group in document.get("ring_groups", []) or [] if _enabled(group)]
+    if groups:
+        lines.append("; ring groups\n")
+    for group in groups:
+        number = str(group.get("number", "")).strip()
+        members = [str(member).strip() for member in group.get("members", []) or []]
+        if not number or not members:
+            continue
+        ring = int(group.get("ring_seconds", 25) or 25)
+        strategy = str(group.get("strategy", "ring all")).lower()
+
+        lines.append(f"exten => {number},1,NoOp(a call to the ring group {number})\n")
+        if strategy == "in order":
+            for member in members:
+                lines.append(f" same => n,Dial(PJSIP/{member},{ring})\n")
+        else:
+            targets = "&".join(f"PJSIP/{member}" for member in members)
+            lines.append(f" same => n,Dial({targets},{ring})\n")
+        lines.append(" same => n,Hangup()\n\n")
+
+    # -- time conditions ---------------------------------------------------
+    conditions = [
+        condition for condition in document.get("time_conditions", []) or []
+        if _enabled(condition)
+    ]
+    if conditions:
+        lines.append("; time conditions\n")
+    for condition in conditions:
+        name = str(condition.get("name", "")).strip()
+        if not name:
+            continue
+        days = [
+            _DAY_NAMES[str(day).lower()]
+            for day in condition.get("days", []) or []
+            if str(day).lower() in _DAY_NAMES
+        ]
+        day_range = "&".join(days) if days else "mon-fri"
+        starts = str(condition.get("starts_at", "09:00"))
+        ends = str(condition.get("ends_at", "17:30"))
+
+        lines.append(f"exten => {name},1,NoOp(the time condition named {name})\n")
+        lines.append(
+            f" same => n,GotoIfTime({starts}-{ends},{day_range},*,*?{name}-open,1)\n"
+        )
+        lines.append(f" same => n,Goto({name}-closed,1)\n\n")
+
+        lines.append(f"exten => {name}-open,1,NoOp(inside the opening hours)\n")
+        lines.extend(
+            _destination_lines("extension", condition.get("open_destination", ""), internal)
+        )
+        lines.append("\n")
+        lines.append(f"exten => {name}-closed,1,NoOp(outside the opening hours)\n")
+        lines.extend(
+            _destination_lines("extension", condition.get("closed_destination", ""), internal)
+        )
+        lines.append("\n")
+
+    # -- outbound routes ---------------------------------------------------
+    routes = sorted(
+        (route for route in document.get("outbound_routes", []) or [] if _enabled(route)),
+        key=lambda route: int(route.get("priority", 10) or 10),
+    )
+    if routes:
+        lines.append("; outbound routes, in the order they are tried\n")
+    for route in routes:
+        pattern = str(route.get("pattern", "")).strip()
+        trunk = str(route.get("trunk", "")).strip()
+        if not pattern or not trunk:
+            continue
+
+        strip = int(route.get("strip_digits", 0) or 0)
+        prepend = str(route.get("prepend_digits", "") or "")
+        dialled = "${EXTEN}"
+        if strip:
+            dialled = f"${{EXTEN:{strip}}}"
+        if prepend:
+            dialled = f"{prepend}{dialled}"
+
+        lines.append(
+            f"exten => _{pattern},1,NoOp(an outbound call by the route named "
+            f"{route.get('name', 'unnamed')})\n"
+        )
+        lines.append(f" same => n,Dial(PJSIP/{dialled}@{trunk}-endpoint,60)\n")
         lines.append(" same => n,Congestion(5)\n")
         lines.append(" same => n,Hangup()\n\n")
 
+    # -- inbound routes ----------------------------------------------------
+    lines.append(f"\n[{inbound}]\n")
+    inbound_routes = [
+        route for route in document.get("inbound_routes", []) or [] if _enabled(route)
+    ]
+    if not inbound_routes:
+        lines.append("exten => _.,1,NoOp(an inbound call with no route configured)\n")
+        lines.append(" same => n,Congestion(5)\n")
+        lines.append(" same => n,Hangup()\n\n")
+        return "".join(lines)
+
+    for route in inbound_routes:
+        did = str(route.get("did", "")).strip()
+        if not did:
+            continue
+        # A route for anything is written as a pattern; an exact number is not.
+        label = f"_{did}" if any(mark in did for mark in "._NXZ[]") else did
+        description = str(route.get("description", "")).strip() or "an inbound call"
+
+        lines.append(f"exten => {label},1,NoOp({description})\n")
+        lines.extend(
+            _destination_lines(
+                str(route.get("destination_kind", "extension")),
+                route.get("destination_value", ""),
+                internal,
+            )
+        )
+        lines.append(" same => n,Hangup()\n\n")
+
+    return "".join(lines)
+
+
+def render_voicemail(document: Mapping[str, Any], secrets: Any = None) -> str:
+    """Render the mailboxes for every telephone that has voicemail."""
+    lines = [_header("mailboxes")]
+    lines.append("[general]\n")
+    lines.append("format = wav49|gsm|wav\n")
+    lines.append("attach = yes\n")
+    lines.append("maxmsg = 100\n")
+    lines.append("maxsecs = 300\n")
+    lines.append("emailsubject = a message from ${VM_CALLERID}\n")
+    lines.append("emailbody = a message of ${VM_DUR} was left in mailbox ${VM_MAILBOX}\n\n")
+
+    lines.append("[default]\n")
+    any_mailbox = False
+    for extension in document.get("extensions", []) or []:
+        number = str(extension.get("number", "")).strip()
+        if not number or not _enabled(extension) or not extension.get("voicemail", True):
+            continue
+        any_mailbox = True
+
+        name = str(extension.get("name", "")).strip() or f"extension {number}"
+        address = str(extension.get("electronic_mail", "") or "")
+        code = _secret_for(secrets, "extensions", number, "voicemail_password") or ""
+        lines.append(f"{number} => {code},{name},{address}\n")
+
+    if not any_mailbox:
+        lines.append("; no telephone on this system has voicemail enabled\n")
     return "".join(lines)
 
 

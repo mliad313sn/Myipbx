@@ -11,7 +11,7 @@
  * that may never see a package index.
  */
 
-var ApplianceNumerals = (function () {
+(function (root) {
     'use strict';
 
     var SMALL = [
@@ -241,7 +241,7 @@ var ApplianceNumerals = (function () {
         return /[0-9]/.test(String(text));
     }
 
-    return {
+    var ApplianceNumerals = {
         spellInteger: spellInteger,
         spellDecimal: spellDecimal,
         spellOrdinal: spellOrdinal,
@@ -249,10 +249,13 @@ var ApplianceNumerals = (function () {
         sanitize: sanitize,
         containsDigit: containsDigit
     };
-}());
 
-/* Expose to the cross implementation agreement test harness when executed
- * outside of a browser.  Guarded so the browser path is unaffected. */
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = ApplianceNumerals;
-}
+    /* The dashboard reads this from the global scope, and the cross
+     * implementation agreement test loads the very same file through the
+     * module system.  Both are served explicitly rather than by leaking a
+     * declaration into whatever scope happens to be current. */
+    root.ApplianceNumerals = ApplianceNumerals;
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = ApplianceNumerals;
+    }
+}(typeof globalThis !== 'undefined' ? globalThis : this));

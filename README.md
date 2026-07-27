@@ -28,15 +28,38 @@ spelling them would stop them working. The constraint governs what the
 appliance *emits*: its logs, its dashboard, and its interface responses. That
 boundary is drawn on purpose and is where the automated tests draw it too.
 
+## Everything is done from the browser
+
+That is the product's central claim, and it is the one worth checking first,
+because it is where the free field is weakest. An administrator never needs a
+terminal — not for telephony, and not for the operating system underneath it.
+
+From the console: extensions, trunks, ring groups, inbound and outbound routes,
+time conditions and voicemail; live call monitoring and call history; the
+machine's static addressing, host name, time zone and clock; starting and
+restarting services; **compiling the legacy interface card drivers against the
+running kernel**; generating span configuration; reading logs; backup and
+restore; and restarting or shutting down the machine.
+
+The one procedure that deliberately still needs a terminal is resetting a lost
+administrator password, because an interface that could do that without
+authentication would not be a security boundary.
+
+How this stays true as the product grows: the console builds its forms from the
+same schema the appliance validates against, and system operations are a fixed
+vocabulary of verbs on a narrow privileged helper. A field cannot exist in one
+place and not the other, and an operation that is not a verb is not an
+operation.
+
 ## What is here
 
 ```
 appliance/     the control plane -- standard library only, no dependencies
-web/           the dashboard -- vanilla markup and scripting, no build step
-scripts/       the bare metal staging scripts and the exclusion audit
-config/        engine, service, network, and appliance configuration templates
-tests/         the quality assurance suite -- two hundred forty-three tests
-docs/          vision, benchmark, architecture, runbook, and assurance report
+web/           the console -- vanilla markup and scripting, no build step
+scripts/       the staging scripts, the exclusion audit, the privileged helper
+config/        engine, service, network, privilege, and appliance templates
+tests/         the quality assurance suite -- three hundred twelve tests
+docs/          vision, benchmarks, architecture, user guide, runbook, assurance
 ```
 
 The control plane imports nothing outside the Python standard library. The
@@ -145,13 +168,18 @@ make check             # syntax gates for shell, control plane, and dashboard
 make test-constraints  # only the two absolute constraint suites
 make test-concurrency  # only the one hundred concurrent session scenarios
 make audit             # the address allocation audit against this machine
+make lint              # static analysis of the console sources
+make test-browser      # drive the real console in a real browser
 make run               # run the control plane in the foreground
 ```
 
-The suite needs nothing beyond the standard library interpreter. A browser
-scripting runtime, if present, additionally proves that the browser numeral
-implementation agrees with the control plane's; without it that one test
-reports itself skipped and everything else runs normally.
+The suite needs nothing beyond the standard library interpreter. Where a
+browser scripting runtime is present it does two things more: it proves the
+console's numeral implementation agrees with the control plane's, and it drives
+the real console in a real browser against a real appliance — signing in,
+walking every section, creating and deleting an extension through the generated
+forms, and watching a pushed update arrive. Without that runtime those tests
+report themselves skipped and everything else runs normally.
 
 ## Documentation
 
@@ -161,4 +189,6 @@ reports itself skipped and everything else runs normally.
 | [`docs/market-benchmark.md`](docs/market-benchmark.md) | the field survey and the three defects to overcome |
 | [`docs/system-architecture.md`](docs/system-architecture.md) | the three layers and how each constraint is enforced |
 | [`docs/operations-runbook.md`](docs/operations-runbook.md) | installing, operating, diagnosing, and recovering |
+| [`docs/competitive-benchmark.md`](docs/competitive-benchmark.md) | measured against the free field, with sources and honest gaps |
+| [`docs/user-guide.md`](docs/user-guide.md) | how to run the appliance, task by task |
 | [`docs/quality-assurance-report.md`](docs/quality-assurance-report.md) | what was tested, what failed, and what was repaired |

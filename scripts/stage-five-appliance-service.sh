@@ -36,6 +36,49 @@ install_control_plane() {
     log_info "the control plane package was installed to ${APPLIANCE_PREFIX}"
 }
 
+install_privileged_helper() {
+    log_step "installing the privileged helper and its narrow privilege grant"
+
+    ensure_directory "${APPLIANCE_PREFIX}/bin" 0755
+    ensure_directory "${APPLIANCE_PREFIX}/bin/lib" 0755
+
+    install_file "${REPOSITORY_ROOT}/scripts/myipbx-privileged-helper.sh" \
+        "${APPLIANCE_PREFIX}/bin/myipbx-privileged-helper.sh" 0755
+    install_file "${REPOSITORY_ROOT}/scripts/lib/common.sh" \
+        "${APPLIANCE_PREFIX}/bin/lib/common.sh" 0644
+
+    # The helper delegates the network and driver work to the staging scripts,
+    # so they must be beside it once installed.
+    local stage
+    for stage in stage-two-network-static.sh stage-three-dahdi-drivers.sh verify-no-dhcp.sh; do
+        install_file "${REPOSITORY_ROOT}/scripts/${stage}" \
+            "${APPLIANCE_PREFIX}/bin/${stage}" 0755
+    done
+
+    local grant="${REPOSITORY_ROOT}/config/sudoers/myipbx"
+    [[ -f "${grant}" ]] || fail "the privilege grant template is missing from the repository"
+
+    if is_rehearsal; then
+        log_info "rehearsal: the privilege grant would be installed after validation"
+        return 0
+    fi
+
+    # A malformed grant file can lock every administrator out of the machine,
+    # so it is validated before it is installed, never after.
+    if have_command visudo; then
+        if ! visudo --check --file="${grant}" >/dev/null 2>&1; then
+            fail "the privilege grant template did not validate; it will not be installed"
+        fi
+        log_info "the privilege grant validated"
+    else
+        log_warn "the privilege grant validator is not available; installing without validation"
+    fi
+
+    ensure_directory /etc/sudoers.d 0755
+    install_file "${grant}" /etc/sudoers.d/myipbx 0440
+    log_info "the service account may now run one helper, and nothing else, with privilege"
+}
+
 install_dashboard() {
     log_step "installing the browser dashboard"
 
@@ -172,6 +215,7 @@ main() {
     fi
 
     install_control_plane
+    install_privileged_helper
     install_dashboard
     write_configuration_document
     install_service_unit

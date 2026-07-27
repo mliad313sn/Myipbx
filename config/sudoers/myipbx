@@ -1,0 +1,25 @@
+# Legacy-to-Modern IPBX Appliance -- privilege grant
+#
+# The control plane runs as an unprivileged service account. The graphical
+# interface must nevertheless be able to restart the telephony engine, apply a
+# static network configuration, rebuild the interface card drivers, and restart
+# the machine, because the product's claim is that every operation can be
+# performed from the interface.
+#
+# This file grants exactly one thing: the right to run one helper script, which
+# itself accepts only a fixed vocabulary of verbs and validates every argument
+# before acting. The service account is granted no shell, no editor, no package
+# manager, and no general command.
+#
+# Install to /etc/sudoers.d/myipbx with mode zero four four zero, owned by
+# root. Validate with the visudo check before installing:
+#
+#     visudo --check --file=config/sudoers/myipbx
+#
+# Note the absence of any grant relating to address allocation. There is no
+# allocation service on this appliance to control.
+
+Defaults:myipbx !requiretty
+Defaults:myipbx env_reset
+
+myipbx ALL=(root) NOPASSWD: /opt/myipbx/bin/myipbx-privileged-helper.sh

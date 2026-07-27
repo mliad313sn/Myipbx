@@ -6,6 +6,7 @@ and Benchmark Defect Three (unguided legacy interface hardware provisioning).
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -84,7 +85,8 @@ class ConfigurationStoreTests(unittest.TestCase):
 
     def test_every_artefact_is_rendered_and_marked_as_generated(self) -> None:
         outcome = self.store.render(DOCUMENT)
-        expected = {"pjsip.conf", "extensions.conf", "chan_dahdi.conf", "manager.conf"}
+        expected = {"pjsip.conf", "extensions.conf", "voicemail.conf",
+                    "chan_dahdi.conf", "manager.conf"}
         self.assertEqual(set(outcome["written"]), expected)
 
         for name in expected:
@@ -98,8 +100,37 @@ class ConfigurationStoreTests(unittest.TestCase):
         self.assertIn("[carrier-primary]", content)
         self.assertIn("sip:sip.example.net", content)
         self.assertIn("example-account", content)
-        # A secret must never be written into a rendered artefact.
-        self.assertNotIn("password", content.lower())
+
+    def test_an_unset_secret_is_never_invented(self) -> None:
+        """With no secret stored, no credential may appear in the artefact."""
+        self.store.render(DOCUMENT)
+        content = (self.output / "pjsip.conf").read_text(encoding="utf-8")
+        self.assertIn("no password has been set for this trunk yet", content)
+        self.assertNotIn("password = ", content)
+
+    def test_a_secret_reaches_the_artefact_only_from_the_secret_store(self) -> None:
+        """The secret is held apart and is read only at the moment of render."""
+        from appliance.entities import SecretStore
+
+        secrets = SecretStore(Path(self.directory.name) / "secrets.json")
+        secrets.set("trunks", "carrier-primary", "secret", "a-carrier-password")
+        self.store.secrets = secrets
+
+        self.store.render(DOCUMENT, force=True)
+        content = (self.output / "pjsip.conf").read_text(encoding="utf-8")
+        self.assertIn("password = a-carrier-password", content)
+
+        # The source of truth itself must never carry it.
+        saved = self.store.save(DOCUMENT)
+        self.assertNotIn(
+            "a-carrier-password",
+            json.dumps(saved),
+            "the secret leaked into the source of truth document",
+        )
+        self.assertEqual(
+            (Path(self.directory.name) / "secrets.json").stat().st_mode & 0o777,
+            0o600,
+        )
 
     def test_the_rendered_dialplan_contains_every_declared_extension(self) -> None:
         self.store.render(DOCUMENT)
@@ -119,7 +150,7 @@ class ConfigurationStoreTests(unittest.TestCase):
         self.store.render(DOCUMENT)
         second = self.store.render(DOCUMENT)
         self.assertEqual(second["written"], [])
-        self.assertEqual(len(second["unchanged"]), 4)
+        self.assertEqual(len(second["unchanged"]), 5)
 
     # -- Benchmark Defect One ------------------------------------------------
 

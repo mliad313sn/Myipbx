@@ -63,6 +63,19 @@ check-browser: ## check every dashboard source for a syntax fault
 		printf '  the browser scripting runtime is absent; this check was skipped\n'; \
 	fi
 
+.PHONY: lint
+lint: ## static analysis of the console sources
+	@if command -v eslint >/dev/null 2>&1; then \
+		NODE_PATH=$${NODE_PATH:-/opt/node22/lib/node_modules} eslint web/js tests/browser; \
+		printf '  the console sources pass static analysis\n'; \
+	else \
+		printf '  the static analysis tool is not installed; this check was skipped\n'; \
+	fi
+
+.PHONY: test-browser
+test-browser: ## drive the real console in a real browser
+	@$(PYTHON) -m unittest test_browser --verbose
+
 .PHONY: audit
 audit: ## run the address allocation exclusion audit against this machine
 	@bash scripts/verify-no-dhcp.sh

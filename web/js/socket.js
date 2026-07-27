@@ -16,7 +16,7 @@
  * always rendered as silence.
  */
 
-var ApplianceSocket = (function () {
+(function (root) {
     'use strict';
 
     var LINK_LIVE = 'live';
@@ -235,14 +235,15 @@ var ApplianceSocket = (function () {
         }
     };
 
-    return {
+    var ApplianceSocket = {
         Client: Client,
         LINK_LIVE: LINK_LIVE,
         LINK_RECONNECTING: LINK_RECONNECTING,
         LINK_STALE: LINK_STALE
     };
-}());
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = ApplianceSocket;
-}
+    root.ApplianceSocket = ApplianceSocket;
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = ApplianceSocket;
+    }
+}(typeof globalThis !== 'undefined' ? globalThis : this));

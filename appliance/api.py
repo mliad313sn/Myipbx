@@ -14,11 +14,13 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from . import numerals
+from . import backup, entities, numerals, sysops
 from .confstore import DriftDetected
 from .httpd import Request, Response, Router
 from .logging_setup import get_logger
 from .trunks import TrunkState
+
+VERSION = "one point one point zero"
 
 __all__ = ["build_router", "SESSION_COOKIE_NAME"]
 
@@ -36,6 +38,7 @@ def build_router(context: Any) -> Router:
 
     # -- unauthenticated -------------------------------------------------
     router.get("/api/health", lambda request: _health(context, request))
+    router.get("/api/session", lambda request: _session_status(context, request))
     router.post("/api/session", lambda request: _sign_in(context, request))
 
     # -- authenticated reads ---------------------------------------------
@@ -65,6 +68,43 @@ def build_router(context: Any) -> Router:
     )
     router.post("/api/trunks/control", guard.write(lambda request: _control_trunk(context, request)))
     router.post("/api/tasks/run", guard.write(lambda request: _run_task(context, request)))
+
+    # -- telephony objects, created and edited entirely from the interface --
+    router.get("/api/schema", guard.read(lambda request: _schema(context)))
+    router.get(
+        "/api/entities/{kind}", guard.read(lambda request: _entities_list(context, request))
+    )
+    router.get(
+        "/api/entities/{kind}/{key}", guard.read(lambda request: _entity_read(context, request))
+    )
+    router.post(
+        "/api/entities/{kind}", guard.write(lambda request: _entity_create(context, request))
+    )
+    router.put(
+        "/api/entities/{kind}/{key}",
+        guard.write(lambda request: _entity_update(context, request)),
+    )
+    router.delete(
+        "/api/entities/{kind}/{key}",
+        guard.write(lambda request: _entity_delete(context, request)),
+    )
+
+    # -- the machine itself -------------------------------------------------
+    router.get("/api/system", guard.read(lambda request: _system(context)))
+    router.get("/api/system/operations", guard.read(lambda request: _operations(context)))
+    router.post(
+        "/api/system/operations/{verb}",
+        guard.write(lambda request: _run_operation(context, request)),
+    )
+
+    # -- diagnostics --------------------------------------------------------
+    router.get("/api/logs", guard.read(lambda request: _log_catalogue(context)))
+    router.get("/api/logs/{key}", guard.read(lambda request: _log_read(context, request)))
+    router.get("/api/calls", guard.read(lambda request: _call_records(context, request)))
+
+    # -- backup and restore -------------------------------------------------
+    router.get("/api/backup", guard.read(lambda request: _backup(context)))
+    router.post("/api/restore", guard.write(lambda request: _restore(context, request)))
 
     router.serve_static(context.config.web_root)
     return router
@@ -142,6 +182,23 @@ def _health(context: Any, request: Request) -> Response:
             "address_allocation_findings": numerals.spell_integer(
                 len(getattr(context, "audit_findings", ()) or ())
             ),
+        }
+    )
+
+
+def _session_status(context: Any, request: Request) -> Response:
+    """Report whether the caller already holds a session.
+
+    This answers with success whether or not a session exists, because asking
+    the question is not an error.  A dashboard that probed a protected route
+    instead would make the browser log a failed request on every page load,
+    which trains an operator to ignore the console exactly when it matters.
+    """
+    session = context.sessions.validate(request.cookie(SESSION_COOKIE_NAME))
+    return Response.json(
+        {
+            "authenticated": session is not None,
+            "username": session.username if session else None,
         }
     )
 
@@ -424,6 +481,233 @@ async def _run_task(context: Any, request: Request) -> Response:
     run = await context.tasks.run(name, payload.get("arguments") or {})
     status = 200 if run.succeeded or run.status == "rejected" else 500
     return Response.json(run.as_dict(), status=status)
+
+
+# -- telephony objects -----------------------------------------------------
+
+
+def _schema(context: Any) -> Response:
+    """The object schema the interface builds its forms from."""
+    return Response.json(entities.schema())
+
+
+def _entity_context(context: Any) -> tuple[dict[str, Any], entities.EntityStore]:
+    document = context.store.load()
+    return document, entities.EntityStore(document, context.secrets)
+
+
+def _commit(context: Any, document: dict[str, Any]) -> dict[str, Any]:
+    """Persist a mutated document and bring the running appliance into line."""
+    saved = context.store.save(document)
+    context.trunks.declare_many(saved.get("trunks", []) or [])
+    context.state.touch()
+    return saved
+
+
+def _entities_list(context: Any, request: Request) -> Response:
+    kind = request.parameter("kind")
+    try:
+        _, store = _entity_context(context)
+        records = store.list(kind)
+    except KeyError as error:
+        return Response.error(404, str(error))
+
+    spec = entities.ENTITY_SPECS[kind]
+    return Response.json(
+        {
+            "kind": kind,
+            "singular": spec.singular,
+            "plural": spec.plural,
+            "records": records,
+            "count": numerals.spell_integer(len(records)),
+        }
+    )
+
+
+def _entity_read(context: Any, request: Request) -> Response:
+    kind = request.parameter("kind")
+    key = request.parameter("key")
+    try:
+        _, store = _entity_context(context)
+        record = store.get(kind, key)
+    except KeyError as error:
+        return Response.error(404, str(error))
+
+    if record is None:
+        return Response.error(404, f"there is nothing of that kind identified as {key}")
+    return Response.json({"kind": kind, "record": record})
+
+
+def _entity_create(context: Any, request: Request) -> Response:
+    kind = request.parameter("kind")
+    payload = request.json()
+    if not isinstance(payload, dict):
+        return Response.error(400, "the submission must be a mapping")
+
+    try:
+        document, store = _entity_context(context)
+        record = store.create(kind, payload)
+    except KeyError as error:
+        return Response.error(404, str(error))
+    except entities.ValidationError as error:
+        return Response.json(
+            {"accepted": False, "errors": error.errors}, status=422
+        )
+
+    _commit(context, document)
+    return Response.json({"accepted": True, "record": record}, status=201)
+
+
+def _entity_update(context: Any, request: Request) -> Response:
+    kind = request.parameter("kind")
+    key = request.parameter("key")
+    payload = request.json()
+    if not isinstance(payload, dict):
+        return Response.error(400, "the submission must be a mapping")
+
+    try:
+        document, store = _entity_context(context)
+        record = store.update(kind, key, payload)
+    except KeyError as error:
+        return Response.error(404, str(error))
+    except entities.ValidationError as error:
+        return Response.json({"accepted": False, "errors": error.errors}, status=422)
+
+    _commit(context, document)
+    return Response.json({"accepted": True, "record": record})
+
+
+def _entity_delete(context: Any, request: Request) -> Response:
+    kind = request.parameter("kind")
+    key = request.parameter("key")
+
+    try:
+        document, store = _entity_context(context)
+        removed = store.delete(kind, key)
+    except KeyError as error:
+        return Response.error(404, str(error))
+    except entities.ValidationError as error:
+        # A deletion that would leave something dangling is refused with an
+        # explanation of exactly what still refers to it.
+        return Response.json({"accepted": False, "errors": error.errors}, status=409)
+
+    if not removed:
+        return Response.error(404, f"there is nothing of that kind identified as {key}")
+
+    _commit(context, document)
+    return Response.json({"accepted": True, "deleted": key})
+
+
+# -- the machine itself ----------------------------------------------------
+
+
+def _system(context: Any) -> Response:
+    payload = context.system.snapshot()
+    payload["appliance"] = {
+        "uptime": numerals.spell_duration(context.state.uptime_seconds()),
+        "engine_connected": context.state.engine_connected,
+        "dashboards_connected": numerals.spell_integer(context.hub.connection_count),
+        "version": VERSION,
+    }
+    payload["privileged_operations"] = context.operations.describe()
+    return Response.json(payload)
+
+
+def _operations(context: Any) -> Response:
+    return Response.json(context.operations.describe())
+
+
+async def _run_operation(context: Any, request: Request) -> Response:
+    verb = request.parameter("verb")
+    payload = request.json() or {}
+    if not isinstance(payload, dict):
+        return Response.error(400, "the request body must be a mapping")
+
+    session = getattr(request, "session", None)
+    _LOG.warning(
+        "the administrator named %s asked for the system operation named %s",
+        session.username if session else "unknown",
+        verb,
+    )
+
+    try:
+        outcome = await context.operations.run(verb, payload)
+    except sysops.OperationRefused as error:
+        return Response.error(400, str(error))
+
+    return Response.json(outcome.as_dict(), status=200 if outcome.succeeded else 500)
+
+
+# -- diagnostics -----------------------------------------------------------
+
+
+def _log_catalogue(context: Any) -> Response:
+    return Response.json({"logs": context.logs.catalogue()})
+
+
+def _log_read(context: Any, request: Request) -> Response:
+    key = request.parameter("key")
+    try:
+        lines = int(request.query.get("lines", "200"))
+    except ValueError:
+        lines = 200
+
+    try:
+        payload = context.logs.read(
+            key,
+            lines=lines,
+            search=request.query.get("search", ""),
+            level=request.query.get("level", ""),
+        )
+    except KeyError as error:
+        return Response.error(404, str(error))
+    return Response.json(payload)
+
+
+def _call_records(context: Any, request: Request) -> Response:
+    try:
+        limit = int(request.query.get("limit", "100"))
+    except ValueError:
+        limit = 100
+    return Response.json(
+        context.calls.read(limit=limit, search=request.query.get("search", ""))
+    )
+
+
+# -- backup and restore ----------------------------------------------------
+
+
+def _backup(context: Any) -> Response:
+    """Produce a complete backup as a single downloadable archive."""
+    try:
+        payload, name = backup.create(context)
+    except OSError as error:
+        return Response.error(500, f"the backup could not be produced: {error}")
+
+    return Response(
+        status=200,
+        body=payload,
+        content_type="application/gzip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            # A backup carries secrets, so it must never sit in a cache.
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
+def _restore(context: Any, request: Request) -> Response:
+    if not request.body:
+        return Response.error(400, "the request carried no archive to restore")
+
+    try:
+        outcome = backup.restore(context, request.body)
+    except backup.RestoreRefused as error:
+        return Response.error(422, str(error))
+    except OSError as error:
+        return Response.error(500, f"the restore could not be completed: {error}")
+
+    return Response.json(outcome)
 
 
 # -- helpers ---------------------------------------------------------------

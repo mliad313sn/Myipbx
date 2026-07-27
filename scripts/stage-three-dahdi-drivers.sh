@@ -31,6 +31,30 @@ TOOLS_ARCHIVE="${TOOLS_ARCHIVE:-}"
 DRIVER_ARCHIVE_URL="${DRIVER_ARCHIVE_URL:-}"
 TOOLS_ARCHIVE_URL="${TOOLS_ARCHIVE_URL:-}"
 
+# Building from the development tree rather than from the last released
+# archive is the default on a recent kernel, and the reason is specific.
+#
+# The legacy interface card drivers this appliance exists to support were
+# removed from the driver project in twenty eighteen and restored after
+# community pressure, the last of them landing in the release numbered three
+# point four point zero in April of twenty twenty-four. No release has been
+# tagged since. The fixes that let the drivers compile against kernels from
+# six point ten onward -- the timer interface changes in particular -- exist
+# only in the development tree.
+#
+# So: an appliance on an older kernel may use the released archive, and an
+# appliance on a newer kernel must use the development tree, or the
+# compilation in this stage will fail on a kernel interface that the release
+# predates. The stage chooses for itself and says which it chose and why.
+DRIVER_SOURCE_MODE="${DRIVER_SOURCE_MODE:-auto}"
+DRIVER_GIT_URL="${DRIVER_GIT_URL:-https://github.com/asterisk/dahdi-linux.git}"
+TOOLS_GIT_URL="${TOOLS_GIT_URL:-https://github.com/asterisk/dahdi-tools.git}"
+DRIVER_GIT_REF="${DRIVER_GIT_REF:-master}"
+
+#: The kernel release from which the released archive is known to fail.
+_TREE_REQUIRED_MAJOR=6
+_TREE_REQUIRED_MINOR=10
+
 # The peripheral bus vendor identifier assigned to Digium.
 DIGIUM_VENDOR="d161"
 
@@ -58,6 +82,73 @@ report_detected_cards() {
         log_info "$(spell_integer "${found}") Digium interface card or cards were detected"
     fi
     return 0
+}
+
+# Decide, and explain, whether to build from the development tree.
+choose_source_mode() {
+    local release major minor
+    release="$(uname -r)"
+    major="${release%%.*}"
+    minor="${release#*.}"
+    minor="${minor%%.*}"
+
+    case "${DRIVER_SOURCE_MODE}" in
+        git|tree)
+            log_info "the development tree was requested explicitly"
+            printf 'git'
+            return 0
+            ;;
+        archive|release)
+            log_info "the released archive was requested explicitly"
+            printf 'archive'
+            return 0
+            ;;
+    esac
+
+    if ! [[ "${major}" =~ ^[0-9]+$ ]] || ! [[ "${minor}" =~ ^[0-9]+$ ]]; then
+        log_warn "the kernel release could not be interpreted; the released archive will be used"
+        printf 'archive'
+        return 0
+    fi
+
+    if (( major > _TREE_REQUIRED_MAJOR )) \
+        || (( major == _TREE_REQUIRED_MAJOR && minor >= _TREE_REQUIRED_MINOR )); then
+        log_info "the running kernel is newer than the last tagged driver release"
+        log_info "the development tree will be used, because the released archive predates the kernel interface changes this kernel requires"
+        printf 'git'
+        return 0
+    fi
+
+    log_info "the running kernel predates the kernel interface changes, so the released archive is sufficient"
+    printf 'archive'
+}
+
+clone_source() {
+    local url="$1"
+    local destination="$2"
+    local description="$3"
+
+    require_command git
+    ensure_directory "$(dirname "${destination}")"
+
+    if is_rehearsal; then
+        log_info "rehearsal: the ${description} tree would be fetched from ${url}"
+        printf '%s' "${destination}"
+        return 0
+    fi
+
+    if [[ -d "${destination}/.git" ]]; then
+        log_info "updating the existing ${description} tree"
+        ( cd "${destination}" && git fetch --depth 1 origin "${DRIVER_GIT_REF}" \
+            && git checkout --force FETCH_HEAD ) \
+            || fail "the ${description} tree could not be updated"
+    else
+        log_info "fetching the ${description} tree at the reference ${DRIVER_GIT_REF}"
+        git clone --depth 1 --branch "${DRIVER_GIT_REF}" "${url}" "${destination}" \
+            || fail "the ${description} tree could not be fetched; supply an archive instead if this machine has no route to it"
+    fi
+
+    printf '%s' "${destination}"
 }
 
 resolve_archive() {
@@ -220,18 +311,23 @@ main() {
     fi
 
     report_detected_cards
-
-    local driver_archive tools_archive
-    driver_archive="$(resolve_archive "${DRIVER_ARCHIVE}" "${DRIVER_ARCHIVE_URL}" 'dahdi-linux*.tar.gz' 'interface driver')"
-    tools_archive="$(resolve_archive "${TOOLS_ARCHIVE}" "${TOOLS_ARCHIVE_URL}" 'dahdi-tools*.tar.gz' 'interface tools')"
-
     ensure_directory "${APPLIANCE_BUILD_DIR}"
 
-    local driver_tree tools_tree
-    driver_tree="$(extract_archive "${driver_archive}" "${APPLIANCE_BUILD_DIR}")"
-    build_drivers "${driver_tree}"
+    local mode driver_tree tools_tree
+    mode="$(choose_source_mode)"
 
-    tools_tree="$(extract_archive "${tools_archive}" "${APPLIANCE_BUILD_DIR}")"
+    if [[ "${mode}" == "git" ]]; then
+        driver_tree="$(clone_source "${DRIVER_GIT_URL}" "${APPLIANCE_BUILD_DIR}/dahdi-linux" 'interface driver')"
+        tools_tree="$(clone_source "${TOOLS_GIT_URL}" "${APPLIANCE_BUILD_DIR}/dahdi-tools" 'interface tools')"
+    else
+        local driver_archive tools_archive
+        driver_archive="$(resolve_archive "${DRIVER_ARCHIVE}" "${DRIVER_ARCHIVE_URL}" 'dahdi-linux*.tar.gz' 'interface driver')"
+        tools_archive="$(resolve_archive "${TOOLS_ARCHIVE}" "${TOOLS_ARCHIVE_URL}" 'dahdi-tools*.tar.gz' 'interface tools')"
+        driver_tree="$(extract_archive "${driver_archive}" "${APPLIANCE_BUILD_DIR}")"
+        tools_tree="$(extract_archive "${tools_archive}" "${APPLIANCE_BUILD_DIR}")"
+    fi
+
+    build_drivers "${driver_tree}"
     build_tools "${tools_tree}"
 
     load_and_persist_modules
