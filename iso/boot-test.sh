@@ -65,6 +65,9 @@ start_image() {
     # address, so a boot test does not need one, and attaching one would let a
     # failure hide behind a timeout waiting for it.
     set +o errexit
+    watch_for_a_finished_boot &
+    local watcher=$!
+
     timeout --signal=KILL "${BOOT_TIMEOUT}" \
         qemu-system-x86_64 \
             -m "${BOOT_MEMORY}" \
@@ -78,12 +81,53 @@ start_image() {
             -no-reboot \
             >"${TRANSCRIPT}" 2>&1
     local status=$?
+    kill "${watcher}" 2>/dev/null || true
+    wait "${watcher}" 2>/dev/null || true
     set -o errexit
 
-    # The emulator is killed by the timeout once the boot has been observed,
-    # so a terminated status is the expected outcome rather than a failure.
+    # The emulator is stopped rather than allowed to finish, either by the
+    # watcher below once the boot has been observed or by the timeout if it
+    # never is, so a terminated status is the expected outcome and not a
+    # failure. What the boot actually did is decided by reading the transcript.
     log_info "the emulator stopped with the status $(spell_integer "${status}")"
     return 0
+}
+
+# Stop the emulator as soon as the boot has said everything it needed to.
+#
+# The appliance has answered the question this test asks the moment it reaches
+# a login prompt, and everything after that is an idle machine being emulated
+# without hardware assistance. Waiting out the whole timeout anyway cost ten
+# minutes on every run, which is ten minutes added to every turn of the loop
+# that fixes a boot fault -- the one loop that most needs to be quick.
+watch_for_a_finished_boot() {
+    local marker seen
+    while true; do
+        sleep 5
+        [[ -s "${TRANSCRIPT}" ]] || continue
+
+        seen="yes"
+        for marker in "${REQUIRED_MARKERS[@]}"; do
+            if ! grep -aqF -- "${marker}" "${TRANSCRIPT}"; then
+                seen="no"
+                break
+            fi
+        done
+
+        # A failure marker is just as final an answer as a successful boot, and
+        # waiting after a kernel panic tells nobody anything.
+        for marker in "${FAILURE_MARKERS[@]}"; do
+            if grep -aqF -- "${marker}" "${TRANSCRIPT}"; then
+                seen="yes"
+                break
+            fi
+        done
+
+        if [[ "${seen}" == "yes" ]]; then
+            pkill -KILL -f "qemu-system-x86_64.*${IMAGE}" 2>/dev/null || true
+            return 0
+        fi
+    done
 }
 
 examine_transcript() {

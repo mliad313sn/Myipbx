@@ -66,7 +66,14 @@ APPLIANCE_IMAGE_MARKER="${APPLIANCE_IMAGE_MARKER:-/.disk/appliance-image}"
 
 # Arguments every boot entry carries.  Both the legacy and the firmware boot
 # paths are generated from this one value so that the two cannot drift apart.
-APPLIANCE_KERNEL_ARGUMENTS="${APPLIANCE_KERNEL_ARGUMENTS:-boot=casper hostname=${APPLIANCE_HOST_NAME} username=${APPLIANCE_HOST_NAME} console=tty0 console=ttyS0,115200n8}"
+#
+# The host name is passed and the live session's account name deliberately is
+# not. The appliance already carries a system account named after itself, which
+# owns the control plane, and asking the live boot to create a login account of
+# the same name makes it stop and report that the user already exists. The live
+# session account keeps the machinery's own default, which collides with
+# nothing.
+APPLIANCE_KERNEL_ARGUMENTS="${APPLIANCE_KERNEL_ARGUMENTS:-boot=casper hostname=${APPLIANCE_HOST_NAME} console=tty0 console=ttyS0,115200n8}"
 
 # ---------------------------------------------------------------------------
 # Build receipts, so a failed build resumes rather than restarts

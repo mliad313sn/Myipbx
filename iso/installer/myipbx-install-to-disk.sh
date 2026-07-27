@@ -174,6 +174,21 @@ guard() {
 # Working on the target
 # ---------------------------------------------------------------------------
 
+# Refuse to remove anything unless the target really is a mounted filesystem.
+#
+# Everything this script deletes is named relative to the target's mount point.
+# If a mount had silently not happened, those same paths would name the running
+# system's own directories instead, and the removals meant for a fresh disk
+# would land on the appliance doing the installing. The mount is therefore
+# proved rather than assumed, immediately before anything is removed.
+assert_target_is_mounted() {
+    [[ -n "${TARGET_MOUNT}" ]] \
+        || fail "the target mount point is not set; nothing will be removed"
+    mountpoint -q "${TARGET_MOUNT}" 2>/dev/null \
+        || findmnt --noheadings --target "${TARGET_MOUNT}" >/dev/null 2>&1 \
+        || fail "the target at ${TARGET_MOUNT} is not a mounted filesystem; nothing will be removed"
+}
+
 # Run a command inside the system being installed. The bootloader, the boot
 # image and the service enablement all have to be done by the target's own
 # tools against the target's own tree, not by this machine's.
@@ -644,6 +659,8 @@ remove_live_boot_machinery() {
         return 0
     fi
 
+    assert_target_is_mounted
+
     rm -f "${TARGET_MOUNT}/etc/casper.conf"
     rm -f "${TARGET_MOUNT}/usr/share/initramfs-tools/hooks/casper"
     rm -f "${TARGET_MOUNT}/usr/share/initramfs-tools/scripts/casper"
@@ -700,6 +717,8 @@ generate_machine_identity() {
         log_info "rehearsal: a fresh machine identity would be generated on the disk"
         return 0
     fi
+
+    assert_target_is_mounted
 
     rm -f "${TARGET_MOUNT}/etc/machine-id" "${TARGET_MOUNT}/var/lib/dbus/machine-id"
     : >"${TARGET_MOUNT}/etc/machine-id"

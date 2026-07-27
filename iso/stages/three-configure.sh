@@ -179,7 +179,21 @@ accommodate_live_boot_scripts() {
 
         # A desktop accessibility profile is written unconditionally.
         mkdir -p /etc/xdg/autostart
+
+        # The unattended upgrade settings are read to switch them off. There is
+        # nothing here that upgrades unattended, and the reading is the only
+        # part that fails.
+        mkdir -p /etc/apt/apt.conf.d
     ' || log_warn "the live boot scripts could not be accommodated"
+
+    write_into_chroot /etc/apt/apt.conf.d/50unattended-upgrades 0644 <<'EOF'
+// This appliance upgrades nothing on its own. An appliance that changes its own
+// telephony engine or kernel while carrying calls is an appliance that will one
+// day drop them, and the sites this product is built for cannot reach a package
+// index anyway. The file exists because the live boot consults it.
+Unattended-Upgrade::Allowed-Origins {};
+APT::Periodic::Enable "0";
+EOF
 
     # The crash reporter is read to decide whether to switch it on for the
     # installer.  There is no installer and no crash reporter in this image, and
@@ -349,6 +363,38 @@ EOF
 EOF
 }
 
+remove_superseded_artefacts() {
+    log_step "removing anything an earlier design left in the image"
+
+    if is_rehearsal; then
+        return 0
+    fi
+
+    # The build tree is reused between runs so that a failed build resumes
+    # rather than restarts, and that is worth keeping. The cost is that a file
+    # written by a design this build no longer has is not removed merely by
+    # deleting the code that wrote it: it sits in the tree and ships.
+    #
+    # This is not hypothetical. A service unit that set the appliance's host
+    # name was written, found to fail on every boot, and replaced by a boot
+    # argument. Deleting the code that wrote it left the unit in the tree, and
+    # the next image still carried it and still reported it failing.
+    #
+    # Every artefact of a superseded design is therefore named here and removed
+    # explicitly, and this list is where one belongs when a design is replaced.
+    local artefact
+    for artefact in \
+        /etc/systemd/system/myipbx-hostname.service \
+        /etc/systemd/system/multi-user.target.wants/myipbx-hostname.service \
+        /etc/sudoers.d/myipbx
+    do
+        if [[ -e "${CHROOT_DIR}${artefact}" || -L "${CHROOT_DIR}${artefact}" ]]; then
+            rm -f "${CHROOT_DIR}${artefact}"
+            log_info "removed the superseded file at ${artefact}"
+        fi
+    done
+}
+
 tidy_image() {
     log_step "tidying the image"
 
@@ -413,6 +459,13 @@ audit_image() {
         findings=$(( findings + 1 ))
     fi
 
+    # A unit that a superseded design left behind would still be enabled, and
+    # would still fail on every boot.
+    if [[ -e "${CHROOT_DIR}/etc/systemd/system/myipbx-hostname.service" ]]; then
+        log_error "a superseded service unit survived into the image"
+        findings=$(( findings + 1 ))
+    fi
+
     if (( findings > 0 )); then
         fail "the image audit made $(spell_integer "${findings}") finding or findings"
     fi
@@ -442,6 +495,7 @@ main() {
     configure_appliance
     configure_services
     configure_boot_message
+    remove_superseded_artefacts
     tidy_image
     audit_image
 
