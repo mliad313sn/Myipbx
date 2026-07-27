@@ -82,7 +82,11 @@ const CONTRAST_HELPERS = `
      * is reached. */
     function behind(element) {
         var layers = [];
-        var node = element.parentElement;
+        /* Start at the element, not its parent. Text painted on a button sits
+         * on the button's own background; measuring it against the panel
+         * underneath reported white on white for a filled button, which is the
+         * measurement being wrong rather than the button. */
+        var node = element;
         while (node) {
             var parsed = parse(getComputedStyle(node).backgroundColor);
             if (parsed && parsed.a > 0) {
@@ -229,7 +233,21 @@ const CONTRAST_HELPERS = `
                     return n.tagName.toLowerCase() + (n.className ? '.' + String(n.className).split(' ')[0] : '');
                 }).slice(0, 12),
                 positiveTabindexCount: positiveTabindex.length,
-                hasSkipLink: !!document.querySelector('a[href^="#"].skip-link, a.skip-link, [data-skip-link]'),
+                /* Look for what a skip link does rather than what it is
+                 * called. A previous run reported this missing because the
+                 * class carries the design system's prefix; the console had
+                 * one all along, and a check that reads a class name tests the
+                 * naming convention instead of the behaviour. What matters is
+                 * that some link near the top of the document points at a
+                 * target that exists. */
+                hasSkipLink: (function () {
+                    var links = document.querySelectorAll('a[href^="#"]');
+                    for (var i = 0; i < links.length && i < 5; i += 1) {
+                        var target = links[i].getAttribute('href').slice(1);
+                        if (target && document.getElementById(target)) { return true; }
+                    }
+                    return false;
+                }()),
                 landmarks: {
                     banner: !!document.querySelector('[role="banner"], header'),
                     nav: !!document.querySelector('nav, [role="navigation"]'),
@@ -273,16 +291,25 @@ const CONTRAST_HELPERS = `
             await page.waitForSelector('#form-holder-extensions form', { state: 'visible', timeout: 10000 });
 
             /* Get it wrong on purpose, the way a person does. */
-            await page.fill('#field-number', 'not-a-number');
-            await page.fill('#field-name', 'A Test Telephone');
+            await page.fill('#field-extensions-number', 'not-a-number');
+            await page.fill('#field-extensions-name', 'A Test Telephone');
             await page.click('#form-holder-extensions button[type="submit"]');
             await page.waitForTimeout(700);
 
             const validation = await page.evaluate(function () {
-                var field = document.querySelector('#field-number');
+                var field = document.querySelector('#field-extensions-number');
                 var holder = document.querySelector('#form-holder-extensions');
-                var message = holder ? holder.querySelector('.field.has-error .field-error, .field-error') : null;
+                /* The marked field's message, and only failing that any
+                 * message at all. A comma separated selector returns whichever
+                 * matches first in the document, so asking for both at once
+                 * returned the empty slot above the offending field. */
+                var message = holder
+                    ? (holder.querySelector('.field.has-error .field-error') ||
+                       holder.querySelector('.field-error'))
+                    : null;
                 var summary = holder ? holder.querySelector('[role="alert"], .form-error-summary') : null;
+                var summaryVisible = !!(summary && !summary.hidden &&
+                    summary.getClientRects().length && (summary.textContent || '').trim());
                 return {
                     fieldFound: !!field,
                     ariaInvalid: field ? field.getAttribute('aria-invalid') : null,
@@ -290,7 +317,7 @@ const CONTRAST_HELPERS = `
                     messageShown: !!(message && (message.textContent || '').trim()),
                     messageText: message ? (message.textContent || '').trim().slice(0, 140) : null,
                     messageId: message ? (message.id || null) : null,
-                    summaryPresent: !!summary,
+                    summaryPresent: summaryVisible,
                     focusIsOnTheField: document.activeElement === field,
                     focusedId: document.activeElement ? (document.activeElement.id || null) : null,
                 };
@@ -317,9 +344,35 @@ const CONTRAST_HELPERS = `
                     'Focus stayed on ' + String(validation.focusedId) +
                     ', so a keyboard user must hunt for the error.');
             }
+            if (!validation.summaryPresent) {
+                finding('medium', 'A refusal is not announced',
+                    'The form shows no live region summarising what was rejected, so a ' +
+                    'screen reader user is told nothing when the submission comes back.');
+            }
+
+            /* Two elements with one id is not a style problem. The label
+             * association silently binds to whichever came first, so a person
+             * editing a queue can be read the label of an extension. */
+            const duplicateIds = await page.evaluate(function () {
+                var seen = {};
+                var repeated = [];
+                Array.prototype.forEach.call(document.querySelectorAll('[id]'), function (node) {
+                    if (seen[node.id]) {
+                        if (repeated.indexOf(node.id) === -1) { repeated.push(node.id); }
+                    }
+                    seen[node.id] = true;
+                });
+                return repeated;
+            });
+            report.duplicateIds = duplicateIds;
+            if (duplicateIds.length) {
+                finding('high', 'The same identifier is used more than once',
+                    'Repeated: ' + duplicateIds.join(', ') +
+                    '. A label points at whichever came first, so the wrong field is named.');
+            }
 
             /* Now get it right, and prove the happy path still works. */
-            await page.fill('#field-number', '241');
+            await page.fill('#field-extensions-number', '241');
             await page.click('#form-holder-extensions button[type="submit"]');
             await page.waitForTimeout(800);
             report.entityCreated = await page.evaluate(function () {
@@ -410,18 +463,47 @@ const CONTRAST_HELPERS = `
             var overflow = document.documentElement.scrollWidth > document.documentElement.clientWidth + 2;
             var nav = document.querySelector('nav, [role="navigation"]');
             var navReachable = nav ? (nav.getClientRects().length > 0) : false;
-            var offscreen = Array.prototype.slice.call(
+            var outside = Array.prototype.slice.call(
                 document.querySelectorAll('button, a[href], input')
             ).filter(function (node) {
                 var box = node.getBoundingClientRect();
                 return box.width > 0 && (box.left < -4 || box.right > window.innerWidth + 4);
-            }).length;
+            });
+            /* Being outside the viewport is only a fault when there is no way
+             * back to it. A control inside a box that scrolls sideways is in
+             * the tab order and is scrolled into view when it takes focus, so
+             * it is reachable by keyboard and by finger alike. A control
+             * outside the viewport with nothing scrollable above it is not
+             * reachable at all, and that is the finding worth raising. Both
+             * counts are reported so the distinction is visible rather than
+             * assumed. */
+            function scrollableAncestor(node) {
+                var walk = node.parentElement;
+                while (walk) {
+                    var style = getComputedStyle(walk);
+                    if (/(auto|scroll)/.test(style.overflowX) &&
+                        walk.scrollWidth > walk.clientWidth + 2) {
+                        return walk;
+                    }
+                    walk = walk.parentElement;
+                }
+                return null;
+            }
+            var stranded = outside.filter(function (node) {
+                return !scrollableAncestor(node);
+            });
             return {
                 horizontalOverflow: overflow,
                 scrollWidth: document.documentElement.scrollWidth,
                 clientWidth: document.documentElement.clientWidth,
                 navigationReachable: navReachable,
-                controlsOffScreen: offscreen,
+                controlsOffScreen: outside.length,
+                controlsStranded: stranded.length,
+                strandedDescription: stranded.map(function (node) {
+                    return node.tagName.toLowerCase() +
+                        (node.className ? '.' + String(node.className).split(' ')[0] : '') +
+                        ' "' + (node.textContent || '').trim().slice(0, 24) + '"';
+                }).slice(0, 8),
             };
         });
         report.viewport.narrow = narrow;
@@ -430,9 +512,10 @@ const CONTRAST_HELPERS = `
                 'At three hundred twenty pixels the document is ' + narrow.scrollWidth +
                 ' wide against a viewport of ' + narrow.clientWidth + '.');
         }
-        if (narrow.controlsOffScreen > 0) {
-            finding('high', 'Controls sit outside the screen on a telephone',
-                narrow.controlsOffScreen + ' interactive controls are wholly or partly off screen.');
+        if (narrow.controlsStranded > 0) {
+            finding('high', 'Controls sit outside the screen with no way to reach them',
+                narrow.controlsStranded + ' interactive controls are outside the viewport and ' +
+                'have no scrollable box above them: ' + narrow.strandedDescription.join(', ') + '.');
         }
 
         await page.setViewportSize({ width: 1400, height: 900 });

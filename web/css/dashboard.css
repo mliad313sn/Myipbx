@@ -169,7 +169,7 @@ main {
   font-size: 1.6rem;
   font-weight: 600;
   line-height: 1.2;
-  color: var(--accent);
+  color: var(--mx-brand-text);
 }
 
 .figure.small { font-size: 1.15rem; }
@@ -182,8 +182,26 @@ main {
 
 /* -- tables ------------------------------------------------------------- */
 
+/* The one place sideways scrolling is allowed: inside a data table, which
+ * cannot be reflowed into a single column without destroying the comparison
+ * down each column that is the reason to draw a table at all. Everything
+ * outside this box reflows. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll:focus-visible {
+  outline: var(--mx-focus-ring-width) solid var(--mx-border-focus);
+  outline-offset: var(--mx-focus-ring-offset);
+}
+
 .grid {
   width: 100%;
+  /* Below this the columns are squeezed past reading, so the table keeps its
+   * width and the box around it scrolls instead. */
+  min-width: 30rem;
   border-collapse: collapse;
   font-size: 0.88rem;
 }
@@ -340,7 +358,7 @@ a:focus-visible {
 
 button.secondary {
   background: var(--mx-color-transparent);
-  color: var(--accent);
+  color: var(--mx-brand-text);
 }
 
 /* The word on a caution button says what it interrupts, and every one of them
@@ -573,6 +591,43 @@ button.caution {
 .field.has-error select {
   border-color: var(--mx-status-critical-border);
   border-width: 2px;
+}
+
+/* The refusal, gathered at the top of the form.
+ *
+ * It exists so that somebody who cannot see the fields is told what happened
+ * without having to walk the whole form looking for red. It is announced, it
+ * takes focus on request, and it names each field by its label, so the list
+ * reads the same whether it is spoken or seen. */
+.form-error-summary {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--mx-status-critical-border);
+  border-radius: 6px;
+  background: var(--mx-status-critical-background);
+  color: var(--mx-status-critical-text);
+}
+
+.form-error-summary[hidden] { display: none; }
+
+.form-error-summary p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.form-error-summary p::before {
+  content: var(--mx-status-critical-mark) " ";
+}
+
+.form-error-summary ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+}
+
+.form-error-summary:focus-visible {
+  outline: var(--mx-focus-ring-width) solid var(--mx-border-focus);
+  outline-offset: var(--mx-focus-ring-offset);
 }
 
 .form-holder { border-left: 3px solid var(--accent); }

@@ -85,6 +85,14 @@ class Field:
     secret: bool = False
     #: Names another entity kind whose members this field must reference.
     references: str | None = None
+    #: True when the value is a name rather than a quantity -- a number that is
+    #: dialled, matched, or read aloud digit by digit. The spelling rule turns
+    #: quantities into words, and a quantity is something you could add one to.
+    #: You cannot add one to an extension: two hundred forty-one is not a
+    #: telephone, 241 is, and an operator reading "two billion fifteen million
+    #: five hundred fifty thousand one hundred" cannot dial it back. Fields
+    #: marked here keep their digits wherever they are displayed.
+    identifier: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -97,6 +105,7 @@ class Field:
             "choices": list(self.choices),
             "references": self.references,
             "secret": self.secret,
+            "identifier": self.identifier,
         }
 
 
@@ -153,7 +162,7 @@ _register(
         fields=(
             # A dial string, not a quantity: kept as text so that a leading
             # zero survives, which an integer would silently discard.
-            Field("number", "extension number", required=True,
+            Field("number", "extension number", required=True, identifier=True,
                   pattern=_NUMBER_PATTERN,
                   pattern_help="an extension number is one to ten digits",
                   help="the number a caller dials to reach this telephone"),
@@ -219,11 +228,13 @@ _register(
         description="a set of telephones that ring together",
         fields=(
             # A dial string, not a quantity; see the note on extensions.
-            Field("number", "group number", required=True, pattern=_NUMBER_PATTERN,
+            Field("number", "group number", required=True, identifier=True,
+                  pattern=_NUMBER_PATTERN,
                   pattern_help="a group number is one to ten digits"),
             Field("name", "description", required=True, pattern=_NAME_PATTERN,
                   pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
-            Field("members", "members", "list", required=True, references="extensions",
+            Field("members", "members", "list", required=True, identifier=True,
+                  references="extensions",
                   help="the extensions that ring when this group is called"),
             Field("strategy", "ring strategy", "choice", default="ring all",
                   choices=("ring all", "in order", "least recently called"),
@@ -243,14 +254,16 @@ _register(
         key="did",
         description="where a call arriving from a carrier is sent",
         fields=(
-            Field("did", "number dialled", required=True, pattern=_PATTERN_PATTERN,
+            Field("did", "number dialled", required=True, identifier=True,
+                  pattern=_PATTERN_PATTERN,
                   pattern_help="a dialled number may contain digits and the pattern marks N, X, Z, period, and brackets",
                   help="the number the caller dialled; use the pattern mark period to match anything"),
             Field("description", "description", pattern=_NAME_PATTERN,
                   pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
             Field("destination_kind", "send the call to", "choice", required=True,
                   default="extension", choices=_DESTINATION_KINDS),
-            Field("destination_value", "destination", required=True, pattern=_NUMBER_PATTERN,
+            Field("destination_value", "destination", required=True, identifier=True,
+                  pattern=_NUMBER_PATTERN,
                   pattern_help="a destination is the number of an extension or a ring group",
                   help="the extension or ring group number that answers"),
             Field("enabled", "enabled", "boolean", default=True),
@@ -268,14 +281,16 @@ _register(
         fields=(
             Field("name", "route name", required=True, pattern=_IDENTIFIER_PATTERN,
                   pattern_help="a route name uses letters, digits, and the marks period, underscore, and hyphen"),
-            Field("pattern", "dialled pattern", required=True, pattern=_PATTERN_PATTERN,
+            Field("pattern", "dialled pattern", required=True, identifier=True,
+                  pattern=_PATTERN_PATTERN,
                   pattern_help="a pattern may contain digits and the pattern marks N, X, Z, period, and brackets",
                   help="the pattern a dialled number must match for this route to carry it"),
             Field("trunk", "carried by", "choice", required=True, references="trunks",
                   help="the trunk this route sends the call to"),
             Field("strip_digits", "digits to remove", "number", default=0, minimum=0, maximum=20,
                   help="how many leading digits to remove before dialling"),
-            Field("prepend_digits", "digits to add", pattern=re.compile(r"^[0-9+]{0,16}$"),
+            Field("prepend_digits", "digits to add", identifier=True,
+                  pattern=re.compile(r"^[0-9+]{0,16}$"),
                   pattern_help="digits to add may contain only digits and a leading plus sign",
                   help="digits placed in front of the number before dialling"),
             Field("priority", "order", "number", default=10, minimum=1, maximum=999,
@@ -304,10 +319,10 @@ _register(
             Field("days", "days", "list", required=True,
                   default=["mon", "tue", "wed", "thu", "fri"],
                   choices=("mon", "tue", "wed", "thu", "fri", "sat", "sun")),
-            Field("open_destination", "when open, send to", required=True,
+            Field("open_destination", "when open, send to", required=True, identifier=True,
                   pattern=_NUMBER_PATTERN,
                   pattern_help="a destination is the number of an extension or a ring group"),
-            Field("closed_destination", "when closed, send to", required=True,
+            Field("closed_destination", "when closed, send to", required=True, identifier=True,
                   pattern=_NUMBER_PATTERN,
                   pattern_help="a destination is the number of an extension or a ring group"),
             Field("enabled", "enabled", "boolean", default=True),
@@ -324,7 +339,8 @@ _register(
         key="number",
         description="plays a greeting and sends the caller where they choose",
         fields=(
-            Field("number", "menu number", required=True, pattern=_NUMBER_PATTERN,
+            Field("number", "menu number", required=True, identifier=True,
+                  pattern=_NUMBER_PATTERN,
                   pattern_help="a menu number is one to ten digits"),
             Field("name", "description", required=True, pattern=_NAME_PATTERN,
                   pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
@@ -332,13 +348,13 @@ _register(
                   pattern=_SOUND_PATTERN,
                   pattern_help="a recording name uses letters, digits, and the marks slash, underscore, and hyphen",
                   help="the recording played when the caller arrives"),
-            Field("options", "options", "map", required=True,
+            Field("options", "options", "map", required=True, identifier=True,
                   pattern=_MAP_PATTERN,
                   pattern_help="options are written as a key, an equals sign, and a destination, separated by commas",
                   help="what each key the caller presses leads to, such as one equals an extension"),
             Field("wait_seconds", "wait time", "number", default=10, minimum=1, maximum=60,
                   help="how long to wait for the caller to choose"),
-            Field("timeout_destination", "if nobody chooses, send to",
+            Field("timeout_destination", "if nobody chooses, send to", identifier=True,
                   pattern=_NUMBER_PATTERN,
                   pattern_help="a destination is the number of an extension, a group, or a queue",
                   help="left empty, the call is hung up"),
@@ -356,11 +372,13 @@ _register(
         key="number",
         description="holds callers in order until somebody is free to answer",
         fields=(
-            Field("number", "queue number", required=True, pattern=_NUMBER_PATTERN,
+            Field("number", "queue number", required=True, identifier=True,
+                  pattern=_NUMBER_PATTERN,
                   pattern_help="a queue number is one to ten digits"),
             Field("name", "description", required=True, pattern=_NAME_PATTERN,
                   pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
-            Field("members", "who answers", "list", required=True, references="extensions",
+            Field("members", "who answers", "list", required=True, identifier=True,
+                  references="extensions",
                   help="the extensions that take calls from this queue"),
             Field("strategy", "how calls are offered", "choice", default="ring all",
                   choices=("ring all", "least recent", "fewest calls", "random",
@@ -371,7 +389,7 @@ _register(
             Field("maximum_waiting", "most callers waiting", "number", default=0,
                   minimum=0, maximum=999,
                   help="callers beyond this are sent to the overflow destination; zero means no limit"),
-            Field("overflow_destination", "when full or timed out, send to",
+            Field("overflow_destination", "when full or timed out, send to", identifier=True,
                   pattern=_NUMBER_PATTERN,
                   pattern_help="a destination is the number of an extension, a group, or a menu"),
             Field("music_class", "music while waiting", default="default",
@@ -391,7 +409,8 @@ _register(
         key="number",
         description="a room several callers can be in at once",
         fields=(
-            Field("number", "room number", required=True, pattern=_NUMBER_PATTERN,
+            Field("number", "room number", required=True, identifier=True,
+                  pattern=_NUMBER_PATTERN,
                   pattern_help="a room number is one to ten digits"),
             Field("name", "description", required=True, pattern=_NAME_PATTERN,
                   pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),

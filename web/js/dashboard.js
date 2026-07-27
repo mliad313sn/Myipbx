@@ -114,21 +114,91 @@
         }, 6000);
     }
 
-    /* A confirmation an operator must give before anything disruptive. */
+    /* The controls inside a container that a keyboard can actually reach. */
+    function focusableWithin(container) {
+        return Array.prototype.filter.call(
+            container.querySelectorAll(
+                'a[href], button:not([disabled]), input:not([disabled]), ' +
+                'select:not([disabled]), textarea:not([disabled]), [tabindex]'
+            ),
+            function (node) {
+                return !node.hasAttribute('hidden') &&
+                    node.getAttribute('tabindex') !== '-1' &&
+                    node.getClientRects().length > 0;
+            }
+        );
+    }
+
+    /* A confirmation an operator must give before anything disruptive.
+     *
+     * A dialogue that claims to be modal has to behave like one. Without this,
+     * the shade covered the page while focus stayed behind it: Tab walked the
+     * navigation the operator could no longer see or click, Escape did
+     * nothing, and a screen reader read the console rather than the question
+     * being asked about deleting a trunk. Focus moves in, stays in, leaves by
+     * Escape or by answering, and returns to whatever opened it. */
     function confirmAction(title, message) {
         return new Promise(function (resolve) {
             nodes.confirmTitle.textContent = numerals.sanitize(title);
             nodes.confirmMessage.textContent = numerals.sanitize(message);
+            state.confirmOpener = document.activeElement;
             nodes.confirmShade.hidden = false;
             state.pendingConfirm = resolve;
+
+            var box = nodes.confirmBox || nodes.confirmShade;
+            /* The cancelling answer takes focus, not the destructive one. A
+             * dialogue that lands on "go ahead" turns a stray Enter into a
+             * deletion. */
+            (nodes.confirmNo || box).focus();
+
+            state.confirmKeydown = function (event) {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    settleConfirm(false);
+                    return;
+                }
+                if (event.key !== 'Tab') {
+                    return;
+                }
+                var stops = focusableWithin(box);
+                if (!stops.length) {
+                    event.preventDefault();
+                    return;
+                }
+                var first = stops[0];
+                var last = stops[stops.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                } else if (stops.indexOf(document.activeElement) === -1) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            };
+            document.addEventListener('keydown', state.confirmKeydown, true);
         });
     }
 
     function settleConfirm(answer) {
         nodes.confirmShade.hidden = true;
+        if (state.confirmKeydown) {
+            document.removeEventListener('keydown', state.confirmKeydown, true);
+            state.confirmKeydown = null;
+        }
+        var opener = state.confirmOpener;
+        state.confirmOpener = null;
         if (state.pendingConfirm) {
             state.pendingConfirm(answer);
             state.pendingConfirm = null;
+        }
+        /* Focus goes back where it came from. Left on the body, the next Tab
+         * starts at the top of the document and the operator loses their
+         * place in a table they were halfway down. */
+        if (opener && document.contains(opener) && typeof opener.focus === 'function') {
+            opener.focus();
         }
     }
 
@@ -163,7 +233,17 @@
             view.hidden = view.id !== 'view-' + name;
         });
         Array.prototype.forEach.call(document.querySelectorAll('.nav-item'), function (item) {
-            item.classList.toggle('active', item.dataset.view === name);
+            var here = item.dataset.view === name;
+            item.classList.toggle('active', here);
+            /* The fill says which section is open to somebody looking at it.
+             * This says the same thing to somebody who is not: without it the
+             * navigation announces twenty-one identical buttons and none of
+             * them is the one you are in. */
+            if (here) {
+                item.setAttribute('aria-current', 'page');
+            } else {
+                item.removeAttribute('aria-current');
+            }
         });
 
         var loader = VIEW_LOADERS[name];
@@ -1467,7 +1547,8 @@
             ['operationsExplanation', 'operations-explanation'],
             ['operationsBody', 'operations-body'],
             ['footerText', 'footer-text'], ['toastHolder', 'toast-holder'],
-            ['confirmShade', 'confirm-shade'], ['confirmTitle', 'confirm-title'],
+            ['confirmShade', 'confirm-shade'], ['confirmBox', 'confirm-box'],
+            ['confirmTitle', 'confirm-title'],
             ['confirmMessage', 'confirm-message'],
             ['confirmYes', 'confirm-yes'], ['confirmNo', 'confirm-no']
         ].forEach(function (pair) {

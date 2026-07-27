@@ -205,6 +205,12 @@
   --mx-brand-primary-pressed: #102a43;
   --mx-brand-on-primary: #ffffff;
   --mx-brand-subtle: #e6eef6;
+  /* The brand used as ink on a surface, rather than as the ground under
+   * white text. The two cannot be one value: a ground light enough for
+   * white text is ink too pale to read on a panel, and the dark theme
+   * inverts which of the two has to move. Wherever the brand colours a
+   * word rather than sits behind one, it is this token. */
+  --mx-brand-text: #1f4e79;
 
   /* The three washes used for a control that sits on the brand ground, where
    * a surface colour would be a patch of the wrong theme rather than a shade
@@ -466,6 +472,16 @@
     --mx-brand-primary-pressed: #275d8e;
     --mx-brand-on-primary: #ffffff;
     --mx-brand-subtle: #1a2c3d;
+    --mx-brand-text: #7db3e0;
+
+    /* On a dark ground the brand is already light, so lightening a control
+     * further pushes it towards its own white text: the header button measured
+     * three point nine one to one that way, under the four point five the text
+     * on it needs. The wash darkens here instead, which separates the control
+     * from the header in the direction the eye expects and returns the white
+     * text to a ratio it passes at. */
+    --mx-brand-on-primary-wash: rgba(0, 0, 0, 0.12);
+    --mx-brand-on-primary-wash-strong: rgba(0, 0, 0, 0.22);
 
     --mx-background-canvas: #12171c;
     --mx-background-surface: #1a2027;
@@ -597,6 +613,16 @@
   --mx-brand-primary-pressed: #275d8e;
   --mx-brand-on-primary: #ffffff;
   --mx-brand-subtle: #1a2c3d;
+  --mx-brand-text: #7db3e0;
+
+  /* On a dark ground the brand is already light, so lightening a control
+   * further pushes it towards its own white text: the header button measured
+   * three point nine one to one that way, under the four point five the text
+   * on it needs. The wash darkens here instead, which separates the control
+   * from the header in the direction the eye expects and returns the white
+   * text to a ratio it passes at. */
+  --mx-brand-on-primary-wash: rgba(0, 0, 0, 0.12);
+  --mx-brand-on-primary-wash-strong: rgba(0, 0, 0, 0.22);
 
   --mx-background-canvas: #12171c;
   --mx-background-surface: #1a2027;
@@ -732,6 +758,7 @@
   --mx-brand-primary-pressed: #102a43;
   --mx-brand-on-primary: #ffffff;
   --mx-brand-subtle: #e6eef6;
+  --mx-brand-text: #1f4e79;
 
   --mx-background-canvas: #f4f6f8;
   --mx-background-surface: #ffffff;
@@ -890,6 +917,7 @@
   --mx-brand-primary-pressed: #041634;
   --mx-brand-on-primary: #ffffff;
   --mx-brand-subtle: #ffffff;
+  --mx-brand-text: #0b3d91;
 
   --mx-background-canvas: #ffffff;
   --mx-background-surface: #ffffff;

@@ -136,8 +136,8 @@ const VIEWS = [
         // First submit a value the appliance must refuse, to prove the
         // validation reaches the operator on the field that caused it.
         report.stage = 'submitting an invalid extension';
-        await page.fill('#field-number', 'not-a-number');
-        await page.fill('#field-name', 'A Test Telephone');
+        await page.fill('#field-extensions-number', 'not-a-number');
+        await page.fill('#field-extensions-name', 'A Test Telephone');
         await page.click('#form-holder-extensions button[type="submit"]');
         await page.waitForTimeout(600);
         const errorText = await page.innerText('#form-holder-extensions .field.has-error .field-error')
@@ -146,8 +146,8 @@ const VIEWS = [
         report.validationMessage = (errorText || '').trim();
 
         report.stage = 'submitting a valid extension';
-        await page.fill('#field-number', '241');
-        await page.fill('#field-name', 'A Test Telephone');
+        await page.fill('#field-extensions-number', '241');
+        await page.fill('#field-extensions-name', 'A Test Telephone');
         await page.click('#form-holder-extensions button[type="submit"]');
         await page.waitForTimeout(900);
 
