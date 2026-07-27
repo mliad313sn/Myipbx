@@ -161,7 +161,7 @@ summarise() {
         log_info "write it to a flash device, or burn it, and start the machine from it"
     fi
 
-    log_info "this appliance assigns no addresses and spells every numeral in full letters"
+    log_info "this appliance assigns no addresses; it spells quantities and keeps identifiers"
 }
 
 main() {

@@ -149,7 +149,7 @@ summarise() {
         fi
     done
 
-    log_info "this appliance assigns no addresses and spells every numeral in full letters"
+    log_info "this appliance assigns no addresses; it spells quantities and keeps identifiers"
 }
 
 main() {

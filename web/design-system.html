@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Appliance design system</title>
+
+<!-- Relative paths, so this page opens from the appliance and equally from a
+     file on a laptop with no server and no network at all. That is the whole
+     point of it: the people who have to review this design work on the same
+     machines the appliance is installed from. -->
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/components.css">
+
+<style>
+/* This page's own furniture. It writes no colour and no size of its own; if it
+ * needed one, that would be a token the system is missing. */
+
+body {
+  margin: 0;
+  background: var(--mx-background-canvas);
+  color: var(--mx-text-primary);
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-size);
+  line-height: var(--mx-type-body-line);
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--mx-space-24);
+}
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: var(--mx-z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mx-space-16);
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: var(--mx-space-16) var(--mx-space-24);
+  border-bottom: 1px solid var(--mx-border-default);
+  background: var(--mx-background-surface);
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: var(--mx-type-heading-1-size);
+  font-weight: var(--mx-type-heading-1-weight);
+  line-height: var(--mx-type-heading-1-line);
+  letter-spacing: var(--mx-type-heading-1-tracking);
+}
+
+.masthead p {
+  margin: var(--mx-space-4) 0 0;
+  color: var(--mx-text-secondary);
+  font-size: var(--mx-type-body-small-size);
+}
+
+.switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mx-space-16);
+}
+
+.switch-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mx-space-4);
+}
+
+section {
+  margin: var(--mx-space-48) 0;
+}
+
+section > h2 {
+  margin: 0 0 var(--mx-space-8);
+  padding-bottom: var(--mx-space-8);
+  border-bottom: 1px solid var(--mx-border-subtle);
+  font-size: var(--mx-type-heading-2-size);
+  font-weight: var(--mx-type-heading-2-weight);
+  line-height: var(--mx-type-heading-2-line);
+}
+
+section > p {
+  max-width: 68ch;
+  color: var(--mx-text-secondary);
+  font-size: var(--mx-type-body-size);
+}
+
+h3 {
+  margin: var(--mx-space-24) 0 var(--mx-space-8);
+  font-size: var(--mx-type-heading-3-size);
+  font-weight: var(--mx-type-heading-3-weight);
+}
+
+h4 {
+  margin: var(--mx-space-16) 0 var(--mx-space-8);
+  color: var(--mx-text-secondary);
+  font-size: var(--mx-type-heading-4-size);
+  font-weight: var(--mx-type-heading-4-weight);
+}
+
+code, .value {
+  font-family: var(--mx-font-mono);
+  font-size: var(--mx-type-monospace-size);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mx-density-inline-gap);
+  align-items: center;
+  margin-bottom: var(--mx-space-12);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mx-density-stack-gap);
+  max-width: 420px;
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--mx-space-12);
+}
+
+.swatch {
+  display: flex;
+  gap: var(--mx-space-8);
+  align-items: center;
+  padding: var(--mx-space-8);
+  border: 1px solid var(--mx-border-subtle);
+  border-radius: var(--mx-radius-medium);
+  background: var(--mx-background-surface);
+}
+
+.swatch__chip {
+  flex: none;
+  width: var(--mx-space-32);
+  height: var(--mx-space-32);
+  border: 1px solid var(--mx-border-strong);
+  border-radius: var(--mx-radius-small);
+}
+
+.swatch__name {
+  font-family: var(--mx-font-mono);
+  font-size: var(--mx-type-caption-size);
+  word-break: break-all;
+}
+
+.swatch__value {
+  color: var(--mx-text-tertiary);
+  font-family: var(--mx-font-mono);
+  font-size: var(--mx-type-caption-size);
+}
+
+.specimen {
+  display: grid;
+  grid-template-columns: minmax(160px, auto) minmax(0, 1fr);
+  gap: var(--mx-space-8) var(--mx-space-24);
+  align-items: baseline;
+  padding: var(--mx-space-16);
+  border: 1px solid var(--mx-border-subtle);
+  border-radius: var(--mx-radius-medium);
+  background: var(--mx-background-surface);
+}
+
+.specimen dt {
+  color: var(--mx-text-tertiary);
+  font-family: var(--mx-font-mono);
+  font-size: var(--mx-type-caption-size);
+}
+
+.specimen dd { margin: 0; }
+
+.ruler {
+  display: inline-block;
+  height: var(--mx-space-16);
+  border-radius: var(--mx-radius-small);
+  background: var(--mx-brand-primary);
+}
+
+.tile {
+  padding: var(--mx-space-16);
+  border: 1px solid var(--mx-border-default);
+  border-radius: var(--mx-radius-medium);
+  background: var(--mx-background-surface);
+  font-size: var(--mx-type-body-small-size);
+}
+
+.theme-previews {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--mx-space-16);
+}
+
+.theme-preview {
+  padding: var(--mx-space-16);
+  border: 1px solid var(--mx-border-default);
+  border-radius: var(--mx-radius-large);
+  background: var(--mx-background-canvas);
+  color: var(--mx-text-primary);
+}
+
+.theme-preview h3 {
+  margin-top: 0;
+  color: var(--mx-text-primary);
+}
+
+.grid-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--mx-space-16);
+}
+
+.note {
+  padding: var(--mx-space-12) var(--mx-space-16);
+  border-left: 3px solid var(--mx-border-selected);
+  background: var(--mx-background-surface-subtle);
+  color: var(--mx-text-secondary);
+  font-size: var(--mx-type-body-small-size);
+}
+</style>
+</head>
+<body>
+
+<a class="mx-skip-link" href="#contents">skip to the design system</a>
+
+<div class="masthead">
+  <div>
+    <h1>Appliance design system</h1>
+    <p>tokens and primitives for the console. no network, no framework, no build step.</p>
+  </div>
+
+  <div class="switches">
+    <div class="switch-group">
+      <label class="mx-label" for="theme-switch">theme</label>
+      <select class="mx-select" id="theme-switch">
+        <option value="">follow the operating system</option>
+        <option value="light">light</option>
+        <option value="dark">dark</option>
+        <option value="high-contrast">high contrast</option>
+      </select>
+    </div>
+
+    <div class="switch-group">
+      <label class="mx-label" for="density-switch">density</label>
+      <select class="mx-select" id="density-switch">
+        <option value="comfortable">comfortable</option>
+        <option value="compact">compact</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<main class="page" id="contents">
+
+<section>
+  <h2>What this page is for</h2>
+  <p>
+    Every colour, size, depth and duration the console may use is named once in
+    <code>css/tokens.css</code>, and every primitive built on those names lives
+    in <code>css/components.css</code>. This page shows all of them, in each
+    theme and each density, so that a change can be judged against everything it
+    affects rather than against the one screen it was made for.
+  </p>
+  <p class="note">
+    Three rules are enforced rather than encouraged. Nothing is fetched from a
+    network, because these appliances are frequently air gapped. No component
+    writes a colour of its own, because a literal colour cannot follow a theme.
+    No state is carried by colour alone: every status below has a mark and a
+    word, and every health lamp has a shape.
+  </p>
+</section>
+
+<section>
+  <h2>Themes</h2>
+  <p>
+    The operating system's own preference is the default signal, and an explicit
+    choice overrides it in both directions — a light console on a dark desktop
+    and a dark console on a light one. The three panels below are drawn at the
+    same time by the same rules, each holding a different theme, which is the
+    quickest way to see a token that has been given a value in one theme and
+    forgotten in another.
+  </p>
+
+  <div class="theme-previews">
+    <div class="theme-preview" data-theme="light">
+      <h3>light</h3>
+      <p class="mx-card__body">trunk carrier-primary, port 5060</p>
+      <div class="row">
+        <span class="mx-status mx-status--success">registered</span>
+        <span class="mx-status mx-status--critical">failed</span>
+      </div>
+      <div class="row">
+        <button type="button" class="mx-button mx-button--primary mx-button--small">apply</button>
+        <button type="button" class="mx-button mx-button--secondary mx-button--small">cancel</button>
+      </div>
+    </div>
+
+    <div class="theme-preview" data-theme="dark">
+      <h3>dark</h3>
+      <p class="mx-card__body">trunk carrier-primary, port 5060</p>
+      <div class="row">
+        <span class="mx-status mx-status--success">registered</span>
+        <span class="mx-status mx-status--critical">failed</span>
+      </div>
+      <div class="row">
+        <button type="button" class="mx-button mx-button--primary mx-button--small">apply</button>
+        <button type="button" class="mx-button mx-button--secondary mx-button--small">cancel</button>
+      </div>
+    </div>
+
+    <div class="theme-preview" data-theme="high-contrast">
+      <h3>high contrast</h3>
+      <p class="mx-card__body">trunk carrier-primary, port 5060</p>
+      <div class="row">
+        <span class="mx-status mx-status--success">registered</span>
+        <span class="mx-status mx-status--critical">failed</span>
+      </div>
+      <div class="row">
+        <button type="button" class="mx-button mx-button--primary mx-button--small">apply</button>
+        <button type="button" class="mx-button mx-button--secondary mx-button--small">cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    The dark theme is not the light one inverted. Its canvas is a dark slate
+    rather than black, its surfaces rise above that canvas instead of sinking
+    below it, and its status colours are chosen again from scratch, because the
+    light theme's greens and reds are dark inks that disappear against a dark
+    panel. The high contrast theme keeps every border and widens the focus ring
+    rather than removing either, and drops shadows entirely, since a soft edge
+    is the thing that theme exists to avoid.
+  </p>
+</section>
+
+<section>
+  <h2>Colour</h2>
+  <p>
+    The swatches read their values from the page as it is drawn, so changing the
+    theme above changes what is reported here. A name describes the job rather
+    than the appearance; that is what lets three themes disagree about the value
+    without a single rule having to know.
+  </p>
+  <div id="colour-tokens"></div>
+</section>
+
+<section>
+  <h2>Typography</h2>
+  <p>
+    System faces only. Nothing is downloaded, so the stack names the faces that
+    ship with an operating system and ends in the generic family. The scale is
+    in relative units, so an operator who has enlarged their browser's text gets
+    a console that grows with it.
+  </p>
+
+  <dl class="specimen">
+    <dt>display-large</dt>
+    <dd style="font-size: var(--mx-type-display-large-size); font-weight: var(--mx-type-display-large-weight); line-height: var(--mx-type-display-large-line); letter-spacing: var(--mx-type-display-large-tracking);">Appliance</dd>
+
+    <dt>display</dt>
+    <dd style="font-size: var(--mx-type-display-size); font-weight: var(--mx-type-display-weight); line-height: var(--mx-type-display-line);">Appliance</dd>
+
+    <dt>heading-1</dt>
+    <dd style="font-size: var(--mx-type-heading-1-size); font-weight: var(--mx-type-heading-1-weight);">Live call activity</dd>
+
+    <dt>heading-2</dt>
+    <dd style="font-size: var(--mx-type-heading-2-size); font-weight: var(--mx-type-heading-2-weight);">Trunk registration</dd>
+
+    <dt>heading-3</dt>
+    <dd style="font-size: var(--mx-type-heading-3-size); font-weight: var(--mx-type-heading-3-weight);">Spans and channels</dd>
+
+    <dt>heading-4</dt>
+    <dd style="font-size: var(--mx-type-heading-4-size); font-weight: var(--mx-type-heading-4-weight);">Guided bring up</dd>
+
+    <dt>body-large</dt>
+    <dd style="font-size: var(--mx-type-body-large-size); line-height: var(--mx-type-body-large-line);">
+      This appliance assigns no addresses and requests none.
+    </dd>
+
+    <dt>body</dt>
+    <dd style="font-size: var(--mx-type-body-size); line-height: var(--mx-type-body-line);">
+      Channel state is pushed from the telephony engine as it happens. Nothing
+      on this page is polled.
+    </dd>
+
+    <dt>body-small</dt>
+    <dd style="font-size: var(--mx-type-body-small-size);">
+      Every address below was written down by an administrator.
+    </dd>
+
+    <dt>label</dt>
+    <dd style="font-size: var(--mx-type-label-size); font-weight: var(--mx-type-label-weight); letter-spacing: var(--mx-type-label-tracking);">host name</dd>
+
+    <dt>caption</dt>
+    <dd style="font-size: var(--mx-type-caption-size); letter-spacing: var(--mx-type-caption-tracking); color: var(--mx-text-tertiary);">peak of twelve concurrent calls</dd>
+
+    <dt>monospace</dt>
+    <dd style="font-family: var(--mx-font-mono); font-size: var(--mx-type-monospace-size);">sip.example.net:5060</dd>
+
+    <dt>numeric-kpi</dt>
+    <dd style="font-size: var(--mx-type-numeric-kpi-size); font-weight: var(--mx-type-numeric-kpi-weight); line-height: var(--mx-type-numeric-kpi-line); font-variant-numeric: var(--mx-type-numeric-kpi-variant);">twelve</dd>
+  </dl>
+
+  <p class="note">
+    The headline figure is set in equal width lining figures. The quantity
+    itself is spelled — an operator reads twelve active calls, never a digit —
+    but an identifier keeps its digits, and an address, a port or a version is
+    what those tabular figures are for.
+  </p>
+</section>
+
+<section>
+  <h2>Spacing</h2>
+  <p>
+    A four pixel baseline. Each step is named by the value it carries, because a
+    name that says what it measures outlives a name that says where it is used.
+  </p>
+  <div id="space-tokens"></div>
+</section>
+
+<section>
+  <h2>Radius, elevation, motion and depth</h2>
+
+  <h3>radius</h3>
+  <div class="row" id="radius-tokens"></div>
+
+  <h3>elevation</h3>
+  <div class="row">
+    <div class="tile" style="box-shadow: var(--mx-elevation-flat);">flat</div>
+    <div class="tile" style="box-shadow: var(--mx-elevation-raised);">raised</div>
+    <div class="tile" style="box-shadow: var(--mx-elevation-floating);">floating</div>
+    <div class="tile" style="box-shadow: var(--mx-elevation-overlay);">overlay</div>
+    <div class="tile" style="box-shadow: var(--mx-elevation-modal);">modal</div>
+  </div>
+
+  <h3>motion</h3>
+  <p>
+    Four durations, all short. This is an operations console: a transition long
+    enough to be admired sits between an operator and the state of a telephone
+    system. An operating system asking for reduced motion takes all four to
+    nothing, and the two components that animate rather than transition are
+    handled where they are defined.
+  </p>
+  <dl class="specimen" id="motion-tokens"></dl>
+
+  <h3>depth</h3>
+  <p>
+    One ordered scale, so that two unrelated parts of the console can never
+    argue about which of them is on top.
+  </p>
+  <dl class="specimen" id="depth-tokens"></dl>
+</section>
+
+<section>
+  <h2>Density</h2>
+  <p>
+    Comfortable is the default, and holds every control to a target of at least
+    forty-four pixels, because the console is used standing at a rack as often
+    as sitting at a desk. Compact gives that up knowingly, for the operator
+    watching many rows at once on a fixed screen. Only measurements move; no
+    colour and no component rule knows which density is in force.
+  </p>
+
+  <div class="grid-two">
+    <div class="tile" data-density="comfortable">
+      <h4>comfortable</h4>
+      <div class="row">
+        <button type="button" class="mx-button mx-button--primary">apply</button>
+        <button type="button" class="mx-button mx-button--secondary">cancel</button>
+      </div>
+      <label class="mx-label" for="density-sample-one">host name</label>
+      <input class="mx-input" id="density-sample-one" type="text" value="pbx-one">
+    </div>
+
+    <div class="tile" data-density="compact">
+      <h4>compact</h4>
+      <div class="row">
+        <button type="button" class="mx-button mx-button--primary">apply</button>
+        <button type="button" class="mx-button mx-button--secondary">cancel</button>
+      </div>
+      <label class="mx-label" for="density-sample-two">host name</label>
+      <input class="mx-input" id="density-sample-two" type="text" value="pbx-one">
+    </div>
+  </div>
+  <dl class="specimen" id="density-tokens"></dl>
+</section>
+
+<section>
+  <h2>Buttons</h2>
+  <p>
+    Four intents and three sizes. Danger is bordered rather than filled: a wall
+    of red buttons stops being a warning, and the word on the button is what
+    says which service it interrupts. Every one of them shows the keyboard ring
+    outside its own edge, so it stays visible on a filled button as well as a
+    transparent one.
+  </p>
+
+  <h4>intent</h4>
+  <div class="row">
+    <button type="button" class="mx-button mx-button--primary">apply the configuration</button>
+    <button type="button" class="mx-button mx-button--secondary">check what is loaded</button>
+    <button type="button" class="mx-button mx-button--danger">restart the machine</button>
+    <button type="button" class="mx-button mx-button--ghost">cancel</button>
+  </div>
+
+  <h4>size</h4>
+  <div class="row">
+    <button type="button" class="mx-button mx-button--primary mx-button--small">small</button>
+    <button type="button" class="mx-button mx-button--primary">medium</button>
+    <button type="button" class="mx-button mx-button--primary mx-button--large">large</button>
+  </div>
+
+  <h4>state</h4>
+  <div class="row">
+    <button type="button" class="mx-button mx-button--primary">resting</button>
+    <button type="button" class="mx-button mx-button--primary mx-button--loading" aria-busy="true">building the drivers</button>
+    <button type="button" class="mx-button mx-button--primary" disabled>unavailable</button>
+    <button type="button" class="mx-button mx-button--secondary" disabled>unavailable</button>
+    <button type="button" class="mx-button mx-button--danger" disabled>unavailable</button>
+  </div>
+
+  <h4>icon button</h4>
+  <div class="row">
+    <button type="button" class="mx-icon-button">
+      <span aria-hidden="true">&#x21bb;</span>
+      <span class="mx-visually-hidden">refresh the call history</span>
+    </button>
+    <button type="button" class="mx-icon-button">
+      <span aria-hidden="true">&#x2715;</span>
+      <span class="mx-visually-hidden">dismiss this notice</span>
+    </button>
+    <button type="button" class="mx-icon-button" disabled>
+      <span aria-hidden="true">&#x2193;</span>
+      <span class="mx-visually-hidden">download a backup</span>
+    </button>
+  </div>
+  <p class="note">
+    An icon button always carries a name that is read aloud and never drawn. An
+    icon on its own is a picture, and a picture is not a label.
+  </p>
+</section>
+
+<section>
+  <h2>Fields</h2>
+
+  <div class="grid-two">
+    <div class="stack">
+      <div class="mx-field">
+        <label class="mx-label mx-label--required" for="field-address">address</label>
+        <input class="mx-input" id="field-address" type="text" value="192.0.2.10"
+               aria-describedby="field-address-help">
+        <p class="mx-help" id="field-address-help">
+          the address this appliance answers on. it is never requested from a
+          network; an administrator writes it down.
+        </p>
+      </div>
+
+      <div class="mx-field">
+        <label class="mx-label" for="field-prefix">prefix length</label>
+        <select class="mx-select" id="field-prefix">
+          <option>twenty-four</option>
+          <option>twenty-five</option>
+          <option>twenty-six</option>
+        </select>
+      </div>
+
+      <div class="mx-field">
+        <label class="mx-label" for="field-certificate">certificate</label>
+        <textarea class="mx-textarea" id="field-certificate" rows="3" spellcheck="false"
+                  placeholder="the certificate, in the usual text form"></textarea>
+        <p class="mx-help">the private key is checked against it before either is stored.</p>
+      </div>
+
+      <div class="mx-field">
+        <label class="mx-label" for="field-disabled">time zone</label>
+        <input class="mx-input" id="field-disabled" type="text" value="Etc/UTC" disabled>
+        <p class="mx-help">a disabled field is dimmed, and also cannot be reached or typed into.</p>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="mx-field">
+        <label class="mx-label mx-label--required" for="field-extension">extension</label>
+        <input class="mx-input" id="field-extension" type="text" value="two hundred one"
+               aria-invalid="true" aria-describedby="field-extension-error">
+        <p class="mx-validation mx-validation--error" id="field-extension-error">
+          an extension is an identifier and keeps its digits, so 201 is what
+          belongs here.
+        </p>
+      </div>
+
+      <div class="mx-field">
+        <label class="mx-label" for="field-port">port</label>
+        <input class="mx-input" id="field-port" type="text" value="5060">
+        <p class="mx-validation mx-validation--warning">
+          this port is open to anywhere. narrow it to the networks that need it.
+        </p>
+      </div>
+
+      <div class="mx-field">
+        <label class="mx-label" for="field-hostname">host name</label>
+        <input class="mx-input" id="field-hostname" type="text" value="pbx-one">
+        <p class="mx-validation mx-validation--success">
+          accepted, and stored. it takes effect when the machine restarts.
+        </p>
+      </div>
+
+      <div class="mx-field">
+        <span class="mx-label">choices</span>
+        <label class="mx-choice">
+          <input class="mx-checkbox" type="checkbox" checked>
+          record this queue
+        </label>
+        <label class="mx-choice">
+          <input class="mx-checkbox" type="checkbox">
+          send unanswered calls to voicemail
+        </label>
+        <label class="mx-choice">
+          <input class="mx-checkbox" type="checkbox" disabled>
+          unavailable while the engine is disconnected
+        </label>
+        <label class="mx-choice">
+          <input class="mx-radio" type="radio" name="transport" checked>
+          encrypted transport
+        </label>
+        <label class="mx-choice">
+          <input class="mx-radio" type="radio" name="transport">
+          plain transport
+        </label>
+        <label class="mx-choice">
+          <input class="mx-switch" type="checkbox" checked>
+          the trunk is enabled
+        </label>
+        <label class="mx-choice">
+          <input class="mx-switch" type="checkbox">
+          the trunk is disabled
+        </label>
+        <label class="mx-choice">
+          <input class="mx-switch" type="checkbox" disabled>
+          unavailable
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    A validation message is a sentence saying what to do, marked and coloured
+    and placed under the field that caused it. The colour is the last of those
+    three, not the first. A required field says the word rather than wearing an
+    asterisk, and a switch says on or off by where its knob sits and by the mark
+    printed in its track.
+  </p>
+</section>
+
+<section>
+  <h2>Status</h2>
+  <p>
+    Eight system conditions and the telephony vocabulary beside them, all drawn
+    by one badge. The mark comes from a value every variant must set, so a
+    variant that forgets one draws nothing and is noticed immediately rather
+    than shipping as a colour-only signal.
+  </p>
+
+  <h4>system conditions</h4>
+  <div class="row">
+    <span class="mx-status mx-status--success">registered</span>
+    <span class="mx-status mx-status--information">reloaded</span>
+    <span class="mx-status mx-status--warning">retrying</span>
+    <span class="mx-status mx-status--critical">failed</span>
+    <span class="mx-status mx-status--offline">disabled</span>
+    <span class="mx-status mx-status--unknown">unknown</span>
+    <span class="mx-status mx-status--maintenance">draining</span>
+    <span class="mx-status mx-status--in-progress">registering</span>
+  </div>
+
+  <h4>telephony</h4>
+  <div class="row">
+    <span class="mx-status mx-status--inbound">inbound</span>
+    <span class="mx-status mx-status--outbound">outbound</span>
+    <span class="mx-status mx-status--internal">internal</span>
+    <span class="mx-status mx-status--external">external</span>
+    <span class="mx-status mx-status--secure">secure</span>
+    <span class="mx-status mx-status--encrypted">encrypted</span>
+    <span class="mx-status mx-status--recorded">recorded</span>
+    <span class="mx-status mx-status--emergency">emergency</span>
+    <span class="mx-status mx-status--queued">queued</span>
+    <span class="mx-status mx-status--answered">answered</span>
+    <span class="mx-status mx-status--missed">missed</span>
+    <span class="mx-status mx-status--failed">failed</span>
+  </div>
+
+  <h4>health indicator</h4>
+  <p>
+    The lamp beside a trunk or a span, where the second channel is shape rather
+    than a mark. A circle, a diamond, a square, a hollow square and a dashed
+    ring are told apart at a distance, which is how this indicator is actually
+    read — from across a room, on a wall display.
+  </p>
+  <div class="row">
+    <span class="mx-health mx-health--operational">
+      <span class="mx-health__lamp" aria-hidden="true"></span>operational
+    </span>
+    <span class="mx-health mx-health--degraded">
+      <span class="mx-health__lamp" aria-hidden="true"></span>degraded
+    </span>
+    <span class="mx-health mx-health--down">
+      <span class="mx-health__lamp" aria-hidden="true"></span>down
+    </span>
+    <span class="mx-health mx-health--maintenance">
+      <span class="mx-health__lamp" aria-hidden="true"></span>under maintenance
+    </span>
+    <span class="mx-health mx-health--unknown">
+      <span class="mx-health__lamp" aria-hidden="true"></span>unknown
+    </span>
+  </div>
+</section>
+
+<section>
+  <h2>Cards, figures and dividers</h2>
+
+  <div class="grid-two">
+    <div class="mx-kpi">
+      <span class="mx-kpi__label">active calls</span>
+      <span class="mx-kpi__figure">twelve</span>
+      <span class="mx-kpi__caption">nine answered</span>
+    </div>
+
+    <div class="mx-kpi">
+      <span class="mx-kpi__label">appliance uptime</span>
+      <span class="mx-kpi__figure">six days</span>
+      <span class="mx-kpi__caption">peak of twenty-one concurrent calls</span>
+    </div>
+
+    <div class="mx-card">
+      <h3 class="mx-card__title">trunk carrier-primary</h3>
+      <p class="mx-card__body">
+        registered against sip.example.net:5060 for three hours. two spans on
+        the card in slot 0000:03:00.0 carry it.
+      </p>
+      <hr class="mx-divider">
+      <div class="row">
+        <span class="mx-status mx-status--success">registered</span>
+        <span class="mx-status mx-status--encrypted">encrypted</span>
+      </div>
+    </div>
+
+    <div class="mx-card mx-card--elevated">
+      <h3 class="mx-card__title">interface card TE420</h3>
+      <p class="mx-card__body">
+        the driver named wcte43xp is bound. four spans, ninety-six channels, no
+        alarm reported.
+      </p>
+      <hr class="mx-divider mx-divider--strong">
+      <span class="mx-status mx-status--maintenance">driver rebuild pending</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Waiting</h2>
+  <p>
+    Both of these say the same thing — the appliance has been asked and has not
+    answered yet — and both need a word beside them, because a shape that turns
+    is not a sentence. The spinner is for an action an operator started; the
+    skeleton is for a region that will fill in on its own.
+  </p>
+
+  <div class="row">
+    <span class="mx-spinner" role="img" aria-label="working"></span>
+    <span>compiling the interface drivers against the running kernel</span>
+  </div>
+
+  <div class="row">
+    <span class="mx-spinner mx-spinner--large" role="img" aria-label="working"></span>
+    <span>applying the ruleset</span>
+  </div>
+
+  <div class="stack" aria-hidden="true">
+    <span class="mx-skeleton mx-skeleton--title"></span>
+    <span class="mx-skeleton mx-skeleton--text"></span>
+    <span class="mx-skeleton mx-skeleton--text"></span>
+    <span class="mx-skeleton mx-skeleton--block"></span>
+  </div>
+
+  <p class="note">
+    Under reduced motion the skeleton stops shimmering and simply sits there,
+    since the shimmer only decorates. The spinner keeps turning, slowly: it is
+    the only sign that a privileged operation is still running, and a frozen
+    spinner reads as a hung console.
+  </p>
+</section>
+
+</main>
+
+<script>
+/*
+ * The switches, and the token tables that read their own values back from the
+ * page. Plain browser scripting in the same style as the console: an immediately
+ * invoked function, var declarations, no framework and nothing fetched.
+ */
+(function () {
+    'use strict';
+
+    var root = document.documentElement;
+
+    /* Named here rather than parsed out of the stylesheet, because a browser
+     * opening this file directly cannot read the rules of a stylesheet it
+     * loaded from disk. A token added to the system and not to this list simply
+     * does not appear, which is the failure this page is meant to make
+     * obvious. */
+    var COLOUR_GROUPS = [
+        {
+            title: 'background',
+            names: [
+                'canvas', 'surface', 'surface-elevated', 'surface-subtle',
+                'hover', 'pressed', 'selected', 'disabled', 'inverse', 'code',
+                'scrim'
+            ],
+            prefix: '--mx-background-'
+        },
+        {
+            title: 'text',
+            names: [
+                'primary', 'secondary', 'tertiary', 'disabled', 'inverse',
+                'link', 'link-hover', 'code'
+            ],
+            prefix: '--mx-text-'
+        },
+        {
+            title: 'border',
+            names: [
+                'default', 'subtle', 'strong', 'focus', 'selected', 'disabled'
+            ],
+            prefix: '--mx-border-'
+        },
+        {
+            title: 'brand',
+            names: [
+                'primary', 'primary-hover', 'primary-pressed', 'on-primary',
+                'subtle'
+            ],
+            prefix: '--mx-brand-'
+        }
+    ];
+
+    var STATUS_CONDITIONS = [
+        'success', 'information', 'warning', 'critical',
+        'offline', 'unknown', 'maintenance', 'in-progress'
+    ];
+
+    var STATUS_ROLES = ['text', 'background', 'border', 'icon'];
+
+    var TELEPHONY_CONDITIONS = [
+        'inbound', 'outbound', 'internal', 'external', 'secure', 'encrypted',
+        'recorded', 'emergency', 'queued', 'answered', 'missed', 'failed'
+    ];
+
+    var TELEPHONY_ROLES = ['text', 'background', 'border'];
+
+    var SPACE_STEPS = [
+        '2', '4', '8', '12', '16', '20', '24', '32', '40', '48', '64', '80'
+    ];
+
+    var RADIUS_STEPS = ['none', 'small', 'medium', 'large', 'full'];
+
+    var MOTION_STEPS = [
+        '--mx-motion-instant', '--mx-motion-fast', '--mx-motion-standard',
+        '--mx-motion-slow', '--mx-motion-ease-standard',
+        '--mx-motion-ease-entrance', '--mx-motion-ease-exit'
+    ];
+
+    var DEPTH_STEPS = [
+        '--mx-z-base', '--mx-z-sticky', '--mx-z-dropdown', '--mx-z-drawer',
+        '--mx-z-overlay', '--mx-z-modal', '--mx-z-toast', '--mx-z-critical-alert'
+    ];
+
+    var DENSITY_STEPS = [
+        '--mx-density-touch-target', '--mx-density-control-height',
+        '--mx-density-control-padding-block', '--mx-density-control-padding-inline',
+        '--mx-density-row-padding-block', '--mx-density-row-padding-inline',
+        '--mx-density-stack-gap', '--mx-density-inline-gap',
+        '--mx-density-card-padding'
+    ];
+
+    function element(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) {
+            node.className = className;
+        }
+        if (text !== undefined && text !== null) {
+            node.textContent = text;
+        }
+        return node;
+    }
+
+    function valueOf(name) {
+        var raw = window.getComputedStyle(root).getPropertyValue(name);
+        return raw ? raw.trim() : 'not defined';
+    }
+
+    function swatch(name) {
+        var holder = element('div', 'swatch');
+        var chip = element('span', 'swatch__chip');
+        chip.style.background = 'var(' + name + ')';
+
+        var text = element('div');
+        text.appendChild(element('div', 'swatch__name', name));
+        text.appendChild(element('div', 'swatch__value', valueOf(name)));
+
+        holder.appendChild(chip);
+        holder.appendChild(text);
+        return holder;
+    }
+
+    function swatchGrid(names) {
+        var grid = element('div', 'swatches');
+        var index;
+        for (index = 0; index < names.length; index += 1) {
+            grid.appendChild(swatch(names[index]));
+        }
+        return grid;
+    }
+
+    function buildColours() {
+        var holder = document.getElementById('colour-tokens');
+        var index;
+        var step;
+        var role;
+        var condition;
+        var group;
+        var names;
+
+        for (index = 0; index < COLOUR_GROUPS.length; index += 1) {
+            group = COLOUR_GROUPS[index];
+            names = [];
+            for (step = 0; step < group.names.length; step += 1) {
+                names.push(group.prefix + group.names[step]);
+            }
+            holder.appendChild(element('h3', null, group.title));
+            holder.appendChild(swatchGrid(names));
+        }
+
+        holder.appendChild(element('h3', null, 'status'));
+        names = [];
+        for (index = 0; index < STATUS_CONDITIONS.length; index += 1) {
+            condition = STATUS_CONDITIONS[index];
+            for (role = 0; role < STATUS_ROLES.length; role += 1) {
+                names.push('--mx-status-' + condition + '-' + STATUS_ROLES[role]);
+            }
+        }
+        holder.appendChild(swatchGrid(names));
+
+        holder.appendChild(element('h3', null, 'telephony'));
+        names = [];
+        for (index = 0; index < TELEPHONY_CONDITIONS.length; index += 1) {
+            condition = TELEPHONY_CONDITIONS[index];
+            for (role = 0; role < TELEPHONY_ROLES.length; role += 1) {
+                names.push('--mx-telephony-' + condition + '-' + TELEPHONY_ROLES[role]);
+            }
+        }
+        holder.appendChild(swatchGrid(names));
+    }
+
+    function buildSpacing() {
+        var holder = document.getElementById('space-tokens');
+        var list = element('dl', 'specimen');
+        var index;
+        var name;
+        var bar;
+        var value;
+
+        for (index = 0; index < SPACE_STEPS.length; index += 1) {
+            name = '--mx-space-' + SPACE_STEPS[index];
+            value = valueOf(name);
+            list.appendChild(element('dt', null, name));
+
+            bar = element('dd');
+            var rule = element('span', 'ruler');
+            rule.style.width = 'var(' + name + ')';
+            bar.appendChild(rule);
+            bar.appendChild(element('span', 'value', ' ' + value));
+            list.appendChild(bar);
+        }
+        holder.appendChild(list);
+    }
+
+    function buildRadius() {
+        var holder = document.getElementById('radius-tokens');
+        var index;
+        var name;
+        var tile;
+
+        for (index = 0; index < RADIUS_STEPS.length; index += 1) {
+            name = '--mx-radius-' + RADIUS_STEPS[index];
+            tile = element('div', 'tile', RADIUS_STEPS[index] + ' — ' + valueOf(name));
+            tile.style.borderRadius = 'var(' + name + ')';
+            holder.appendChild(tile);
+        }
+    }
+
+    function buildList(identifier, names) {
+        var holder = document.getElementById(identifier);
+        var index;
+
+        while (holder.firstChild) {
+            holder.removeChild(holder.firstChild);
+        }
+        for (index = 0; index < names.length; index += 1) {
+            holder.appendChild(element('dt', null, names[index]));
+            holder.appendChild(element('dd', 'value', valueOf(names[index])));
+        }
+    }
+
+    /* Every reported value is read from the page as it currently stands, so a
+     * change of theme or density has to redraw them or the page would report
+     * the previous one. */
+    function refreshReportedValues() {
+        var swatches = document.querySelectorAll('.swatch');
+        var index;
+        var name;
+
+        for (index = 0; index < swatches.length; index += 1) {
+            name = swatches[index].querySelector('.swatch__name').textContent;
+            swatches[index].querySelector('.swatch__value').textContent = valueOf(name);
+        }
+        buildList('motion-tokens', MOTION_STEPS);
+        buildList('depth-tokens', DEPTH_STEPS);
+        buildList('density-tokens', DENSITY_STEPS);
+    }
+
+    function start() {
+        var theme = document.getElementById('theme-switch');
+        var density = document.getElementById('density-switch');
+
+        buildColours();
+        buildSpacing();
+        buildRadius();
+        refreshReportedValues();
+
+        theme.addEventListener('change', function () {
+            if (theme.value) {
+                root.setAttribute('data-theme', theme.value);
+            } else {
+                root.removeAttribute('data-theme');
+            }
+            refreshReportedValues();
+        });
+
+        density.addEventListener('change', function () {
+            root.setAttribute('data-density', density.value);
+            refreshReportedValues();
+        });
+
+        root.setAttribute('data-density', density.value);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
+    }
+}());
+</script>
+
+</body>
+</html>

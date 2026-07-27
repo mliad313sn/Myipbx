@@ -1020,7 +1020,7 @@ summarise() {
     log_info "it starts on an older machine by the legacy path and on a modern machine by the firmware path"
     log_info "it answers on the address the image arrived with, at the port the boot screen names"
     log_info "remove the live medium and start the machine from its disk"
-    log_info "this appliance assigns no addresses and spells every numeral in full letters"
+    log_info "this appliance assigns no addresses; it spells quantities and keeps identifiers"
 }
 
 main() {

@@ -3,19 +3,26 @@
  * Plain stylesheet, no build step, no external font, no remote asset.  The
  * appliance may never reach a network that can fetch anything, so everything
  * the interface needs is served from the appliance itself.
+ *
+ * The colours, sizes and depths this file uses now come from tokens.css, which
+ * is loaded before it. The nine names below are kept as they were and pointed
+ * at the tokens, so that the several hundred rules underneath did not have to
+ * be rewritten to gain the dark and high contrast themes: they ask for the
+ * same nine names and get whichever theme is in force. New work should ask for
+ * the token directly.
  */
 
 :root {
-  --ink: #101418;
-  --ink-soft: #55606b;
-  --paper: #f4f6f8;
-  --card: #ffffff;
-  --rule: #d8dee4;
-  --accent: #1f4e79;
-  --good: #1d7a4c;
-  --warn: #9a6400;
-  --bad: #a32020;
-  --shadow: 0 1px 3px rgba(16, 20, 24, 0.10);
+  --ink: var(--mx-text-primary);
+  --ink-soft: var(--mx-text-secondary);
+  --paper: var(--mx-background-canvas);
+  --card: var(--mx-background-surface);
+  --rule: var(--mx-border-default);
+  --accent: var(--mx-brand-primary);
+  --good: var(--mx-status-success-text);
+  --warn: var(--mx-status-warning-text);
+  --bad: var(--mx-status-critical-text);
+  --shadow: var(--mx-elevation-raised);
 }
 
 * { box-sizing: border-box; }
@@ -28,9 +35,9 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", "DejaVu Sans", system-ui, sans-serif;
-  font-size: 15px;
-  line-height: 1.5;
+  font-family: var(--mx-font-sans);
+  font-size: var(--mx-type-body-size);
+  line-height: var(--mx-type-body-line);
   color: var(--ink);
   background: var(--paper);
 }
@@ -45,7 +52,7 @@ body {
   justify-content: space-between;
   padding: 1rem 1.5rem;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--mx-brand-on-primary);
 }
 
 .appliance-header h1 {
@@ -66,22 +73,39 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--mx-brand-on-primary-wash);
   padding: 0.4rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--mx-radius-full);
 }
 
+/* The lamp changes shape as well as colour, because the shape is the half of
+ * the signal that survives being read by somebody who cannot separate the
+ * green from the amber, or across a room on a wall display. The word beside it
+ * says the same thing again in full, and the lamp is hidden from speech in the
+ * markup so it is not read out twice. */
 .lamp {
   width: 0.7rem;
   height: 0.7rem;
-  border-radius: 50%;
-  background: #8b96a0;
+  border-radius: var(--mx-radius-full);
+  background: var(--mx-status-offline-on-brand);
   flex: none;
 }
 
-.lamp.live { background: #46d07f; }
-.lamp.reconnecting { background: #f0b429; }
-.lamp.stale { background: #ff6b5e; }
+.lamp.live {
+  background: var(--mx-status-success-on-brand);
+  border-radius: var(--mx-radius-full);
+}
+
+.lamp.reconnecting {
+  background: var(--mx-status-warning-on-brand);
+  border-radius: var(--mx-radius-none);
+  transform: rotate(45deg);
+}
+
+.lamp.stale {
+  background: var(--mx-status-critical-on-brand);
+  border-radius: var(--mx-radius-none);
+}
 
 .link-age { opacity: 0.8; }
 
@@ -184,18 +208,49 @@ main {
   font-style: italic;
 }
 
+/* A state pill carries a mark as well as a colour. The mark is drawn from a
+ * value the base rule reads and every variant sets, so a state read down a
+ * column at speed — which is how a trunk table is actually read — is legible
+ * without relying on the colour at all. The pill also always contains the
+ * state in words; the mark is a third channel, not a replacement. */
 .state-pill {
+  --state-pill-mark: var(--mx-status-offline-mark);
   display: inline-block;
   padding: 0.1rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--mx-radius-full);
   font-size: 0.78rem;
-  background: #e7ebef;
-  color: var(--ink-soft);
+  background: var(--mx-status-offline-background);
+  color: var(--mx-status-offline-text);
 }
 
-.state-pill.registered, .state-pill.answered { background: #dff3e7; color: var(--good); }
-.state-pill.registering, .state-pill.retrying, .state-pill.ringing { background: #fbf0d6; color: var(--warn); }
-.state-pill.failed, .state-pill.unknown { background: #fbe0e0; color: var(--bad); }
+.state-pill::before {
+  content: var(--state-pill-mark) " ";
+  font-weight: 700;
+}
+
+.state-pill.registered, .state-pill.answered {
+  --state-pill-mark: var(--mx-status-success-mark);
+  background: var(--mx-status-success-background);
+  color: var(--mx-status-success-text);
+}
+
+.state-pill.registering, .state-pill.retrying, .state-pill.ringing {
+  --state-pill-mark: var(--mx-status-in-progress-mark);
+  background: var(--mx-status-warning-background);
+  color: var(--mx-status-warning-text);
+}
+
+.state-pill.failed {
+  --state-pill-mark: var(--mx-status-critical-mark);
+  background: var(--mx-status-critical-background);
+  color: var(--mx-status-critical-text);
+}
+
+.state-pill.unknown {
+  --state-pill-mark: var(--mx-status-unknown-mark);
+  background: var(--mx-status-unknown-background);
+  color: var(--mx-status-unknown-text);
+}
 
 /* -- alarms ------------------------------------------------------------- */
 
@@ -203,8 +258,27 @@ main {
 
 .alarm-list li { margin-bottom: 0.4rem; }
 
-.alarm-list li.critical { color: var(--bad); }
-.alarm-list li.warning { color: var(--warn); }
+/* An alarm's severity is prefixed as well as coloured. A list where the only
+ * difference between a critical alarm and a warning is the shade of the text
+ * is a list that says nothing to an operator who cannot see the difference,
+ * and nothing at all when it is printed. */
+.alarm-list li.critical {
+  color: var(--mx-status-critical-text);
+}
+
+.alarm-list li.critical::before {
+  content: var(--mx-status-critical-mark) " ";
+  font-weight: 700;
+}
+
+.alarm-list li.warning {
+  color: var(--mx-status-warning-text);
+}
+
+.alarm-list li.warning::before {
+  content: var(--mx-status-warning-mark) " ";
+  font-weight: 700;
+}
 
 .alarm-detail { color: var(--ink-soft); font-size: 0.85rem; }
 
@@ -226,6 +300,8 @@ form input {
   margin-top: 0.25rem;
   border: 1px solid var(--rule);
   border-radius: 5px;
+  background: var(--mx-background-surface);
+  color: var(--mx-text-primary);
   font-size: 0.95rem;
   font-family: inherit;
 }
@@ -236,7 +312,7 @@ button {
   border: 1px solid var(--accent);
   border-radius: 5px;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--mx-brand-on-primary);
   font-size: 0.88rem;
   font-family: inherit;
   cursor: pointer;
@@ -245,14 +321,30 @@ button {
 button:hover { filter: brightness(1.08); }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* Every control on this page shows where the keyboard is. The ring is drawn
+ * outside the control so that it is visible against the page rather than
+ * against a filled button, and it thickens under the high contrast theme
+ * because the token it reads does. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: var(--mx-focus-ring-width) solid var(--mx-border-focus);
+  outline-offset: var(--mx-focus-ring-offset);
+}
+
 button.secondary {
-  background: transparent;
+  background: var(--mx-color-transparent);
   color: var(--accent);
 }
 
+/* The word on a caution button says what it interrupts, and every one of them
+ * asks for confirmation before it acts. The red outline is the third signal,
+ * not the only one. */
 button.caution {
-  background: transparent;
-  border-color: var(--bad);
+  background: var(--mx-color-transparent);
+  border-color: var(--mx-status-critical-border);
   color: var(--bad);
 }
 
@@ -263,10 +355,16 @@ button.caution {
 .failure {
   margin-top: 0.9rem;
   padding: 0.6rem 0.75rem;
+  border: 1px solid var(--mx-status-critical-border);
   border-radius: 5px;
-  background: #fbe0e0;
-  color: var(--bad);
+  background: var(--mx-status-critical-background);
+  color: var(--mx-status-critical-text);
   font-size: 0.87rem;
+}
+
+.failure::before {
+  content: var(--mx-status-critical-mark) " ";
+  font-weight: 700;
 }
 
 /* -- constraints --------------------------------------------------------- */
@@ -315,8 +413,8 @@ button.caution {
 .header-button {
   margin: 0;
   padding: 0.35rem 0.8rem;
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--mx-brand-on-primary-wash-strong);
+  border-color: var(--mx-brand-on-primary-edge);
   font-size: 0.82rem;
 }
 
@@ -348,20 +446,22 @@ button.caution {
   margin: 0;
   padding: 0.4rem 0.6rem;
   text-align: left;
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--mx-color-transparent);
+  border: 1px solid var(--mx-color-transparent);
   border-radius: 5px;
   color: var(--ink);
   font-size: 0.87rem;
   cursor: pointer;
 }
 
-.nav-item:hover { background: #eef2f6; filter: none; }
+.nav-item:hover { background: var(--mx-background-hover); filter: none; }
 
+/* The section an operator is in is filled, coloured and set in a heavier
+ * weight. Weight is the part that still reads when the fill does not. */
 .nav-item.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #ffffff;
+  color: var(--mx-brand-on-primary);
   font-weight: 600;
 }
 
@@ -452,12 +552,24 @@ button.caution {
 .field-error {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
-  color: var(--bad);
+  color: var(--mx-status-critical-text);
   min-height: 0;
 }
 
+/* The mark appears only once a field actually has an error, so an untouched
+ * form is not decorated with warnings it has not earned. The refusal reaches
+ * the operator as a sentence under the field that caused it; the red border
+ * and this mark are how they find that field, not how they read it. */
+.field.has-error .field-error::before {
+  content: var(--mx-status-critical-mark) " ";
+  font-weight: 700;
+}
+
 .field.has-error input,
-.field.has-error select { border-color: var(--bad); }
+.field.has-error select {
+  border-color: var(--mx-status-critical-border);
+  border-width: 2px;
+}
 
 .form-holder { border-left: 3px solid var(--accent); }
 
@@ -490,10 +602,10 @@ button.caution {
   padding: 0.85rem;
   max-height: 460px;
   overflow: auto;
-  background: #10171d;
-  color: #d6e0ea;
-  border-radius: 6px;
-  font-family: "DejaVu Sans Mono", ui-monospace, monospace;
+  background: var(--mx-background-code);
+  color: var(--mx-text-code);
+  border-radius: var(--mx-radius-medium);
+  font-family: var(--mx-font-mono);
   font-size: 0.79rem;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -505,13 +617,25 @@ button.caution {
 .notice {
   margin: 0.9rem 0 0;
   padding: 0.6rem 0.75rem;
+  border: 1px solid var(--mx-status-success-border);
   border-radius: 5px;
-  background: #e4f1e9;
-  color: var(--good);
+  background: var(--mx-status-success-background);
+  color: var(--mx-status-success-text);
   font-size: 0.87rem;
 }
 
-.notice.bad { background: #fbe0e0; color: var(--bad); }
+.notice::before {
+  content: var(--mx-status-success-mark) " ";
+  font-weight: 700;
+}
+
+.notice.bad {
+  border-color: var(--mx-status-critical-border);
+  background: var(--mx-status-critical-background);
+  color: var(--mx-status-critical-text);
+}
+
+.notice.bad::before { content: var(--mx-status-critical-mark) " "; }
 
 .toast-holder {
   position: fixed;
@@ -520,21 +644,48 @@ button.caution {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  z-index: 40;
+  /* Deliberately below the confirmation sheet rather than at the toast level
+   * of the scale. A dialogue asking whether to interrupt a telephone system
+   * must not be partly covered by a notice about something that already
+   * happened. */
+  z-index: var(--mx-z-overlay);
   max-width: min(420px, calc(100vw - 2rem));
 }
 
+/* A toast is bordered and marked rather than filled with a solid colour. A
+ * solid green and a solid red are the same rectangle to an operator who cannot
+ * separate them, and they are also the two colours that cannot both keep white
+ * text legible once the dark theme lightens them. */
 .toast {
   padding: 0.6rem 0.85rem;
+  border: 1px solid var(--mx-status-success-border);
   border-radius: 6px;
-  box-shadow: 0 3px 10px rgba(16, 20, 24, 0.18);
-  background: var(--good);
-  color: #ffffff;
+  box-shadow: var(--mx-elevation-overlay);
+  background: var(--mx-status-success-background);
+  color: var(--mx-status-success-text);
   font-size: 0.86rem;
 }
 
-.toast.bad { background: var(--bad); }
-.toast.warn { background: var(--warn); }
+.toast::before {
+  content: var(--mx-status-success-mark) " ";
+  font-weight: 700;
+}
+
+.toast.bad {
+  border-color: var(--mx-status-critical-border);
+  background: var(--mx-status-critical-background);
+  color: var(--mx-status-critical-text);
+}
+
+.toast.bad::before { content: var(--mx-status-critical-mark) " "; }
+
+.toast.warn {
+  border-color: var(--mx-status-warning-border);
+  background: var(--mx-status-warning-background);
+  color: var(--mx-status-warning-text);
+}
+
+.toast.warn::before { content: var(--mx-status-warning-mark) " "; }
 
 /* -- confirmation --------------------------------------------------------- */
 
@@ -544,15 +695,16 @@ button.caution {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(16, 20, 24, 0.45);
-  z-index: 50;
+  background: var(--mx-background-scrim);
+  z-index: var(--mx-z-modal);
   padding: 1rem;
 }
 
 .confirm-box {
-  background: var(--card);
+  background: var(--mx-background-surface-elevated);
+  border: 1px solid var(--mx-border-default);
   border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(16, 20, 24, 0.3);
+  box-shadow: var(--mx-elevation-modal);
   padding: 1.25rem 1.5rem;
   max-width: 460px;
 }

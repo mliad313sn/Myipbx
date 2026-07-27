@@ -205,6 +205,7 @@
         /\b(?:eth|en[a-z0-9]*|wl[a-z0-9]*|lo|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)\d+\b/g,
         /(?:\/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+/g,
         /\b(?:SIP|HTTP|status|code|error)\s+\d{3}\b/gi,
+        /\b(?:chmod|mode|permissions)\s+[0-7]{3,4}\b/gi,
         /\b(?:errno|error\s+number)\s+\d+\b/gi,
         /\(\s*'[^']*'\s*,\s*\d{1,5}\s*\)/g,
         /\bport(?:\s+number)?\s+\d{1,5}\b/gi,

@@ -17,6 +17,12 @@
  */
 
 :root {
+  /* The browser is told which grounds this page is prepared to be drawn on, so
+   * that the controls it draws itself — a select, a scrollbar, a file picker —
+   * follow the theme instead of staying stubbornly light inside a dark
+   * console. The explicit themes below narrow this to the one they mean. */
+  color-scheme: light dark;
+
   /* -- type ---------------------------------------------------------------
    *
    * System faces only. The first two names are the faces actually present on
@@ -200,6 +206,13 @@
   --mx-brand-on-primary: #ffffff;
   --mx-brand-subtle: #e6eef6;
 
+  /* The three washes used for a control that sits on the brand ground, where
+   * a surface colour would be a patch of the wrong theme rather than a shade
+   * of the header. */
+  --mx-brand-on-primary-wash: rgba(255, 255, 255, 0.12);
+  --mx-brand-on-primary-wash-strong: rgba(255, 255, 255, 0.16);
+  --mx-brand-on-primary-edge: rgba(255, 255, 255, 0.35);
+
   /* -- background ----------------------------------------------------------- */
   --mx-background-canvas: #f4f6f8;
   --mx-background-surface: #ffffff;
@@ -210,6 +223,13 @@
   --mx-background-selected: #dce8f4;
   --mx-background-disabled: #eceff2;
   --mx-background-inverse: #10171d;
+
+  /* A log or a generated ruleset keeps a dark ground in every theme. It is
+   * read the way a terminal is read, in long unwrapped lines, and an operator
+   * comparing it against the terminal beside them should not have to adjust to
+   * a second set of colours. */
+  --mx-background-code: #10171d;
+  --mx-text-code: #d6e0ea;
 
   /* -- text ------------------------------------------------------------------
    *
@@ -293,6 +313,16 @@
   --mx-status-in-progress-border: #b4b7e6;
   --mx-status-in-progress-icon: #43469c;
   --mx-status-in-progress-mark: "\25B8";
+
+  /* Four of the conditions also appear as a lamp on the brand coloured header,
+   * where the surface behind them is neither a light theme nor a dark one.
+   * They are lightened enough to hold against that ground, and the lamp that
+   * uses them is given a distinct shape as well, because a lamp is the one
+   * indicator with no room for a word inside it. */
+  --mx-status-success-on-brand: #46d07f;
+  --mx-status-warning-on-brand: #f0b429;
+  --mx-status-critical-on-brand: #ff6b5e;
+  --mx-status-offline-on-brand: #8b96a0;
 
   /* -- telephony -------------------------------------------------------------
    *
@@ -689,9 +719,151 @@
 }
 
 /* An explicit light choice has to be able to defeat an operating system set to
- * dark, or the switch only works one way. */
+ * dark, or the switch only works one way. The values are restated in full
+ * rather than left to inherit, because this selector is also what re-themes a
+ * region inside a differently themed page — a light sample shown on the dark
+ * showcase, say — and inheritance would carry the surrounding theme into it.
+ */
 [data-theme="light"] {
   color-scheme: light;
+
+  --mx-brand-primary: #1f4e79;
+  --mx-brand-primary-hover: #17395a;
+  --mx-brand-primary-pressed: #102a43;
+  --mx-brand-on-primary: #ffffff;
+  --mx-brand-subtle: #e6eef6;
+
+  --mx-background-canvas: #f4f6f8;
+  --mx-background-surface: #ffffff;
+  --mx-background-surface-elevated: #ffffff;
+  --mx-background-surface-subtle: #eef1f4;
+  --mx-background-hover: #e7ecf1;
+  --mx-background-pressed: #dbe2e9;
+  --mx-background-selected: #dce8f4;
+  --mx-background-disabled: #eceff2;
+  --mx-background-inverse: #10171d;
+  --mx-background-code: #10171d;
+  --mx-background-scrim: rgba(16, 20, 24, 0.45);
+
+  --mx-text-primary: #101418;
+  --mx-text-secondary: #4a5560;
+  --mx-text-tertiary: #64707d;
+  --mx-text-disabled: #939ea9;
+  --mx-text-inverse: #f2f5f8;
+  --mx-text-link: #1f4e79;
+  --mx-text-link-hover: #16395a;
+  --mx-text-code: #d6e0ea;
+
+  --mx-border-default: #d8dee4;
+  --mx-border-subtle: #e7ebef;
+  --mx-border-strong: #8e9aa5;
+  --mx-border-focus: #1f4e79;
+  --mx-border-selected: #1f4e79;
+  --mx-border-disabled: #e2e6ea;
+
+  --mx-focus-ring-width: 2px;
+
+  --mx-status-success-text: #12613b;
+  --mx-status-success-background: #e3f3ea;
+  --mx-status-success-border: #a9d8bf;
+  --mx-status-success-icon: #1d7a4c;
+
+  --mx-status-information-text: #1b4b78;
+  --mx-status-information-background: #e2eefa;
+  --mx-status-information-border: #a9c9e6;
+  --mx-status-information-icon: #1f5f96;
+
+  --mx-status-warning-text: #7a4e00;
+  --mx-status-warning-background: #fbf0d6;
+  --mx-status-warning-border: #e2c37a;
+  --mx-status-warning-icon: #9a6400;
+
+  --mx-status-critical-text: #8c1b1b;
+  --mx-status-critical-background: #fbe3e3;
+  --mx-status-critical-border: #e3a5a5;
+  --mx-status-critical-icon: #a32020;
+
+  --mx-status-offline-text: #46515c;
+  --mx-status-offline-background: #eceff2;
+  --mx-status-offline-border: #cbd3da;
+  --mx-status-offline-icon: #64707d;
+
+  --mx-status-unknown-text: #4b3f66;
+  --mx-status-unknown-background: #eeeaf5;
+  --mx-status-unknown-border: #c6bcdd;
+  --mx-status-unknown-icon: #5d4d80;
+
+  --mx-status-maintenance-text: #14555c;
+  --mx-status-maintenance-background: #dff1f3;
+  --mx-status-maintenance-border: #a3cfd5;
+  --mx-status-maintenance-icon: #1b6f78;
+
+  --mx-status-in-progress-text: #33357a;
+  --mx-status-in-progress-background: #e7e8fa;
+  --mx-status-in-progress-border: #b4b7e6;
+  --mx-status-in-progress-icon: #43469c;
+
+  --mx-status-success-on-brand: #46d07f;
+  --mx-status-warning-on-brand: #f0b429;
+  --mx-status-critical-on-brand: #ff6b5e;
+  --mx-status-offline-on-brand: #8b96a0;
+
+  --mx-telephony-inbound-text: #14555c;
+  --mx-telephony-inbound-background: #dff1f3;
+  --mx-telephony-inbound-border: #a3cfd5;
+
+  --mx-telephony-outbound-text: #33357a;
+  --mx-telephony-outbound-background: #e7e8fa;
+  --mx-telephony-outbound-border: #b4b7e6;
+
+  --mx-telephony-internal-text: #3c4a57;
+  --mx-telephony-internal-background: #eaeef2;
+  --mx-telephony-internal-border: #c4cdd6;
+
+  --mx-telephony-external-text: #6b3f14;
+  --mx-telephony-external-background: #f7ecdf;
+  --mx-telephony-external-border: #dcc0a0;
+
+  --mx-telephony-secure-text: #12613b;
+  --mx-telephony-secure-background: #e3f3ea;
+  --mx-telephony-secure-border: #a9d8bf;
+
+  --mx-telephony-encrypted-text: #12613b;
+  --mx-telephony-encrypted-background: #e3f3ea;
+  --mx-telephony-encrypted-border: #a9d8bf;
+
+  --mx-telephony-recorded-text: #8c1b1b;
+  --mx-telephony-recorded-background: #fbe3e3;
+  --mx-telephony-recorded-border: #e3a5a5;
+
+  --mx-telephony-emergency-text: #8c1b1b;
+  --mx-telephony-emergency-background: #fbe3e3;
+  --mx-telephony-emergency-border: #cc6a6a;
+
+  --mx-telephony-queued-text: #7a4e00;
+  --mx-telephony-queued-background: #fbf0d6;
+  --mx-telephony-queued-border: #e2c37a;
+
+  --mx-telephony-answered-text: #12613b;
+  --mx-telephony-answered-background: #e3f3ea;
+  --mx-telephony-answered-border: #a9d8bf;
+
+  --mx-telephony-missed-text: #7a4e00;
+  --mx-telephony-missed-background: #fbf0d6;
+  --mx-telephony-missed-border: #e2c37a;
+
+  --mx-telephony-failed-text: #8c1b1b;
+  --mx-telephony-failed-background: #fbe3e3;
+  --mx-telephony-failed-border: #e3a5a5;
+
+  --mx-elevation-raised: 0 1px 2px rgba(16, 20, 24, 0.08),
+                         0 1px 3px rgba(16, 20, 24, 0.10);
+  --mx-elevation-floating: 0 2px 4px rgba(16, 20, 24, 0.08),
+                           0 4px 10px rgba(16, 20, 24, 0.12);
+  --mx-elevation-overlay: 0 4px 8px rgba(16, 20, 24, 0.10),
+                          0 8px 24px rgba(16, 20, 24, 0.16);
+  --mx-elevation-modal: 0 8px 16px rgba(16, 20, 24, 0.14),
+                        0 16px 48px rgba(16, 20, 24, 0.24);
 }
 
 [data-theme="dark"] {
@@ -729,6 +901,13 @@
   --mx-background-disabled: #ffffff;
   --mx-background-inverse: #000000;
   --mx-background-scrim: rgba(0, 0, 0, 0.70);
+  --mx-background-code: #000000;
+  --mx-text-code: #ffffff;
+
+  --mx-status-success-on-brand: #6ef0a8;
+  --mx-status-warning-on-brand: #ffd24d;
+  --mx-status-critical-on-brand: #ff9d92;
+  --mx-status-offline-on-brand: #dfe4e9;
 
   --mx-text-primary: #000000;
   --mx-text-secondary: #1a1a1a;

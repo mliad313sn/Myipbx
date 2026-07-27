@@ -405,6 +405,7 @@ IDENTIFIER_SHAPES: tuple[str, ...] = (
     r"(/[A-Za-z0-9._-]*\d[A-Za-z0-9._-]*)+",
     r"\b(SIP|HTTP|status|code|error)\s+\d{3}\b",
     r"\bport(\s+number)?\s+\d{1,5}\b",
+    r"\b(chmod|mode|permissions)\s+[0-7]{3,4}\b",
     r"\b(errno|error\s+number)\s+\d+\b",
     r"\(\s*'[^']*'\s*,\s*\d{1,5}\s*\)",
     r"\b(TDM|TE|AEX|HA|HB|B)\d+[A-Z]?\b",

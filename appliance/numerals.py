@@ -123,6 +123,9 @@ _IDENTIFIER_SHAPES: tuple[re.Pattern[str], ...] = (
     # The address and port pair the networking layer prints when a connection
     # fails. The port inside it is an identifier like any other.
     re.compile(r"\(\s*'[^']*'\s*,\s*\d{1,5}\s*\)"),
+    # A file mode. An operator types it into a command; "zero seven
+    # hundred fifty" is not something chmod accepts.
+    re.compile(r"\b(?:chmod|mode|permissions)\s+[0-7]{3,4}\b", re.IGNORECASE),
     # A port, named as one. An operator opens a port in a firewall and types it
     # into a browser, so it is something they use rather than something they
     # count.

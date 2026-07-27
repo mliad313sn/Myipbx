@@ -118,6 +118,7 @@ _IDENTIFIER_SHAPES=(
     '(eth|en[a-z0-9]*|wl[a-z0-9]*|tty[A-Za-z]*|sd[a-z]|nvme|dahdi|span|zap)[0-9]+'
     '(/[A-Za-z0-9._-]*[0-9][A-Za-z0-9._-]*)+'
     '(SIP|HTTP|status|code|error)[[:space:]]+[0-9]{3}'
+    '([Cc]hmod|[Mm]ode|[Pp]ermissions)[[:space:]]+[0-7]{3,4}'
     '([Ee]rrno|[Ee]rror[[:space:]]+number)[[:space:]]+[0-9]+'
     'port([[:space:]]+number)?[[:space:]]+[0-9]{1,5}'
     '(TDM|TE|AEX|HA|HB|B)[0-9]+[A-Z]?'
@@ -398,6 +399,6 @@ banner() {
     printf '\n'
     printf '  %s\n' "${APPLIANCE_NAME}"
     printf '  %s\n' "$(spell_all "$1")"
-    printf '  this appliance assigns no addresses and spells every numeral in full letters\n'
+    printf '  this appliance assigns no addresses; it spells quantities and keeps identifiers\n'
     printf '\n'
 }

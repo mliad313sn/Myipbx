@@ -4,18 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Legacy-to-Modern IPBX Appliance</title>
+<!-- The token layer first, then the primitives built on it, then this page's
+     own presentation. All three are served by the appliance; nothing here is
+     fetched from anywhere. -->
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/css/components.css">
 <link rel="stylesheet" href="/css/dashboard.css">
 </head>
 <body>
 
-<header class="appliance-header">
+<!-- The console offers twenty-one sections in one column, so a keyboard
+     reaching the page lands in front of all of them. This is the way past. -->
+<a class="mx-skip-link" href="#main-content">skip to the console</a>
+
+<header class="appliance-header" role="banner">
   <div class="masthead">
     <h1>Legacy-to-Modern IPBX Appliance</h1>
     <p class="subtitle">bare metal telephony on legacy Digium interface cards</p>
   </div>
   <div class="header-right">
     <div class="link-state" id="link-state">
-      <span class="lamp" id="link-lamp"></span>
+      <!-- The lamp is a second reading of the text beside it, in colour and in
+           shape. It is hidden from speech so the link condition is announced
+           once rather than twice. -->
+      <span class="lamp" id="link-lamp" aria-hidden="true"></span>
       <span class="link-text" id="link-text">not connected</span>
       <span class="link-age" id="link-age"></span>
     </div>
@@ -23,10 +35,10 @@
   </div>
 </header>
 
-<main>
+<main id="main-content" role="main">
 
-  <section class="panel sign-in" id="sign-in-panel">
-    <h2>sign in</h2>
+  <section class="panel sign-in" id="sign-in-panel" aria-labelledby="sign-in-heading">
+    <h2 id="sign-in-heading">sign in</h2>
     <p class="hint">
       this appliance ships with no default credentials. the installer generated an
       initial password and printed it once during installation.
@@ -475,7 +487,7 @@
   </div>
 </div>
 
-<footer class="appliance-footer">
+<footer class="appliance-footer" role="contentinfo">
   <p id="footer-text">this appliance assigns no addresses</p>
 </footer>
 
