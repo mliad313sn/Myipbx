@@ -24,7 +24,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from . import addresses
 from .logging_setup import get_logger
+
+#: Readings a field may name. Each one is the single place this appliance
+#: decides what a piece of text means, so that no two components can disagree
+#: about the same value.
+_READINGS = {
+    "network": addresses.parse_network,
+    "address": addresses.parse_address,
+}
 
 __all__ = [
     "Field",
@@ -50,6 +59,13 @@ _TIME_PATTERN = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
 _MAP_PATTERN = re.compile(r"^\s*[0-9*#]\s*=\s*[A-Za-z0-9_-]+\s*(,\s*[0-9*#]\s*=\s*[A-Za-z0-9_-]+\s*)*$")
 _SOUND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$")
 #: A network in prefix notation, or the word naming everywhere.
+#:
+#: This is the coarse shape only. The pattern accepted four groups of up to
+#: three digits and checked nothing about them, so nine hundred ninety-nine dot
+#: one dot one dot one saved into the source of truth here and was refused
+#: later, at render time, by the firewall with a different message from a
+#: different component. The reading that decides is the shared one below, so
+#: what is accepted on the way in is what can be rendered on the way out.
 _SOURCE_PATTERN = re.compile(r"^(any|anywhere|(\d{1,3}\.){3}\d{1,3}(/([0-9]|[12][0-9]|3[0-2]))?)$", re.IGNORECASE)
 
 
@@ -85,6 +101,10 @@ class Field:
     secret: bool = False
     #: Names another entity kind whose members this field must reference.
     references: str | None = None
+    #: Named check applied after the pattern, for a value whose validity
+    #: cannot be written as a pattern without disagreeing with the component
+    #: that will act on it later.
+    reading: str = ""
     #: True when the value is a name rather than a quantity -- a number that is
     #: dialled, matched, or read aloud digit by digit. The spelling rule turns
     #: quantities into words, and a quantity is something you could add one to.
@@ -443,7 +463,7 @@ _register(
                            "secure shell", "name resolution"),
                   help="what this rule opens; the console itself is always reachable"),
             Field("source", "reachable from", required=True, default="any",
-                  pattern=_SOURCE_PATTERN,
+                  pattern=_SOURCE_PATTERN, reading="network",
                   pattern_help="a source is a network in prefix notation, or the word any",
                   help="name the networks that need it rather than opening it to everywhere"),
             Field("enabled", "enabled", "boolean", default=True),
@@ -760,6 +780,14 @@ class EntityStore:
 
         if item.pattern is not None and not item.pattern.match(text):
             raise ValidationError({item.name: item.pattern_help or f"{item.label} is not valid"})
+
+        if item.reading:
+            reader = _READINGS.get(item.reading)
+            if reader is not None:
+                try:
+                    return reader(text)
+                except addresses.AddressRefused as error:
+                    raise ValidationError({item.name: str(error)}) from error
 
         return text
 

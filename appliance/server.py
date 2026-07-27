@@ -65,6 +65,7 @@ class Appliance:
         self.credentials = CredentialStore(self.config.credentials_path, hasher)
         self.sessions = SessionStore(
             idle_seconds=self.config.session_idle_seconds,
+            lifetime_seconds=self.config.session_lifetime_seconds,
             maximum=self.config.session_maximum,
         )
         self.throttle = LoginThrottle(

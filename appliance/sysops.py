@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
-from . import numerals
+from . import addresses, numerals
 from .logging_setup import get_logger
 
 __all__ = [
@@ -181,9 +181,14 @@ _VALIDATORS: dict[str, Callable[[str], bool]] = {
 
 
 def _is_address(value: str) -> bool:
-    if not _ADDRESS_PATTERN.match(value):
-        return False
-    return all(0 <= int(part) <= 255 for part in value.split("."))
+    """One reading of an address, shared with the firewall and the schema.
+
+    This used to read each group with the interpreter's own integer
+    conversion, under which ``010`` is ten. The C library that every other
+    program on the machine uses reads ``010`` as octal eight, so a rule this
+    module accepted named one host and the kernel loaded another.
+    """
+    return addresses.is_address(value)
 
 
 @dataclass

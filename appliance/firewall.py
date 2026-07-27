@@ -22,12 +22,11 @@ having passed the schema first.
 
 from __future__ import annotations
 
-import ipaddress
 import re
 
 from typing import Any, Iterable, Mapping
 
-from . import numerals
+from . import addresses, numerals
 from .logging_setup import get_logger
 
 __all__ = [
@@ -105,19 +104,16 @@ def describe_services() -> list[dict[str, Any]]:
 
 
 def _validate_source(source: str) -> str:
-    """Accept a network in prefix notation, or the word naming everywhere."""
-    text = str(source or "").strip().lower()
-    if text in ("any", "anywhere", "0.0.0.0/0", ""):
-        return "0.0.0.0/0"
+    """Accept a network in prefix notation, or the word naming everywhere.
+
+    The reading is the shared one, so that a source the telephony schema
+    accepted on the way in cannot be refused here on the way out with a
+    different message from a different component.
+    """
     try:
-        network = ipaddress.ip_network(text, strict=False)
-    except ValueError as error:
-        raise FirewallError(
-            f"the source named {source} is not a network in prefix notation"
-        ) from error
-    if network.version != 4:
-        raise FirewallError("only version four networks are supported by this ruleset")
-    return str(network)
+        return addresses.parse_network(source)
+    except addresses.AddressRefused as error:
+        raise FirewallError(str(error)) from error
 
 
 def _port_expression(ports: Iterable[Any]) -> str:

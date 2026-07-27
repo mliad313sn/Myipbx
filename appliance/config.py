@@ -116,6 +116,11 @@ class ApplianceConfig:
 
     # --- Security ---------------------------------------------------------
     session_idle_seconds: int = 1800
+    #: The ceiling a busy session cannot lift. Idle expiry alone never ends a
+    #: session that keeps being used, so a console left open on a wall display
+    #: -- or a stolen token being polled -- renews itself indefinitely. Twelve
+    #: hours is longer than a working day and shorter than two.
+    session_lifetime_seconds: int = 43200
     session_maximum: int = 64
     login_attempt_limit: int = 5
     login_lockout_seconds: int = 300
@@ -282,6 +287,11 @@ class ApplianceConfig:
             )
         if self.session_idle_seconds < 60:
             raise ConfigError("the session idle expiry must be at least sixty seconds")
+        if self.session_lifetime_seconds < self.session_idle_seconds:
+            raise ConfigError(
+                "the session lifetime cannot be shorter than the idle expiry, "
+                "which would end every session the moment it began"
+            )
         if self.password_iterations < 100000:
             raise ConfigError("the key derivation iteration count is too low to ship")
         if self.worker_pool_size < 1:

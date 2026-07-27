@@ -131,12 +131,26 @@ class SessionStore:
         idle_seconds: int = 1800,
         maximum: int = 64,
         clock: Callable[[], float] | None = None,
+        lifetime_seconds: int = 43200,
     ) -> None:
         if idle_seconds < 60:
             raise ValueError("the idle expiry must be at least sixty seconds")
         if maximum < 1:
             raise ValueError("at least one session must be permitted")
+        if lifetime_seconds < idle_seconds:
+            raise ValueError(
+                "the absolute lifetime cannot be shorter than the idle expiry"
+            )
         self.idle_seconds = idle_seconds
+        #: How long a session may live, however busy it is.
+        #:
+        #: Idle expiry alone never ends a session that keeps being used. A
+        #: console left open on a wall display, or a token an attacker holds
+        #: and polls, renews itself every time it is touched and lives until
+        #: the appliance restarts. Twelve hours is longer than a working day
+        #: and shorter than a week of one, so an operator signs in each
+        #: morning and a stolen token stops working by the next.
+        self.lifetime_seconds = lifetime_seconds
         self.maximum = maximum
         self._clock = clock or time.monotonic
         self._sessions: dict[str, Session] = {}
@@ -180,6 +194,15 @@ class SessionStore:
         if now - session.last_seen_at > self.idle_seconds:
             self._sessions.pop(self._index(token), None)
             return None
+        # And a ceiling that being busy cannot lift. Touching a session moves
+        # its idle clock but not the moment it was created.
+        if now - session.created_at > self.lifetime_seconds:
+            self._sessions.pop(self._index(token), None)
+            _LOG.info(
+                "a session reached its absolute lifetime and was ended; "
+                "the account named %s must sign in again", session.username,
+            )
+            return None
         if touch:
             session.last_seen_at = now
         return session
@@ -200,6 +223,7 @@ class SessionStore:
             index
             for index, session in self._sessions.items()
             if now - session.last_seen_at > self.idle_seconds
+            or now - session.created_at > self.lifetime_seconds
         ]
         for index in stale:
             del self._sessions[index]

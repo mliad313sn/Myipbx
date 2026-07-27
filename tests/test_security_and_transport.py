@@ -98,7 +98,8 @@ class SessionStoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self.moment = 1000.0
         self.store = SessionStore(
-            idle_seconds=60, maximum=3, clock=lambda: self.moment
+            idle_seconds=60, lifetime_seconds=600, maximum=3,
+            clock=lambda: self.moment,
         )
 
     def test_a_created_session_validates_and_carries_its_owner(self) -> None:
@@ -125,6 +126,44 @@ class SessionStoreTests(unittest.TestCase):
         for _ in range(10):
             self.moment += 30
             self.assertIsNotNone(self.store.validate(token))
+
+    def test_activity_cannot_extend_a_session_past_its_lifetime(self) -> None:
+        """The ceiling being busy cannot lift.
+
+        Idle expiry alone never ends a session that keeps being used. A console
+        left open on a wall display renews itself every time the page polls,
+        and so does a token an attacker has taken and is polling: both live
+        until the appliance restarts. This is the other half of the rule.
+        """
+        token = self.store.create("administrator")
+        for _ in range(20):
+            self.moment += 30
+            self.assertIsNotNone(
+                self.store.validate(token),
+                "a session ended before its lifetime while in constant use",
+            )
+        # Exactly ten minutes in, and still live: the boundary belongs to the
+        # session, the same way the idle boundary does.
+
+        self.moment += 1
+        self.assertIsNone(
+            self.store.validate(token),
+            "a session in constant use outlived its absolute lifetime",
+        )
+        self.assertEqual(len(self.store), 0)
+
+    def test_a_session_past_its_lifetime_is_purged_without_being_asked_for(self) -> None:
+        """The sweep must find it too, or a dead session holds a place in the
+        population ceiling until somebody happens to present its token."""
+        self.store.create("administrator")
+        self.moment += 601
+        self.assertEqual(self.store.purge_expired(), 1)
+        self.assertEqual(len(self.store), 0)
+
+    def test_a_lifetime_shorter_than_the_idle_expiry_is_refused(self) -> None:
+        """It would end every session at the moment it began."""
+        with self.assertRaises(ValueError):
+            SessionStore(idle_seconds=600, lifetime_seconds=60)
 
     def test_a_revoked_session_stops_validating(self) -> None:
         token = self.store.create("administrator")
