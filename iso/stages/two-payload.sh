@@ -182,12 +182,19 @@ install_control_plane() {
     fi
 
     local prefix="${CHROOT_DIR}/opt/myipbx"
-    mkdir -p "${prefix}/appliance" "${prefix}/web/js" "${prefix}/web/css" "${prefix}/bin/lib"
+    mkdir -p "${prefix}/appliance" "${prefix}/web/js" "${prefix}/web/css" \
+             "${prefix}/bin/lib" "${prefix}/share"
 
     install -m 0644 "${REPOSITORY_ROOT}"/appliance/*.py "${prefix}/appliance/"
     install -m 0644 "${REPOSITORY_ROOT}"/web/index.html "${prefix}/web/"
     install -m 0644 "${REPOSITORY_ROOT}"/web/js/*.js "${prefix}/web/js/"
     install -m 0644 "${REPOSITORY_ROOT}"/web/css/*.css "${prefix}/web/css/"
+
+    # The data the control plane reads, which is not a module and so is not
+    # carried by the line above. The interface card catalogue lives here; an
+    # image without it names every fitted card "an unrecognised Digium
+    # interface card", which is a fault nobody sees until a card is fitted.
+    install -m 0644 "${REPOSITORY_ROOT}"/share/* "${prefix}/share/"
 
     # The privileged helper and the staging scripts it delegates to.
     install -m 0755 "${REPOSITORY_ROOT}/scripts/myipbx-privileged-helper.sh" "${prefix}/bin/"
@@ -252,6 +259,10 @@ verify_payload() {
     fi
     if ! in_chroot test -f /opt/myipbx/web/index.html; then
         log_error "the console is not present in the image"
+        failures=$(( failures + 1 ))
+    fi
+    if ! in_chroot test -f /opt/myipbx/share/digium-cards.tsv; then
+        log_error "the interface card catalogue is not present in the image, so every fitted card would be reported as unrecognised"
         failures=$(( failures + 1 ))
     fi
     if ! in_chroot bash -c 'ls /boot/vmlinuz-* >/dev/null 2>&1'; then

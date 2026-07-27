@@ -210,6 +210,27 @@ class TheInstalledAppliancePathTests(unittest.TestCase):
         looked_in = {str(path) for path in hardware._CATALOGUE_LOCATIONS}
         self.assertIn("/opt/myipbx/share/digium-cards.tsv", looked_in)
 
+    def test_the_image_carries_it_and_checks_that_it_did(self) -> None:
+        """The same gap, in the other place the package is laid down.
+
+        The image build copies the modules and the console by glob. Data files
+        are neither, so the catalogue would have been missing from a finished
+        image exactly as it was missing from an installation -- and an image is
+        harder to inspect afterwards than a machine is.
+        """
+        payload = (REPOSITORY_ROOT / "iso" / "stages" / "two-payload.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            '"${REPOSITORY_ROOT}"/share/*', payload,
+            "the image build does not carry the data the control plane reads",
+        )
+        self.assertIn(
+            "/opt/myipbx/share/digium-cards.tsv", payload,
+            "the image build never checks that the catalogue arrived, so a "
+            "silent omission would ship",
+        )
+
     def test_the_preflight_script_looks_there_too(self) -> None:
         text = PREFLIGHT.read_text(encoding="utf-8")
         self.assertIn("APPLIANCE_PREFIX:-/opt/myipbx}/share/digium-cards.tsv", text)
