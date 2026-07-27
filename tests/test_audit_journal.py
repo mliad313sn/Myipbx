@@ -174,6 +174,60 @@ class RecordedThroughTheGuardTests(unittest.IsolatedAsyncioTestCase):
         raw = self.appliance.config.journal_path.read_text(encoding="utf-8")
         self.assertNotIn("a-very-distinctive-guess", raw)
 
+    async def test_producing_a_backup_is_recorded_even_though_it_changes_nothing(self) -> None:
+        """A read that emits the whole site is worth an entry.
+
+        The guard records writes, because a write changes the machine. These
+        two change nothing and are recorded anyway: they put the entire
+        configuration -- and, when asked, every password on the appliance --
+        into a file that somebody then sends somewhere. That an archive was
+        produced, by whom and from where, is exactly the entry wanted
+        afterwards, and no write route would ever have carried it.
+        """
+        await self.harness.sign_in()
+        await self.harness.request("GET", "/api/backup?include_secrets=yes")
+
+        entries = self.appliance.journal.recent()
+        exports = [entry for entry in entries if entry["target"] == "/api/backup"]
+        self.assertTrue(exports, f"a backup left no trace: {entries}")
+        self.assertEqual(exports[0]["action"], "EXPORT")
+        self.assertEqual(exports[0]["actor"], TEST_USERNAME)
+        self.assertIn("every password in the clear", exports[0]["outcome"])
+
+    async def test_a_backup_without_secrets_is_recorded_as_such(self) -> None:
+        await self.harness.sign_in()
+        await self.harness.request("GET", "/api/backup?include_secrets=no")
+        exports = [
+            entry for entry in self.appliance.journal.recent()
+            if entry["target"] == "/api/backup"
+        ]
+        self.assertTrue(exports)
+        self.assertIn("no password", exports[0]["outcome"])
+
+    async def test_producing_a_support_bundle_is_recorded(self) -> None:
+        await self.harness.sign_in()
+        await self.harness.request("GET", "/api/support-bundle")
+        exports = [
+            entry for entry in self.appliance.journal.recent()
+            if entry["target"] == "/api/support-bundle"
+        ]
+        self.assertTrue(exports, "a support bundle left no trace")
+        self.assertEqual(exports[0]["action"], "EXPORT")
+
+    async def test_an_ordinary_read_is_not_recorded(self) -> None:
+        """The journal is a record of consequence, not a request log.
+
+        An entry for every dashboard poll would bury the entries that matter
+        under thousands that do not, and the console polls.
+        """
+        await self.harness.sign_in()
+        for _ in range(3):
+            await self.harness.request("GET", "/api/state")
+        entries = self.appliance.journal.recent()
+        self.assertEqual(
+            [entry for entry in entries if entry["target"] == "/api/state"], []
+        )
+
     async def test_no_write_route_is_silent(self) -> None:
         """The reason the recording lives in the guard rather than in handlers.
 

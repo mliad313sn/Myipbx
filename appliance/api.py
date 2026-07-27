@@ -126,7 +126,10 @@ def build_router(context: Any) -> Router:
 
     # -- backup and restore -------------------------------------------------
     router.get("/api/backup", guard.read(lambda request: _backup(context, request)))
-    router.get("/api/support-bundle", guard.read(lambda request: _support_bundle(context)))
+    router.get(
+        "/api/support-bundle",
+        guard.read(lambda request: _support_bundle(context, request)),
+    )
     router.post("/api/restore", guard.write(lambda request: _restore(context, request)))
 
     router.serve_static(context.config.web_root)
@@ -1166,7 +1169,14 @@ def _backup(context: Any, request: Request) -> Response:
     try:
         payload, name = backup.create(context, include_secrets=include_secrets)
     except OSError as error:
+        _record_export(context, request, "/api/backup", f"refused: {error}")
         return Response.error(500, f"the backup could not be produced: {error}")
+
+    _record_export(
+        context, request, "/api/backup",
+        "produced, carrying every password in the clear" if include_secrets
+        else "produced, carrying no password",
+    )
 
     return Response(
         status=200,
@@ -1180,7 +1190,33 @@ def _backup(context: Any, request: Request) -> Response:
     )
 
 
-def _support_bundle(context: Any) -> Response:
+def _record_export(context: Any, request: Request, target: str, outcome: str) -> None:
+    """Record a read that leaves the appliance carrying the site with it.
+
+    The journal is written by the guard that fronts every write, because a
+    write changes the machine. These two do not change anything and are
+    recorded anyway: they emit the whole configuration -- and, when asked,
+    every password on it -- into a file somebody then sends somewhere. That an
+    archive was produced, by whom and from where, is exactly the entry wanted
+    afterwards, and no write route would ever have carried it.
+    """
+    journal = getattr(context, "journal", None)
+    if journal is None:
+        return
+    session = getattr(request, "session", None)
+    try:
+        journal.record(
+            actor=getattr(session, "username", "") or "an unidentified account",
+            source=getattr(request, "peer", "") or "an unrecorded address",
+            action="EXPORT",
+            target=target,
+            outcome=outcome,
+        )
+    except Exception:  # pragma: no cover - a journal must never break a read
+        _LOG.warning("an export could not be recorded in the journal")
+
+
+def _support_bundle(context: Any, request: Request) -> Response:
     """Everything a remote engineer needs, in one file.
 
     The exchange this replaces is a dozen messages long -- what does the
@@ -1195,9 +1231,15 @@ def _support_bundle(context: Any) -> Response:
     try:
         payload, name = supportbundle.create(context)
     except OSError as error:
+        _record_export(context, request, "/api/support-bundle", f"refused: {error}")
         return Response.error(
             500, f"the support bundle could not be produced: {error}"
         )
+
+    _record_export(
+        context, request, "/api/support-bundle",
+        "produced, describing this site and carrying no password",
+    )
 
     return Response(
         status=200,
