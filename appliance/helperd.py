@@ -204,7 +204,17 @@ class _Server(socketserver.ThreadingUnixStreamServer):
 
     daemon_threads = True
     allow_reuse_address = True
-    request_queue_size = 16
+
+    # How many connections the kernel holds while the daemon is accepting.
+    #
+    # This is not a throughput setting, it is a burst setting, and it was too
+    # small.  The appliance is specified to carry one hundred dashboards at
+    # once, and a single operator action on each is enough to make them all ask
+    # for a privileged operation in the same instant.  With a queue of sixteen
+    # the rest were refused by the kernel before the daemon ever saw them, and
+    # the operator was told the connection was lost -- which is true, and tells
+    # them nothing they can act on.
+    request_queue_size = 128
 
     def __init__(self, path: str, daemon: "HelperDaemon") -> None:
         self.daemon_reference = daemon

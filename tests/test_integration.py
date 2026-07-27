@@ -130,6 +130,51 @@ class InterfaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 403)
         self.assertIn("origin", payload["error"])
 
+    async def test_a_foreign_origin_is_refused_on_the_sign_in_route(self) -> None:
+        """Signing in is a write route too, and was the one that went unchecked.
+
+        Every other write route demands a session before it looks at the
+        origin, so signing in could not use the same guard and ended up with no
+        origin check at all — leaving the one route an attacker would aim at
+        first as the only one not covered by the rule.
+        """
+        status, _, payload = await self.harness.request(
+            "POST", "/api/session",
+            body=json.dumps(
+                {"username": TEST_USERNAME, "password": TEST_PASSWORD}
+            ),
+            extra_headers={"Origin": "https://an-attacker.example"},
+        )
+        self.assertEqual(status, 403)
+        self.assertIn("origin", payload["error"])
+        self.assertFalse(numerals.contains_digit(payload["error"]))
+
+    async def test_signing_in_from_the_appliance_own_origin_still_works(self) -> None:
+        status, headers, _ = await self.harness.request(
+            "POST", "/api/session",
+            body=json.dumps(
+                {"username": TEST_USERNAME, "password": TEST_PASSWORD}
+            ),
+            extra_headers={"Origin": f"http://127.0.0.1:{self.harness.port}"},
+        )
+        self.assertEqual(status, 200)
+        self.assertIn("set-cookie", {name.lower() for name in headers})
+
+    async def test_signing_in_without_an_origin_header_still_works(self) -> None:
+        """A request with no origin did not come from a browser page.
+
+        Refusing those would break every script and every recovery procedure
+        that signs in from the appliance's own command line, and they are not
+        the threat the check exists to defeat.
+        """
+        status, _, _ = await self.harness.request(
+            "POST", "/api/session",
+            body=json.dumps(
+                {"username": TEST_USERNAME, "password": TEST_PASSWORD}
+            ),
+        )
+        self.assertEqual(status, 200)
+
     async def test_the_appliance_own_origin_is_accepted(self) -> None:
         cookie = await self.harness.sign_in()
         status, _, _ = await self.harness.request(

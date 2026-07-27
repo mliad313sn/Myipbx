@@ -73,6 +73,13 @@ class ApplianceConfig:
     asterisk_configuration_directory: str = "/etc/asterisk"
     log_file: str = "/var/log/myipbx/appliance.log"
     privileged_helper: str = "/opt/myipbx/bin/myipbx-privileged-helper.sh"
+
+    # Where the daemon that holds the privilege is listening.  The control
+    # plane holds none of its own and reaches every system operation through
+    # this socket, so an appliance whose daemon listens elsewhere -- a second
+    # appliance on one machine, or a test standing one up in a temporary
+    # directory -- could not be configured at all while this was fixed in code.
+    privileged_socket: str = "/run/myipbx/helper.sock"
     call_record_file: str = "/var/log/asterisk/cdr-csv/Master.csv"
     log_level: str = "INFO"
 

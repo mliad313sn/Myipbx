@@ -77,7 +77,9 @@ class Appliance:
 
         # -- the machine, and the operations the interface may perform on it -
         self.system = SystemStatus()
-        self.operations = PrivilegedOperations(self.config.privileged_helper)
+        self.operations = PrivilegedOperations(
+            self.config.privileged_helper, self.config.privileged_socket
+        )
         self.logs = LogReader()
         self.calls = CallRecordReader(self.config.call_record_file)
 

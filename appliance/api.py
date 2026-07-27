@@ -46,7 +46,9 @@ def build_router(context: Any) -> Router:
     # -- unauthenticated -------------------------------------------------
     router.get("/api/health", lambda request: _health(context, request))
     router.get("/api/session", lambda request: _session_status(context, request))
-    router.post("/api/session", lambda request: _sign_in(context, request))
+    router.post(
+        "/api/session", guard.unauthenticated_write(lambda request: _sign_in(context, request))
+    )
 
     # -- authenticated reads ---------------------------------------------
     router.get("/api/state", guard.read(lambda request: state_cache.response()))
@@ -143,6 +145,30 @@ class _Guard:
             refusal = self._authenticate(request)
             if refusal is not None:
                 return refusal
+            refusal = self._check_origin(request)
+            return refusal if refusal is not None else handler(request)
+
+        return wrapped
+
+    def unauthenticated_write(
+        self, handler: Callable[[Request], Any]
+    ) -> Callable[[Request], Any]:
+        """Guard a write that cannot require a session, because it grants one.
+
+        Signing in is the one route that changes something and cannot demand an
+        existing session, so it cannot use the guard above.  It was therefore
+        the one write route reached with no origin check at all, which left the
+        appliance's stated posture -- that every write route checks the origin
+        -- true of every route but the one an attacker would aim at first.
+
+        What this closes is a page on another site driving a browser to sign in
+        against this appliance.  The session that results is useless to that
+        page, because the cookie is refused on any cross site request, but a
+        victim silently signed in as somebody else is a poor thing to leave
+        possible when the check costs nothing.
+        """
+
+        def wrapped(request: Request) -> Any:
             refusal = self._check_origin(request)
             return refusal if refusal is not None else handler(request)
 

@@ -65,6 +65,12 @@ _LENGTH_PREFIX = struct.Struct("!I")
 #: make the control plane allocate without bound.
 _MAXIMUM_REPLY_BYTES = 1024 * 1024
 
+#: How many times a connection to the privileged daemon is attempted, and the
+#: first pause between attempts.  Only the connection is retried; see _connect
+#: for why nothing after it may be.
+_CONNECT_ATTEMPTS = 4
+_RETRY_INITIAL_SECONDS = 0.05
+
 #: The services the appliance is permitted to control.  Anything outside this
 #: set is refused, so a request cannot reach an unrelated system service.
 MANAGED_SERVICES = ("asterisk", "myipbx", "dahdi")
@@ -350,6 +356,40 @@ class PrivilegedOperations:
             duration_seconds=duration,
         )
 
+    async def _connect(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Open the connection, retrying only while it is safe to retry.
+
+        A burst of dashboards acting at once can fill the daemon's accept queue
+        and have the kernel refuse the rest.  That is transient by nature and
+        the obvious answer is to try again — but retrying a privileged
+        operation is only safe while it is certain the request has not been
+        sent, because the verbs include restarting the engine and restarting
+        the machine, and doing either of those twice is not a small matter.
+
+        Connecting is the one moment where that certainty exists, so the retry
+        lives here and nowhere else.  A failure after this point is reported,
+        never repeated.
+        """
+        delay = _RETRY_INITIAL_SECONDS
+        last: OSError | None = None
+
+        for _ in range(_CONNECT_ATTEMPTS):
+            try:
+                return await asyncio.open_unix_connection(str(self.socket_path))
+            except (ConnectionError, BlockingIOError, TimeoutError) as error:
+                # The daemon is there and momentarily full.  Nothing was sent.
+                last = error
+                await asyncio.sleep(delay)
+                delay *= 2
+            except OSError:
+                # The socket is absent or unusable, which more waiting will not
+                # mend, so it is reported at once.
+                raise
+
+        raise last if last is not None else ConnectionError(
+            "the privileged helper could not be reached"
+        )
+
     async def _default_runner(
         self, vector: Sequence[str], timeout_seconds: float
     ) -> tuple[int, str]:
@@ -360,7 +400,7 @@ class PrivilegedOperations:
         leave a half read request behind for the next one to be confused by,
         which is worth more here than the cost of connecting each time.
         """
-        reader, writer = await asyncio.open_unix_connection(str(self.socket_path))
+        reader, writer = await self._connect()
         try:
             request = json.dumps(
                 {"verb": vector[0], "arguments": list(vector[1:])}

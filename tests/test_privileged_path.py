@@ -21,6 +21,7 @@ import os
 import socket
 import struct
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -54,6 +55,7 @@ class _RealHelperFixture(unittest.TestCase):
             "#!/bin/sh\n"
             'printf "verb=%s args=%s\\n" "$1" "$*"\n'
             'if [ "$1" = "firewall-clear" ]; then exit 3; fi\n'
+            'if [ "$1" = "driver-rebuild" ]; then sleep 2; fi\n'
             "exit 0\n",
             encoding="utf-8",
         )
@@ -288,6 +290,52 @@ class UnavailableDaemonTests(unittest.TestCase):
         outcome = asyncio.run(operations.run("engine-reload"))
         self.assertFalse(outcome.succeeded)
         self.assertIn("not running", outcome.detail)
+
+
+class BurstTests(_RealHelperFixture):
+    """A burst of operators must not have their requests dropped.
+
+    The appliance is specified to carry one hundred dashboards at once, and one
+    operator action on each is enough to make them all ask for a privileged
+    operation in the same instant. The daemon's accept queue used to hold
+    sixteen, so the kernel refused the rest before the daemon saw them and the
+    operator was told the connection was lost — true, and nothing they could
+    act on.
+    """
+
+    def test_a_burst_of_requests_is_answered_rather_than_dropped(self) -> None:
+        async def burst() -> list:
+            return await asyncio.gather(
+                *[self.operations.run("firewall-status") for _ in range(120)],
+                return_exceptions=True,
+            )
+
+        outcomes = asyncio.run(burst())
+        failed = [
+            outcome
+            for outcome in outcomes
+            if isinstance(outcome, BaseException) or not outcome.succeeded
+        ]
+        self.assertEqual(
+            failed,
+            [],
+            "requests were dropped under a burst: "
+            + "; ".join(str(getattr(f, "detail", f)) for f in failed[:3]),
+        )
+
+    def test_a_slow_operation_does_not_block_a_quick_one(self) -> None:
+        """Rebuilding drivers takes minutes and must not hold up a status read."""
+
+        async def both() -> float:
+            slow = asyncio.create_task(self.operations.run("driver-rebuild"))
+            await asyncio.sleep(0.2)
+            started = time.monotonic()
+            await self.operations.run("service-status", {"service": "asterisk"})
+            elapsed = time.monotonic() - started
+            await slow
+            return elapsed
+
+        self.assertLess(asyncio.run(both()), 2.0)
 
 
 class RefusedCallerSeesAReasonTests(unittest.TestCase):
