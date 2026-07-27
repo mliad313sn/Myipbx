@@ -49,7 +49,6 @@ class PrivilegedOperationTests(unittest.IsolatedAsyncioTestCase):
 
         self.operations = PrivilegedOperations(
             helper_path=__file__,  # any existing executable-ish path
-            elevate=False,
             runner=runner,
         )
         # The helper existence check must pass for the invocation tests.
@@ -157,7 +156,7 @@ class PrivilegedOperationTests(unittest.IsolatedAsyncioTestCase):
         async def failing(command, timeout):
             return 1, "the service manager refused"
 
-        operations = PrivilegedOperations(helper_path=__file__, elevate=False, runner=failing)
+        operations = PrivilegedOperations(helper_path=__file__, runner=failing)
         operations.available = lambda: True  # type: ignore[method-assign]
 
         outcome = await operations.run("engine-reload")
@@ -168,13 +167,13 @@ class PrivilegedOperationTests(unittest.IsolatedAsyncioTestCase):
         operations = PrivilegedOperations(helper_path="/a/path/that/does/not/exist")
         outcome = await operations.run("engine-reload")
         self.assertFalse(outcome.succeeded)
-        self.assertIn("not installed", outcome.detail)
+        self.assertIn("not running", outcome.detail)
 
     async def test_the_output_of_an_operation_is_spelled(self) -> None:
         async def noisy(command, timeout):
             return 0, "restarted 3 services on port 5038"
 
-        operations = PrivilegedOperations(helper_path=__file__, elevate=False, runner=noisy)
+        operations = PrivilegedOperations(helper_path=__file__, runner=noisy)
         operations.available = lambda: True  # type: ignore[method-assign]
 
         outcome = await operations.run("engine-reload")

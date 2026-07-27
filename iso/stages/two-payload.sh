@@ -38,7 +38,40 @@ install_kernel_and_live_boot() {
         casper \
         || fail "the kernel or the live boot machinery could not be installed"
 
+    freeze_boot_image
+
     log_info "the kernel and the live boot machinery are installed"
+}
+
+freeze_boot_image() {
+    # From here on, no package may regenerate the boot image.
+    #
+    # The boot image that ships is the one the kernel package just produced,
+    # and it is the one this build proves boots by starting the finished image
+    # and watching it reach a login prompt.  A regenerated boot image was tried
+    # and could not create the writable layer over its own read only root: the
+    # boot stopped at a rescue shell reporting that it found no support for its
+    # layering format, with the required modules demonstrably present in the
+    # archive.
+    #
+    # The danger is that regeneration is not something this build asks for.
+    # Several ordinary packages install a trigger that rebuilds the boot image
+    # as a side effect of being installed, so every package added to the image
+    # after this point is a chance to silently replace a boot image that works
+    # with one that does not.  Turning the trigger off closes that whole class
+    # of accident rather than the one instance of it that was noticed.
+    #
+    # The setting is deliberately left in place in the shipped image.  An
+    # appliance installed to a fixed disk needs a boot image built for that
+    # disk, so the installer turns this back on before it regenerates one.
+    write_into_chroot /etc/initramfs-tools/update-initramfs.conf 0644 <<'EOF'
+# The boot image this appliance ships with is the one proved to boot, and no
+# package installation may replace it as a side effect. The disk installer
+# turns this back on when it builds a boot image for an installed system.
+update_initramfs=no
+EOF
+
+    log_info "the boot image is frozen; no package may replace it as a side effect"
 }
 
 install_telephony_engine() {
@@ -120,7 +153,24 @@ install_supplementary_services() {
         ethtool \
         curl \
         git \
+        console-setup \
         || log_warn "one or more supplementary services could not be installed"
+
+    # What the appliance needs in order to install itself onto a fixed disk.
+    # The image can be run from the medium indefinitely, but an appliance in a
+    # rack should be running from its own disk, and it can only put itself
+    # there if it is carrying the tools to do so before it leaves the factory.
+    #
+    # Both bootloader flavours are carried deliberately.  The installer writes
+    # both a legacy boot record and a firmware one, because the machine it will
+    # be installed on is not known at the time this image is built.
+    install_in_chroot \
+        squashfs-tools \
+        rsync \
+        dosfstools \
+        gdisk parted \
+        grub-common grub-pc-bin grub-efi-amd64-bin grub2-common \
+        || log_warn "one or more of the disk installation tools could not be installed"
 }
 
 install_control_plane() {
@@ -153,11 +203,27 @@ install_control_plane() {
     install -m 0644 "${REPOSITORY_ROOT}"/docs/*.md "${prefix}/docs/"
     install -m 0644 "${REPOSITORY_ROOT}/README.md" "${prefix}/docs/"
 
-    install -m 0644 "${REPOSITORY_ROOT}/config/systemd/myipbx.service" \
-        "${CHROOT_DIR}/etc/systemd/system/myipbx.service"
-    mkdir -p "${CHROOT_DIR}/etc/sudoers.d"
-    install -m 0440 "${REPOSITORY_ROOT}/config/sudoers/myipbx" \
-        "${CHROOT_DIR}/etc/sudoers.d/myipbx"
+    # The control plane's own unit, and the unit for the daemon that holds the
+    # privilege the control plane deliberately does not have.
+    #
+    # The service account is granted nothing.  An earlier design gave it a sudo
+    # rule naming the helper script, which could never have worked: the control
+    # plane's unit sets NoNewPrivileges, and sudo refuses to run under that
+    # flag.  No privilege grant is installed here, and any left behind by an
+    # older image is removed.
+    local unit
+    for unit in myipbx.service myipbx-helperd.service; do
+        install -m 0644 "${REPOSITORY_ROOT}/config/systemd/${unit}" \
+            "${CHROOT_DIR}/etc/systemd/system/${unit}"
+    done
+    rm -f "${CHROOT_DIR}/etc/sudoers.d/myipbx"
+
+    # The appliance installs itself onto a fixed disk from here, so the script
+    # that does it travels inside the image rather than beside it.
+    install -m 0755 "${REPOSITORY_ROOT}/iso/installer/myipbx-install-to-disk.sh" \
+        "${prefix}/bin/myipbx-install-to-disk.sh"
+    ln -sf "${prefix#"${CHROOT_DIR}"}/bin/myipbx-install-to-disk.sh" \
+        "${CHROOT_DIR}/usr/local/sbin/myipbx-install-to-disk" 2>/dev/null || true
 
     log_info "the control plane was installed into the image"
 }

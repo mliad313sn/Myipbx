@@ -141,6 +141,49 @@ marked as unavailable to browser scripting. Authentication attempts are rate
 limited per source address with a lockout. The socket upgrade validates both
 the session and the origin header before completing the handshake.
 
+### How the control plane reaches privilege
+
+The product's central claim is that every operation can be performed from the
+browser, and several of those operations need privilege the control plane must
+not hold: restarting the telephony engine, applying a static network
+configuration, recompiling the interface card drivers, restarting the machine.
+
+The control plane runs as an unprivileged account under a unit that sets
+`NoNewPrivileges`. It reaches privilege by asking a small daemon that already
+holds it, over a Unix domain socket at `/run/myipbx/helper.sock`, mode `0660`,
+owned `root:myipbx`. The exchange is one length-prefixed JSON request and one
+reply. The daemon establishes who is calling by asking the kernel for the peer
+credentials of the connection rather than by believing anything the request
+says, and refuses any caller that is not the appliance's own service account
+before it parses a single byte of what was sent.
+
+It then accepts only a verb from the same fixed vocabulary of sixteen the
+control plane knows, with every argument checked against the same patterns, and
+passes the vector to the helper script as an argument list. There is no shell
+anywhere on that path, so a value that came from a browser cannot become a
+command. The validation happens three times — in the control plane, in the
+daemon, and again in the helper script — and the repetition is deliberate: the
+control plane's copy protects the operator from mistakes, the daemon's copy
+protects the machine from the control plane, and the script's copy protects the
+machine from anything that invokes the script directly.
+
+**Why a socket rather than a setuid escalator.** The obvious design is to grant
+the service account the right to run one helper script under `sudo`, and this
+product shipped that design first. It could never have worked.
+`NoNewPrivileges` sets the kernel's `no_new_privs` flag, which permanently
+disables the setuid mechanism for the process and everything it spawns, and
+under that flag `sudo` refuses to run at all — it reports that the no-new-
+privileges flag is set and exits. Every privileged operation would have failed
+on every real installation, and would have failed at the moment an operator
+asked for one rather than at start up where somebody would have noticed. The
+test suite did not catch it because the process runner was replaced in every
+test of that path.
+
+The service account now holds no privilege grant of any kind. There is no
+`sudoers` file in this repository, the image build refuses to produce an image
+containing one, and `tests/test_privileged_path.py` exercises the real daemon
+over a real socket with nothing on the path replaced.
+
 ## Constraint One — structural enforcement of the address allocation exclusion
 
 The exclusion is enforced at four independent points, so that no single

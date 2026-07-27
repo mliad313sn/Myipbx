@@ -37,7 +37,7 @@ install_control_plane() {
 }
 
 install_privileged_helper() {
-    log_step "installing the privileged helper and its narrow privilege grant"
+    log_step "installing the privileged helper and the daemon that holds its privilege"
 
     ensure_directory "${APPLIANCE_PREFIX}/bin" 0755
     ensure_directory "${APPLIANCE_PREFIX}/bin/lib" 0755
@@ -55,28 +55,41 @@ install_privileged_helper() {
             "${APPLIANCE_PREFIX}/bin/${stage}" 0755
     done
 
-    local grant="${REPOSITORY_ROOT}/config/sudoers/myipbx"
-    [[ -f "${grant}" ]] || fail "the privilege grant template is missing from the repository"
+    local unit="${REPOSITORY_ROOT}/config/systemd/myipbx-helperd.service"
+    [[ -f "${unit}" ]] || fail "the privileged helper's service unit is missing from the repository"
 
     if is_rehearsal; then
-        log_info "rehearsal: the privilege grant would be installed after validation"
+        log_info "rehearsal: the privileged helper's service would be installed and started"
         return 0
     fi
 
-    # A malformed grant file can lock every administrator out of the machine,
-    # so it is validated before it is installed, never after.
-    if have_command visudo; then
-        if ! visudo --check --file="${grant}" >/dev/null 2>&1; then
-            fail "the privilege grant template did not validate; it will not be installed"
-        fi
-        log_info "the privilege grant validated"
-    else
-        log_warn "the privilege grant validator is not available; installing without validation"
+    # The service account is granted nothing at all.  It reaches privilege by
+    # asking a daemon that already holds it, over a socket the daemon opens
+    # only to this account, and the daemon accepts only the same fixed
+    # vocabulary of verbs.
+    #
+    # An earlier design granted the account the right to run this helper under
+    # sudo.  That could never have worked: the control plane's service unit
+    # sets NoNewPrivileges, which disables the setuid mechanism, and sudo
+    # refuses to run at all under it.  Any leftover grant from that design is
+    # removed here rather than left to confuse a later reader, and because a
+    # privilege grant that is no longer needed should not survive the reason
+    # for it.
+    if [[ -f /etc/sudoers.d/myipbx ]]; then
+        rm -f /etc/sudoers.d/myipbx
+        log_info "the obsolete privilege grant was removed; the service account now has none"
     fi
 
-    ensure_directory /etc/sudoers.d 0755
-    install_file "${grant}" /etc/sudoers.d/myipbx 0440
-    log_info "the service account may now run one helper, and nothing else, with privilege"
+    if ! have_command systemctl; then
+        log_warn "the service manager is not available; the privileged helper was installed but not started"
+        return 0
+    fi
+
+    install_file "${unit}" /etc/systemd/system/myipbx-helperd.service 0644
+    run_command systemctl daemon-reload
+    run_command systemctl enable myipbx-helperd.service
+    run_command systemctl restart myipbx-helperd.service
+    log_info "the privileged helper is listening; the service account holds no privilege of its own"
 }
 
 install_dashboard() {

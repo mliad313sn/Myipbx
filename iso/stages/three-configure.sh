@@ -27,10 +27,10 @@ configure_identity() {
         return 0
     fi
 
-    write_into_chroot /etc/hostname 0644 <<<"myipbx"
-    write_into_chroot /etc/hosts 0644 <<'EOF'
+    write_into_chroot /etc/hostname 0644 <<<"${APPLIANCE_HOST_NAME}"
+    write_into_chroot /etc/hosts 0644 <<EOF
 127.0.0.1   localhost
-127.0.1.1   myipbx
+127.0.1.1   ${APPLIANCE_HOST_NAME}
 ::1         localhost ip6-localhost ip6-loopback
 EOF
 
@@ -65,19 +65,29 @@ configure_live_boot() {
         return 0
     fi
 
-    # Without a flavour set, the live boot machinery derives a host name at
-    # boot and overrides the one written here. Setting it makes the appliance
-    # keep its own identity.
-    write_into_chroot /etc/casper.conf 0644 <<'EOF'
-# Legacy-to-Modern IPBX Appliance -- live boot settings
+    # This file is not what names the appliance at boot, and it is worth being
+    # clear about why, because the obvious reading is wrong.
+    #
+    # The live boot machinery reads its settings from the copy of this file
+    # inside the boot image, not from the copy in this filesystem, and the boot
+    # image is produced when the kernel package is installed -- before this
+    # stage runs.  A name written here therefore never reaches the code that
+    # would act on it.  The name is passed as a boot argument instead, which is
+    # generated once in the shared settings and used by both boot paths.
+    #
+    # What this copy is good for is the appliance after installation to a fixed
+    # disk, where the boot image is rebuilt and this file is read normally.
+    write_into_chroot /etc/casper.conf 0644 <<EOF
+# ${APPLIANCE_NAME} -- live boot settings
 #
-# The flavour must be a non empty string, or the host name below is discarded
-# at boot in favour of one derived from the image label.
-export USERNAME="myipbx"
+# The boot argument is authoritative while the appliance runs from the image.
+# These values apply once the appliance has been installed to a disk and its
+# boot image rebuilt.
+export USERNAME="${APPLIANCE_HOST_NAME}"
 export USERFULLNAME="appliance operator"
-export HOST="myipbx"
-export BUILD_SYSTEM="myipbx"
-export FLAVOUR="myipbx"
+export HOST="${APPLIANCE_HOST_NAME}"
+export BUILD_SYSTEM="${APPLIANCE_HOST_NAME}"
+export FLAVOUR="${APPLIANCE_HOST_NAME}"
 EOF
 
     # The module lists below are written for whoever later rebuilds the boot
@@ -135,6 +145,50 @@ MODULES=most
 EOF
 
     log_info "the boot image that ships is the one the kernel package produced, which is the one this build proves boots"
+}
+
+accommodate_live_boot_scripts() {
+    log_step "making room for the live boot scripts to succeed"
+
+    if is_rehearsal; then
+        return 0
+    fi
+
+    # The live boot machinery ships a set of scripts written for a desktop
+    # installation disc, and it runs all of them regardless of what the image
+    # actually contains.  On an appliance with no desktop several of them reach
+    # for directories and files that were never installed and complain, in a
+    # burst of errors on the console, while the boot proceeds perfectly well.
+    #
+    # The scripts cannot be removed, because they live inside the boot image
+    # and this build deliberately does not rebuild it.  What can be done is to
+    # give each of them the thing it reaches for, so that it does its work
+    # quietly instead of failing loudly.  Everything below is created for the
+    # sake of one named script, and is inert otherwise.
+
+    in_chroot bash -c '
+        # The live boot initialises a crash directory so that a desktop
+        # notifier can watch it.  Nothing watches it here, but its absence is
+        # reported twice on every boot.
+        mkdir -p /var/crash
+
+        # Two scripts replace update checkers with a command that does nothing.
+        # Neither checker is installed, so the replacement is harmless; only
+        # the missing directory turns it into an error.
+        mkdir -p /usr/lib/update-notifier /usr/lib/ubuntu-release-upgrader
+
+        # A desktop accessibility profile is written unconditionally.
+        mkdir -p /etc/xdg/autostart
+    ' || log_warn "the live boot scripts could not be accommodated"
+
+    # The crash reporter is read to decide whether to switch it on for the
+    # installer.  There is no installer and no crash reporter in this image, and
+    # the file is written so that the reading succeeds and the answer is no.
+    write_into_chroot /etc/default/apport 0644 <<'EOF'
+# Crash reporting is not installed on this appliance and nothing here enables
+# it.  The file exists because the live boot consults it, and a consultation
+# that finds nothing is quieter than one that finds no file at all.
+EOF
 }
 
 configure_static_network() {
@@ -225,6 +279,11 @@ configure_services() {
         return 0
     fi
 
+    # The privileged helper is enabled before the control plane, because the
+    # control plane can perform no system operation until the helper is
+    # listening and an operator would have no way to tell why.
+    in_chroot systemctl enable myipbx-helperd.service >/dev/null 2>&1 \
+        || log_warn "the privileged helper service could not be enabled"
     in_chroot systemctl enable myipbx.service >/dev/null 2>&1 \
         || log_warn "the appliance service could not be enabled"
     in_chroot systemctl enable asterisk.service >/dev/null 2>&1 \
@@ -339,6 +398,21 @@ audit_image() {
         findings=$(( findings + 1 ))
     fi
 
+    # The service account must hold no privilege of its own.  It reaches
+    # privilege by asking a daemon that holds it, and a grant here would mean
+    # the account could act directly instead.
+    if [[ -e "${CHROOT_DIR}/etc/sudoers.d/myipbx" ]]; then
+        log_error "the service account was granted privilege directly in the image"
+        findings=$(( findings + 1 ))
+    fi
+
+    # And the daemon that does hold the privilege must actually be there, or
+    # every operation offered by the interface would fail on a real machine.
+    if [[ ! -f "${CHROOT_DIR}/etc/systemd/system/myipbx-helperd.service" ]]; then
+        log_error "the privileged helper's service is missing from the image"
+        findings=$(( findings + 1 ))
+    fi
+
     if (( findings > 0 )); then
         fail "the image audit made $(spell_integer "${findings}") finding or findings"
     fi
@@ -362,6 +436,7 @@ main() {
 
     configure_identity
     configure_live_boot
+    accommodate_live_boot_scripts
     configure_service_account
     configure_static_network
     configure_appliance

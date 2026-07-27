@@ -37,7 +37,16 @@ prepare_tree() {
              "${STAGING_DIR}/EFI/boot" \
              "${STAGING_DIR}/.disk"
 
-    printf '%s\n' "${APPLIANCE_NAME}" >"${STAGING_DIR}/.disk/info"
+    # The marker the firmware bootloader searches for, and the only claim this
+    # image makes about what it is.
+    #
+    # A distribution would name this file so that the live boot machinery reads
+    # it and treats the disc as a package disc: it would then derive the host
+    # name from the first word of the description, and try to register the disc
+    # as a source of packages.  Neither is true here.  This image carries an
+    # appliance, not a package archive, so the description goes in a file of the
+    # appliance's own naming and the disc makes no claim it cannot honour.
+    printf '%s\n' "${APPLIANCE_NAME}" >"${STAGING_DIR}${APPLIANCE_IMAGE_MARKER}"
     printf 'full_cd/single\n' >"${STAGING_DIR}/.disk/cd_type"
 }
 

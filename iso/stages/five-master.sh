@@ -58,22 +58,22 @@ LABEL appliance
   MENU LABEL Start the appliance
   MENU DEFAULT
   KERNEL /casper/vmlinuz
-  APPEND initrd=/casper/initrd boot=casper quiet console=tty0 console=ttyS0,115200n8 ---
+  APPEND initrd=/casper/initrd ${APPLIANCE_KERNEL_ARGUMENTS} quiet ---
 
 LABEL appliance-safe
   MENU LABEL Start the appliance, safe graphics and no power management
   KERNEL /casper/vmlinuz
-  APPEND initrd=/casper/initrd boot=casper nomodeset acpi=off noapic console=tty0 console=ttyS0,115200n8 ---
+  APPEND initrd=/casper/initrd ${APPLIANCE_KERNEL_ARGUMENTS} nomodeset acpi=off noapic ---
 
 LABEL appliance-verbose
   MENU LABEL Start the appliance, showing every boot message
   KERNEL /casper/vmlinuz
-  APPEND initrd=/casper/initrd boot=casper debug verbose console=tty0 console=ttyS0,115200n8 ---
+  APPEND initrd=/casper/initrd ${APPLIANCE_KERNEL_ARGUMENTS} debug verbose ---
 
 LABEL memtest
   MENU LABEL Check this machine's memory
   KERNEL /casper/vmlinuz
-  APPEND initrd=/casper/initrd boot=casper memtest ---
+  APPEND initrd=/casper/initrd ${APPLIANCE_KERNEL_ARGUMENTS} memtest ---
 
 MENU SEPARATOR
 
@@ -105,25 +105,25 @@ set default=0
 set timeout=10
 
 menuentry "Start the appliance" {
-    linux /casper/vmlinuz boot=casper quiet console=tty0 console=ttyS0,115200n8 ---
+    linux /casper/vmlinuz ${APPLIANCE_KERNEL_ARGUMENTS} quiet ---
     initrd /casper/initrd
 }
 
 menuentry "Start the appliance, safe graphics and no power management" {
-    linux /casper/vmlinuz boot=casper nomodeset acpi=off noapic console=tty0 console=ttyS0,115200n8 ---
+    linux /casper/vmlinuz ${APPLIANCE_KERNEL_ARGUMENTS} nomodeset acpi=off noapic ---
     initrd /casper/initrd
 }
 
 menuentry "Start the appliance, showing every boot message" {
-    linux /casper/vmlinuz boot=casper debug verbose console=tty0 console=ttyS0,115200n8 ---
+    linux /casper/vmlinuz ${APPLIANCE_KERNEL_ARGUMENTS} debug verbose ---
     initrd /casper/initrd
 }
 EOF
 
     local embedded="${BUILD_ROOT}/grub-embedded.cfg"
-    cat >"${embedded}" <<'EOF'
-search --set=root --file /.disk/info
-set prefix=($root)/boot/grub
+    cat >"${embedded}" <<EOF
+search --set=root --file ${APPLIANCE_IMAGE_MARKER}
+set prefix=(\$root)/boot/grub
 configfile /boot/grub/grub.cfg
 EOF
 

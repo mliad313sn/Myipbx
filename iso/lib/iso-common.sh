@@ -49,6 +49,25 @@ APPLIANCE_DEFAULT_ADDRESS="${APPLIANCE_DEFAULT_ADDRESS:-192.168.100.10}"
 APPLIANCE_DEFAULT_PREFIX="${APPLIANCE_DEFAULT_PREFIX:-24}"
 APPLIANCE_CONSOLE_PORT="${APPLIANCE_CONSOLE_PORT:-8088}"
 
+# The name the appliance answers to.  The live boot machinery reads its own
+# settings out of the boot image rather than out of the root filesystem, and
+# this build deliberately does not rebuild the boot image, so a name written
+# into the root filesystem alone is discarded at boot.  Passing it as a boot
+# argument reaches the live boot machinery at the only moment it is listening,
+# which is why the name lives here rather than in the configuration stage.
+APPLIANCE_HOST_NAME="${APPLIANCE_HOST_NAME:-myipbx}"
+
+# The marker the firmware bootloader searches for to find the image.  It is the
+# appliance's own file rather than the package disc marker a distribution would
+# use, because this image is an appliance and not a package disc: claiming to
+# be one makes the live boot machinery try to read package indexes off it and
+# report, correctly, that there are none.
+APPLIANCE_IMAGE_MARKER="${APPLIANCE_IMAGE_MARKER:-/.disk/appliance-image}"
+
+# Arguments every boot entry carries.  Both the legacy and the firmware boot
+# paths are generated from this one value so that the two cannot drift apart.
+APPLIANCE_KERNEL_ARGUMENTS="${APPLIANCE_KERNEL_ARGUMENTS:-boot=casper hostname=${APPLIANCE_HOST_NAME} username=${APPLIANCE_HOST_NAME} console=tty0 console=ttyS0,115200n8}"
+
 # ---------------------------------------------------------------------------
 # Build receipts, so a failed build resumes rather than restarts
 # ---------------------------------------------------------------------------
@@ -116,8 +135,40 @@ in_chroot() {
             "$@"
 }
 
+# Everything a package installation needs in place before it can run.
+#
+# The stages exist to be run again on their own -- that is what the receipts
+# are for -- but the configuring stage deliberately removes two things a
+# package installation depends on: the package index, so that a stale index
+# does not ship, and the restriction that stops a package from starting the
+# service it installed.  Re-entering an earlier stage after that point would
+# otherwise install against no index, and start daemons inside a filesystem
+# that is not a running system.
+#
+# Both are restored here rather than in the stage that removed them, because
+# this is the only code that needs them and it can tell whether they are
+# missing.  Neither restoration does anything on a build that runs straight
+# through.
+prepare_image_for_installation() {
+    if [[ ! -f "${CHROOT_DIR}/usr/sbin/policy-rc.d" ]]; then
+        log_info "restoring the restriction that stops services starting inside the image"
+        write_into_chroot /usr/sbin/policy-rc.d 0755 <<'EOF'
+#!/bin/sh
+# During the image build nothing may start. The appliance decides what runs.
+exit 101
+EOF
+    fi
+
+    if ! compgen -G "${CHROOT_DIR}/var/lib/apt/lists/*Packages*" >/dev/null 2>&1; then
+        log_info "the package index inside the image is absent; refreshing it"
+        in_chroot apt-get update >/dev/null 2>&1 \
+            || log_warn "the package index inside the image could not be refreshed"
+    fi
+}
+
 # Install packages inside the image.
 install_in_chroot() {
+    prepare_image_for_installation
     log_info "installing into the image: $*"
     in_chroot apt-get install --yes --no-install-recommends "$@"
 }

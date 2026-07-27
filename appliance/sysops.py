@@ -11,6 +11,18 @@ only a fixed vocabulary of verbs with pattern validated arguments. There is no
 shell anywhere on the path: the argument vector is passed directly to the
 process, so a value taken from an interface request cannot become a command.
 
+The request reaches the helper over a Unix domain socket rather than by way of
+a setuid binary, and the reason is worth stating because the alternative looks
+simpler and does not work. The control plane's service unit sets
+``NoNewPrivileges``, which sets the kernel's ``no_new_privs`` flag and
+permanently disables the setuid mechanism for that process and everything it
+spawns. Under that flag ``sudo`` refuses to run at all. A control plane that
+escalated through ``sudo`` would therefore fail every privileged operation on a
+real installation, and would fail at the moment an operator asked for one
+rather than at start up where somebody would notice. Asking a daemon that
+already holds privilege is what lets the control plane keep the hardening and
+still do its job.
+
 Everything an operator might otherwise reach for a terminal to do is either a
 verb here or a reader below. If something is missing from this file, it is
 missing from the graphical interface, and that is the test to apply when
@@ -20,10 +32,11 @@ judging whether the product's central claim still holds.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
-import shutil
 import socket
+import struct
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,6 +55,15 @@ __all__ = [
 ]
 
 _LOG = get_logger("sysops")
+
+#: The framing the control plane and the privileged daemon agree on: an
+#: unsigned length, then that many bytes of a JSON object.
+_LENGTH_PREFIX = struct.Struct("!I")
+
+#: A reply carries the tail of a command's output and nothing larger.  The cap
+#: is here so that a helper which somehow produced an enormous answer cannot
+#: make the control plane allocate without bound.
+_MAXIMUM_REPLY_BYTES = 1024 * 1024
 
 #: The services the appliance is permitted to control.  Anything outside this
 #: set is refused, so a request cannot reach an unrelated system service.
@@ -178,39 +200,57 @@ class PrivilegedOperations:
     def __init__(
         self,
         helper_path: str | Path = "/opt/myipbx/bin/myipbx-privileged-helper.sh",
-        elevate: bool = True,
+        socket_path: str | Path = "/run/myipbx/helper.sock",
         runner: Runner | None = None,
     ) -> None:
         self.helper_path = Path(helper_path)
-        self.elevate = elevate
+        self.socket_path = Path(socket_path)
         self._runner = runner or self._default_runner
 
     # -- availability ------------------------------------------------------
 
     def available(self) -> bool:
-        """Report whether the helper is installed and executable."""
-        return self.helper_path.is_file() and os.access(self.helper_path, os.X_OK)
+        """Report whether the privileged daemon is listening."""
+        try:
+            return self.socket_path.is_socket()
+        except OSError:
+            return False
 
     def describe(self) -> dict[str, Any]:
         return {
             "available": self.available(),
             "helper_path": str(self.helper_path),
+            "socket_path": str(self.socket_path),
             "operations": [operation.as_dict() for operation in OPERATIONS.values()],
             "managed_services": list(MANAGED_SERVICES),
             "explanation": (
                 "the control plane runs unprivileged and performs no system "
                 "operation itself; it asks a helper that accepts only this fixed "
-                "vocabulary, with every argument validated before it is sent"
+                "vocabulary, with every argument validated before it is sent, "
+                "over a socket the helper opens only to this appliance's own "
+                "account"
             ),
         }
 
     # -- invocation --------------------------------------------------------
 
     def validate(self, verb: str, arguments: Mapping[str, Any] | None = None) -> list[str]:
+        """Validate a request and return the argument vector to send."""
+        return self.validate_arguments(verb, arguments)
+
+    @staticmethod
+    def validate_arguments(
+        verb: str, arguments: Mapping[str, Any] | None = None
+    ) -> list[str]:
         """Validate a request and return the argument vector to send.
 
         Raises rather than returning a partial vector, so a caller cannot act
         on a request that was only partly acceptable.
+
+        This is a static method because the privileged daemon calls it too.
+        Both sides checking the same way is deliberate: the control plane's
+        check protects the operator from mistakes, and the daemon's check
+        protects the machine from the control plane.
         """
         operation = OPERATIONS.get(verb)
         if operation is None:
@@ -257,30 +297,15 @@ class PrivilegedOperations:
                 exit_status=-1,
                 output="",
                 detail=(
-                    "the privileged helper is not installed on this machine, so "
+                    "the privileged helper is not running on this machine, so "
                     "system operations cannot be performed from the interface"
                 ),
             )
 
-        command: list[str] = []
-        if self.elevate:
-            sudo = shutil.which("sudo")
-            if sudo is None:
-                return OperationOutcome(
-                    verb=verb,
-                    succeeded=False,
-                    exit_status=-1,
-                    output="",
-                    detail="privilege elevation is not available on this machine",
-                )
-            command.extend([sudo, "-n"])
-        command.append(str(self.helper_path))
-        command.extend(vector)
-
-        _LOG.info("performing the privileged operation named %s", verb)
+        _LOG.info("requesting the privileged operation named %s", verb)
         started = time.monotonic()
         try:
-            status, output = await self._runner(command, operation.timeout_seconds)
+            status, output = await self._runner(vector, operation.timeout_seconds)
         except asyncio.TimeoutError:
             return OperationOutcome(
                 verb=verb,
@@ -315,25 +340,49 @@ class PrivilegedOperations:
             duration_seconds=duration,
         )
 
-    @staticmethod
     async def _default_runner(
-        command: Sequence[str], timeout_seconds: float
+        self, vector: Sequence[str], timeout_seconds: float
     ) -> tuple[int, str]:
-        """Run the helper with no shell anywhere on the path."""
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
+        """Ask the privileged daemon to perform the already validated vector.
+
+        The whole exchange is one request and one reply on one connection.  A
+        connection that carries a single operation and is then closed cannot
+        leave a half read request behind for the next one to be confused by,
+        which is worth more here than the cost of connecting each time.
+        """
+        reader, writer = await asyncio.open_unix_connection(str(self.socket_path))
         try:
-            stdout, _ = await asyncio.wait_for(
-                process.communicate(), timeout=timeout_seconds
+            request = json.dumps(
+                {"verb": vector[0], "arguments": list(vector[1:])}
+            ).encode("utf-8")
+            writer.write(_LENGTH_PREFIX.pack(len(request)) + request)
+            await writer.drain()
+
+            header = await asyncio.wait_for(
+                reader.readexactly(_LENGTH_PREFIX.size), timeout=timeout_seconds
             )
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-            raise
-        return process.returncode or 0, stdout.decode("utf-8", "replace")
+            (length,) = _LENGTH_PREFIX.unpack(header)
+            if length > _MAXIMUM_REPLY_BYTES:
+                return -1, "the privileged helper replied with more than it should have"
+            body = await asyncio.wait_for(
+                reader.readexactly(length), timeout=timeout_seconds
+            )
+        except asyncio.IncompleteReadError:
+            return -1, "the privileged helper closed before it answered"
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except OSError:
+                pass
+
+        try:
+            reply = json.loads(body.decode("utf-8"))
+            return int(reply["status"]), str(reply.get("output", "")) or str(
+                reply.get("detail", "")
+            )
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return -1, "the privileged helper's answer could not be read"
 
 
 class SystemStatus:

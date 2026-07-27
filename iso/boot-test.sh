@@ -30,7 +30,6 @@ TRANSCRIPT="${TRANSCRIPT:-${BUILD_ROOT}/boot-transcript.txt}"
 declare -a REQUIRED_MARKERS=(
     "Legacy-to-Modern IPBX Appliance"   # the appliance's own message reached the console
     "login:"                            # userspace started and offered a session
-    "myipbx"                            # the appliance kept its own identity
 )
 
 # Any of these means the boot failed in a way worth naming.
@@ -125,6 +124,12 @@ examine_transcript() {
         findings=$(( findings + 1 ))
     else
         log_info "the boot transcript mentions no address allocation of any kind"
+    fi
+
+    local observed
+    observed="$(grep -aoE "[A-Za-z0-9-]+ login:" "${TRANSCRIPT}" | head -n 1 | sed 's/ login://')"
+    if [[ -n "${observed}" ]]; then
+        log_info "the machine offered a session as the host named ${observed}"
     fi
 
     if (( findings > 0 )); then

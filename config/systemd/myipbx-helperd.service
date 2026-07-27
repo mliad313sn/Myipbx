@@ -1,0 +1,55 @@
+[Unit]
+Description=Legacy-to-Modern IPBX Appliance privileged helper
+Documentation=file:/opt/myipbx/docs/system-architecture.md
+
+# The helper must be listening before the control plane starts, or the first
+# operation an operator asks for after a restart would be refused for no reason
+# the operator could act on.
+Before=myipbx.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/myipbx
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=MYIPBX_HELPER_SOCKET=/run/myipbx/helper.sock
+Environment=MYIPBX_HELPER_SCRIPT=/opt/myipbx/bin/myipbx-privileged-helper.sh
+Environment=MYIPBX_SERVICE_ACCOUNT=myipbx
+ExecStart=/usr/bin/python3 -m appliance.helperd
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# The socket directory is created by the service manager rather than by the
+# daemon, so that it exists with the right ownership before anything can race
+# to create it with the wrong ownership.
+RuntimeDirectory=myipbx
+RuntimeDirectoryMode=0750
+
+# This daemon holds privilege on purpose, so the hardening below is what can be
+# applied without taking away the privilege that is its whole reason to exist.
+# It is not, and cannot be, as confined as the control plane it serves.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+# The daemon speaks only to the local socket. It has no reason to reach the
+# network, and no reason ever to bind an address allocation service port.
+RestrictAddressFamilies=AF_UNIX
+
+# The verbs it performs write to the engine's configuration, the appliance's
+# own state, and the network and firewall configuration directories. Nothing
+# outside this list is writable, so a defect in a helper verb cannot reach the
+# rest of the filesystem.
+ProtectSystem=full
+ReadWritePaths=/var/lib/myipbx /var/log/myipbx /run/myipbx
+ReadWritePaths=-/etc/asterisk -/etc/dahdi -/etc/systemd/network -/etc/myipbx
+
+[Install]
+WantedBy=multi-user.target
