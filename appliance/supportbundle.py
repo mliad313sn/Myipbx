@@ -15,9 +15,11 @@ no telephone password, no carrier account password, no administrator
 credential, no private key, and no session token, because a support bundle is
 the single most casually forwarded file an appliance produces: it goes to a
 vendor, into a ticket, onto a shared drive, and it stays there. Everything
-placed in it is chosen by name rather than swept up, so a field added elsewhere
-cannot arrive here by accident, and the redaction is asserted by a test that
-reads the finished bytes and looks for the material.
+placed in it is chosen by name rather than swept up, and the names come from
+the schema rather than from a list kept here, so a secret field added to the
+schema next year is withheld without anybody remembering to add it. The
+redaction is asserted by a test that reads the finished bytes and looks for the
+material.
 
 It does carry things a site may consider sensitive in another sense: the
 addresses of its carriers, the numbers of its extensions, the shape of its
@@ -34,7 +36,7 @@ import tarfile
 import time
 from typing import Any
 
-from . import numerals
+from . import entities, numerals
 from .logging_setup import get_logger
 
 __all__ = ["create", "REDACTED", "WITHHELD_FIELDS"]
@@ -46,21 +48,45 @@ _LOG = get_logger("supportbundle")
 #: misleading statement than "this was not put in the bundle".
 REDACTED = "withheld from the support bundle"
 
-#: Fields removed wherever they appear, at any depth. The names are the ones
-#: the schema uses for material that is never displayed even in the console.
-WITHHELD_FIELDS = frozenset(
+#: Names this module knows about on its own: material that never appears in
+#: the telephony schema but does appear in settings, in state, and in whatever
+#: a future collector reaches for.
+_ALWAYS_WITHHELD = frozenset(
     {
-        "secret",
         "password",
-        "pin",
-        "voicemail_password",
         "credential",
         "token",
         "private_key",
         "tls_private_key",
         "cookie",
+        "passphrase",
+        "api_key",
+        "authorization",
     }
 )
+
+
+def _schema_secret_names() -> frozenset[str]:
+    """Every field the telephony schema itself marks as a secret.
+
+    Read rather than restated. The first version of this file listed the names
+    by hand and its own docstring claimed that a field added elsewhere could
+    not arrive here by accident. That was not true: the list happened to match
+    the schema on the day it was written, and adding one secret field to the
+    schema the following year would have put its value into a bundle destined
+    for a vendor's inbox. Asking the schema makes the claim true.
+    """
+    names = set()
+    for spec in entities.ENTITY_SPECS.values():
+        for item in spec.fields:
+            if item.secret:
+                names.add(item.name)
+    return frozenset(names)
+
+
+#: Fields removed wherever they appear, at any depth: everything the schema
+#: calls a secret, and everything this module knows to be one.
+WITHHELD_FIELDS = _ALWAYS_WITHHELD | _schema_secret_names()
 
 #: How much of each log to take. Enough to see what led to a fault, bounded so
 #: that the bundle stays something a person can send in a message.

@@ -557,7 +557,14 @@
   </div>
 </main>
 
+<!-- Two regions, because "the configuration was saved" and "the trunk
+     carrying every outside call has failed" must not wait in the same queue.
+     The polite one yields to whatever a screen reader is already saying; the
+     assertive one interrupts, which is warranted for a condition that is
+     taking calls away and for nothing else. -->
 <div class="toast-holder" id="toast-holder" aria-live="polite"></div>
+<div class="toast-holder toast-holder--urgent" id="toast-holder-urgent"
+     role="alert" aria-live="assertive"></div>
 
 <div class="confirm-shade" id="confirm-shade" hidden>
   <div class="confirm-box" id="confirm-box" role="alertdialog" aria-modal="true"

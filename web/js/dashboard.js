@@ -103,8 +103,15 @@
         return lines[lines.length - 1].trim().slice(0, 200);
     }
 
-    function toast(message, kind) {
-        var holder = nodes.toastHolder;
+    function toast(message, kind, urgent) {
+        /* A failure interrupts; everything else waits its turn. A screen
+         * reader reading a table does not need to be cut into by "the
+         * configuration was saved", and does need to be cut into by a trunk
+         * that has stopped carrying calls. */
+        var holder = urgent ? nodes.toastHolderUrgent : nodes.toastHolder;
+        if (!holder) {
+            holder = nodes.toastHolder;
+        }
         var note = element('div', 'toast ' + (kind || 'good'), numerals.sanitize(String(message)));
         holder.appendChild(note);
         window.setTimeout(function () {
@@ -342,6 +349,40 @@
         }
     }
 
+    /* Redraw without taking the control out from under the person using it.
+     *
+     * The overview redraws from every pushed snapshot, which on a busy
+     * appliance is about once a second. Each redraw cleared its list and built
+     * a new one, so a keyboard user who had tabbed to a trunk's control, or to
+     * an alarm's acknowledgement, lost it before they could press it: the
+     * element they were on stopped existing and focus fell to the document
+     * body. The control was reachable in principle and unusable in practice.
+     *
+     * Rather than reconcile every table by hand, the redraw is wrapped: the
+     * focused element's key is noted, the redraw runs, and whatever now
+     * carries that key takes focus back. A control that has genuinely gone --
+     * a trunk that was deleted -- has no key to return to, and focus is left
+     * where the browser put it rather than moved somewhere arbitrary. */
+    function preservingFocus(redraw) {
+        var active = document.activeElement;
+        var key = active && active.getAttribute
+            ? active.getAttribute('data-focus-key')
+            : null;
+
+        redraw();
+
+        if (!key) {
+            return;
+        }
+        var escaped = window.CSS && CSS.escape
+            ? CSS.escape(key)
+            : key.replace(/["\\]/g, '\\$&');
+        var restored = document.querySelector('[data-focus-key="' + escaped + '"]');
+        if (restored && typeof restored.focus === 'function') {
+            restored.focus();
+        }
+    }
+
     /* A figure the appliance cannot currently read.
      *
      * Marked three ways, because one is never enough: the class tints it, the
@@ -460,6 +501,10 @@
      * system the next operator is usually the one who finds out that a trunk
      * has been down since Friday. */
     function renderAlarms(alarms) {
+        preservingFocus(function () { renderAlarmList(alarms); });
+    }
+
+    function renderAlarmList(alarms) {
         clear(nodes.alarmList);
         if (!alarms.length) {
             nodes.alarmPanel.hidden = true;
@@ -483,6 +528,7 @@
             } else {
                 var seen = element('button', 'secondary alarm-acknowledge', 'i have seen this');
                 seen.type = 'button';
+                seen.setAttribute('data-focus-key', 'alarm:' + alarm.key);
                 seen.setAttribute('aria-label',
                     'acknowledge the alarm: ' + alarm.message);
                 seen.addEventListener('click', function () {
@@ -517,6 +563,10 @@
         if (!snapshot) {
             return;
         }
+        preservingFocus(function () { renderTrunkTable(snapshot); });
+    }
+
+    function renderTrunkTable(snapshot) {
         nodes.figureTrunks.textContent = count(snapshot.registered);
         nodes.captionTrunks.textContent = 'of ' + count(snapshot.total) + ' declared';
 
@@ -541,6 +591,7 @@
             var control = element('td');
             var button = element('button', 'secondary', trunk.enabled ? 'disable' : 'enable');
             button.type = 'button';
+            button.setAttribute('data-focus-key', 'trunk:' + trunk.name);
             button.addEventListener('click', function () {
                 controlTrunk(trunk.name, trunk.enabled ? 'disable' : 'enable');
             });
@@ -1687,7 +1738,10 @@
          * described by the state snapshot that accompanies it, so the handler
          * only has to say it out loud; the panels redraw from the snapshot. */
         socket.on('alarm.raised', function (payload) {
-            toast(payload.message || 'an alarm was raised', 'bad');
+            /* A critical alarm interrupts. It is the one thing on this console
+             * that means somebody has to stop what they are doing. */
+            toast(payload.message || 'an alarm was raised', 'bad',
+                (payload.severity || '') === 'critical');
         });
         socket.on('engine.disconnected', function () {
             toast('the telephony engine connection was lost', 'bad');
@@ -1766,6 +1820,7 @@
             ['operationsExplanation', 'operations-explanation'],
             ['operationsBody', 'operations-body'],
             ['footerText', 'footer-text'], ['toastHolder', 'toast-holder'],
+            ['toastHolderUrgent', 'toast-holder-urgent'],
             ['confirmShade', 'confirm-shade'], ['confirmBox', 'confirm-box'],
             ['confirmTitle', 'confirm-title'],
             ['confirmMessage', 'confirm-message'],

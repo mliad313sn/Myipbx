@@ -284,6 +284,68 @@ const CONTRAST_HELPERS = `
         }
 
         // -- a form, got wrong on purpose --------------------------------
+        // -- a control that redraws under the person using it -------------
+        /* The overview redraws from every pushed snapshot, about once a second
+         * on a busy appliance. A redraw that rebuilds its list takes the
+         * control out from under a keyboard user before they can press it:
+         * reachable in principle, unusable in practice. */
+        report.stage = 'focus-across-redraw';
+        const overviewForFocus = await page.$('.nav-item[data-view="overview"]');
+        if (overviewForFocus) {
+            await overviewForFocus.click();
+            await page.waitForTimeout(500);
+        }
+        /* Driven by a real change rather than by reaching into the page.
+         * Saving anything advances the appliance's sequence, which publishes a
+         * snapshot on the socket, which is what redraws the overview. That is
+         * the same path a busy appliance takes every second, so this measures
+         * the thing an operator actually meets. */
+        const focused = await page.evaluate(function () {
+            var target = document.querySelector('[data-focus-key]');
+            if (!target) { return null; }
+            target.focus();
+            return {
+                key: target.getAttribute('data-focus-key'),
+                took: document.activeElement === target,
+            };
+        });
+
+        let focusAcrossRedraw = { tested: false, reason: 'no keyed control is on screen' };
+        if (focused && focused.took) {
+            await page.evaluate(async function () {
+                await fetch('/api/entities/extensions', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        number: '299', name: 'A Redraw Probe', technology: 'PJSIP',
+                        voicemail: false, ring_seconds: 20, enabled: true,
+                    }),
+                });
+            });
+            await page.waitForTimeout(1200);
+            focusAcrossRedraw = await page.evaluate(function (key) {
+                var active = document.activeElement;
+                return {
+                    tested: true,
+                    key: key,
+                    focusedBefore: true,
+                    keptFocus: !!(active && active.getAttribute &&
+                        active.getAttribute('data-focus-key') === key),
+                    landedOn: active === document.body ? 'the document body'
+                        : String((active && active.className) || (active && active.tagName)),
+                };
+            }, focused.key);
+        }
+        report.focusAcrossRedraw = focusAcrossRedraw;
+        if (focusAcrossRedraw.tested && focusAcrossRedraw.focusedBefore &&
+            !focusAcrossRedraw.keptFocus) {
+            finding('high', 'A redraw takes the control out from under a keyboard user',
+                'Focus was on ' + focusAcrossRedraw.key + ' and a state update moved it to ' +
+                focusAcrossRedraw.landedOn + '. The console redraws about once a second, so ' +
+                'this control cannot be operated from the keyboard at all.');
+        }
+
         // -- what the tiles say when the engine is not there --------------
         /* The appliance under test is deliberately pointed at an engine that
          * is not listening, which is the condition an operator meets at three
@@ -744,9 +806,25 @@ const CONTRAST_HELPERS = `
         });
         report.liveRegions = live;
         const assertive = live.filter(function (r) { return r.politeness === 'assertive'; });
+        const polite = live.filter(function (r) { return r.politeness === 'polite'; });
         if (assertive.length > 1) {
             finding('medium', 'Several assertive live regions',
                 assertive.length + ' regions interrupt the screen reader. Routine updates should be polite.');
+        }
+        /* One that interrupts and one that waits. Every region being polite
+         * puts "the trunk carrying every outside call has failed" in the same
+         * queue as "the configuration was saved"; every region being assertive
+         * cuts into a screen reader for things that could have waited. */
+        if (!assertive.length) {
+            finding('medium', 'Nothing on the console can interrupt',
+                'Every live region is polite, so a critical alarm waits behind whatever a ' +
+                'screen reader is already saying. A condition taking calls away is the one ' +
+                'thing that warrants interrupting.');
+        }
+        if (!polite.length) {
+            finding('medium', 'Everything on the console interrupts',
+                'There is no polite region, so an ordinary confirmation cuts into whatever ' +
+                'is being read.');
         }
         if (!live.length) {
             finding('high', 'Nothing is announced when the appliance pushes an update',

@@ -23,12 +23,14 @@ real bundle, and search the finished bytes for the material by value.
 
 from __future__ import annotations
 
+import importlib
 import io
 import json
 import tarfile
 import unittest
 
 from appliance import supportbundle
+from appliance.entities import ENTITY_SPECS, Field
 from support import ApplianceHarness
 
 #: Distinctive enough that finding any of them in the archive is unambiguous.
@@ -166,6 +168,51 @@ class SupportBundleTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("no telephone password", readme)
         self.assertIn("addresses of this site", readme)
         self.assertIn(supportbundle.REDACTED, readme)
+
+    def test_every_secret_the_schema_declares_is_withheld(self) -> None:
+        """The claim this module makes about itself, asserted rather than said.
+
+        The first version listed the withheld names by hand and its docstring
+        promised that a field added elsewhere could not arrive here by
+        accident. That was not true -- the list happened to match the schema on
+        the day it was written. Adding one secret field the following year
+        would have put its value into a bundle destined for a vendor's inbox.
+        """
+        declared = {
+            item.name
+            for spec in ENTITY_SPECS.values()
+            for item in spec.fields
+            if item.secret
+        }
+        self.assertTrue(declared, "the schema declares no secrets, so this proved nothing")
+        missing = declared - set(supportbundle.WITHHELD_FIELDS)
+        self.assertEqual(
+            missing, set(),
+            f"the schema calls these secret and the bundle would carry them: {missing}",
+        )
+
+    def test_a_secret_field_added_to_the_schema_is_withheld_without_being_listed(
+        self,
+    ) -> None:
+        """The property itself, exercised: add one and see it withheld."""
+        spec = ENTITY_SPECS["trunks"]
+        original = spec.fields
+        addition = Field(
+            "carrier_interface_key", "carrier interface key", "secret", secret=True
+        )
+        object.__setattr__(spec, "fields", original + (addition,))
+        try:
+            importlib.reload(supportbundle)
+            redacted = supportbundle._redact(
+                {"trunks": [{"carrier_interface_key": "material"}]}
+            )
+            self.assertEqual(
+                redacted["trunks"][0]["carrier_interface_key"],
+                supportbundle.REDACTED,
+            )
+        finally:
+            object.__setattr__(spec, "fields", original)
+            importlib.reload(supportbundle)
 
     def test_the_manifest_names_every_withheld_field(self) -> None:
         _, members = self._bundle()

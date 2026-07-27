@@ -285,6 +285,17 @@ main {
 
 /* -- alarms ------------------------------------------------------------- */
 
+/* The urgent region sits with the polite one and is never seen: it exists to
+ * be spoken. Given no box of its own it would still be laid out, so it is held
+ * to nothing and takes no space when empty. */
+.toast-holder--urgent:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .alarm-list { margin: 0; padding-left: 1.1rem; }
 
 .alarm-list li { margin-bottom: 0.4rem; }
