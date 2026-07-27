@@ -32,6 +32,32 @@ to a machine.
 
 ## Getting started
 
+### Starting from the appliance image
+
+Write the image to a flash device or burn it to a disc, put it in the machine,
+and start the machine from it. The appliance comes up by itself and prints, on
+the machine's own screen, the address to open a browser at.
+
+That address was written into the image. This appliance never asks a network
+for an address and never hands one out, so it has to arrive already reachable
+or you could not open its console the first time. Change it from the console
+once you can reach it.
+
+While the appliance is running from the medium it forgets everything when the
+machine stops, which is the right shape for trying it and the wrong shape for
+running a site on it. When you are ready to keep it, install it onto the
+machine's own disk from the console, or from the machine's own keyboard:
+
+```
+myipbx-install-to-disk --dry-run --disk /dev/sda
+myipbx-install-to-disk --disk /dev/sda
+```
+
+The first command reports every step and writes nothing. The second does it,
+and destroys everything on that disk — it says exactly what it is about to
+destroy and makes you type a word to agree. Then take the medium out and start
+the machine again.
+
 ### Signing in
 
 There are no default credentials. The installer generated a password and

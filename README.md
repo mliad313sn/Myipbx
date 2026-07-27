@@ -258,4 +258,5 @@ report themselves skipped and everything else runs normally.
 | [`docs/operations-runbook.md`](docs/operations-runbook.md) | installing, operating, diagnosing, and recovering |
 | [`docs/competitive-benchmark.md`](docs/competitive-benchmark.md) | measured against the free field, with sources and honest gaps |
 | [`docs/user-guide.md`](docs/user-guide.md) | how to run the appliance, task by task |
+| [`docs/hardware-compatibility.md`](docs/hardware-compatibility.md) | which cards have actually been driven, and by whom — currently none |
 | [`docs/quality-assurance-report.md`](docs/quality-assurance-report.md) | what was tested, what failed, and what was repaired |
