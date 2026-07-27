@@ -86,7 +86,8 @@ class ConfigurationStoreTests(unittest.TestCase):
     def test_every_artefact_is_rendered_and_marked_as_generated(self) -> None:
         outcome = self.store.render(DOCUMENT)
         expected = {"pjsip.conf", "extensions.conf", "voicemail.conf",
-                    "chan_dahdi.conf", "manager.conf"}
+                    "queues.conf", "confbridge.conf", "chan_dahdi.conf",
+                    "manager.conf"}
         self.assertEqual(set(outcome["written"]), expected)
 
         for name in expected:
@@ -150,7 +151,7 @@ class ConfigurationStoreTests(unittest.TestCase):
         self.store.render(DOCUMENT)
         second = self.store.render(DOCUMENT)
         self.assertEqual(second["written"], [])
-        self.assertEqual(len(second["unchanged"]), 5)
+        self.assertEqual(len(second["unchanged"]), 7)
 
     # -- Benchmark Defect One ------------------------------------------------
 

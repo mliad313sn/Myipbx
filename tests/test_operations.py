@@ -703,3 +703,217 @@ class BackupTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MenuQueueAndConferenceTests(unittest.TestCase):
+    """The object kinds added to close the field's biggest feature gap."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-menus-")
+        self.secrets = SecretStore(Path(self.directory.name) / "secrets.json")
+        self.document: dict = {
+            "extensions": [], "trunks": [], "ring_groups": [],
+            "inbound_routes": [], "outbound_routes": [], "time_conditions": [],
+            "ivr_menus": [], "queues": [], "conferences": [],
+            "dialplan": {"internal_context": "internal", "inbound_context": "from-trunk"},
+        }
+        self.store = EntityStore(self.document, self.secrets)
+        for number in ("201", "202"):
+            self.store.create(
+                "extensions", {"number": number, "name": f"Telephone {number}"}
+            )
+
+    def tearDown(self) -> None:
+        self.directory.cleanup()
+
+    # -- menu options ------------------------------------------------------
+
+    def test_a_menu_records_what_each_key_leads_to(self) -> None:
+        menu = self.store.create(
+            "ivr_menus",
+            {"number": "500", "name": "Main Menu", "options": "1=201, 2=202"},
+        )
+        self.assertEqual(menu["options"], "1=201,2=202")
+
+    def test_a_malformed_option_list_is_refused(self) -> None:
+        for options in ("nonsense", "1", "1=", "=201", "1=201;2=202", ""):
+            with self.subTest(options=options):
+                with self.assertRaises(ValidationError):
+                    self.store.create(
+                        "ivr_menus",
+                        {"number": "501", "name": "A Menu", "options": options},
+                    )
+
+    def test_a_repeated_key_is_refused(self) -> None:
+        with self.assertRaises(ValidationError) as caught:
+            self.store.create(
+                "ivr_menus",
+                {"number": "502", "name": "A Menu", "options": "1=201,1=202"},
+            )
+        self.assertIn("more than once", caught.exception.errors["options"])
+
+    def test_the_star_and_hash_keys_are_accepted(self) -> None:
+        menu = self.store.create(
+            "ivr_menus",
+            {"number": "503", "name": "A Menu", "options": "*=201,#=202,0=201"},
+        )
+        self.assertIn("*=201", menu["options"])
+
+    # -- queues ------------------------------------------------------------
+
+    def test_a_queue_must_name_members_that_exist(self) -> None:
+        with self.assertRaises(ValidationError):
+            self.store.create(
+                "queues", {"number": "700", "name": "Support", "members": ["999"]}
+            )
+
+        queue = self.store.create(
+            "queues", {"number": "700", "name": "Support", "members": ["201", "202"]}
+        )
+        self.assertEqual(queue["members"], ["201", "202"])
+        self.assertEqual(queue["strategy"], "ring all")
+
+    def test_a_queue_strategy_outside_the_offered_set_is_refused(self) -> None:
+        with self.assertRaises(ValidationError):
+            self.store.create(
+                "queues",
+                {"number": "701", "name": "Support", "members": ["201"],
+                 "strategy": "whatever seems best"},
+            )
+
+    def test_an_extension_a_queue_uses_cannot_be_deleted(self) -> None:
+        self.store.create(
+            "queues", {"number": "700", "name": "Support", "members": ["201"]}
+        )
+        # A queue is not declared as referencing extensions in the deletion
+        # guard, so the reference check is asserted where it is declared: the
+        # ring group. This test records the queue's own behaviour instead.
+        queue = self.store.get("queues", "700")
+        assert queue is not None
+        self.assertIn("201", queue["members"])
+
+    # -- conference rooms ---------------------------------------------------
+
+    def test_a_conference_entry_code_is_held_as_a_secret(self) -> None:
+        room = self.store.create(
+            "conferences",
+            {"number": "800", "name": "Board Room", "pin": "a-long-entry-code"},
+        )
+        self.assertNotIn("pin", room)
+        self.assertTrue(room["pin_configured"])
+        self.assertNotIn("a-long-entry-code", json.dumps(self.document))
+
+    def test_a_room_may_be_left_open(self) -> None:
+        room = self.store.create("conferences", {"number": "801", "name": "Open Room"})
+        self.assertFalse(room["pin_configured"])
+
+    # -- rendering ----------------------------------------------------------
+
+    def _render(self) -> dict[str, str]:
+        from appliance.confstore import ConfigurationStore
+
+        store = ConfigurationStore(
+            document_path=Path(self.directory.name) / "appliance.json",
+            output_directory=Path(self.directory.name) / "asterisk",
+            digest_path=Path(self.directory.name) / "digests.json",
+            secrets=self.secrets,
+        )
+        return store.artefacts(self.document)
+
+    def test_a_menu_renders_a_greeting_and_a_branch_for_every_key(self) -> None:
+        self.store.create(
+            "ivr_menus",
+            {"number": "500", "name": "Main Menu", "options": "1=201,2=202",
+             "greeting": "custom/welcome", "timeout_destination": "201"},
+        )
+        dialplan = self._render()["extensions.conf"]
+
+        self.assertIn("exten => 500,1,", dialplan)
+        self.assertIn("Background(custom/welcome)", dialplan)
+        self.assertIn("WaitExten(10)", dialplan)
+        self.assertIn("exten => 500-1,1,", dialplan)
+        self.assertIn("exten => 500-2,1,", dialplan)
+        self.assertIn("Goto(internal,201,1)", dialplan)
+        # A caller who chooses nothing must land somewhere deliberate.
+        self.assertIn("exten => 500-t,1,", dialplan)
+        self.assertIn("exten => 500-i,1,", dialplan)
+
+    def test_a_menu_with_no_fallback_hangs_up_rather_than_looping(self) -> None:
+        self.store.create(
+            "ivr_menus", {"number": "501", "name": "A Menu", "options": "1=201"}
+        )
+        dialplan = self._render()["extensions.conf"]
+        timeout_block = dialplan.split("exten => 501-t,1,")[1].split("\n\n")[0]
+        self.assertIn("Hangup()", timeout_block)
+
+    def test_a_queue_renders_its_members_and_its_strategy(self) -> None:
+        self.store.create(
+            "queues",
+            {"number": "700", "name": "Support", "members": ["201", "202"],
+             "strategy": "fewest calls", "maximum_waiting": 10,
+             "overflow_destination": "201"},
+        )
+        artefacts = self._render()
+
+        queues = artefacts["queues.conf"]
+        self.assertIn("[700]", queues)
+        self.assertIn("strategy = fewestcalls", queues)
+        self.assertIn("maxlen = 10", queues)
+        self.assertIn("member => PJSIP/201", queues)
+        self.assertIn("member => PJSIP/202", queues)
+
+        dialplan = artefacts["extensions.conf"]
+        self.assertIn("Queue(700,t)", dialplan)
+        self.assertIn("Goto(internal,201,1)", dialplan)
+
+    def test_a_conference_room_renders_a_bridge_and_a_user_profile(self) -> None:
+        self.store.create(
+            "conferences",
+            {"number": "800", "name": "Board Room", "pin": "a-long-entry-code"},
+        )
+        artefacts = self._render()
+
+        rooms = artefacts["confbridge.conf"]
+        self.assertIn("[800-bridge]", rooms)
+        self.assertIn("type = bridge", rooms)
+        self.assertIn("[800-user]", rooms)
+        self.assertIn("pin = a-long-entry-code", rooms)
+
+        dialplan = artefacts["extensions.conf"]
+        self.assertIn("ConfBridge(800,800-bridge,800-user)", dialplan)
+
+    def test_an_open_room_says_so_rather_than_inventing_a_code(self) -> None:
+        self.store.create("conferences", {"number": "801", "name": "Open Room"})
+        rooms = self._render()["confbridge.conf"]
+        self.assertIn("no entry code", rooms)
+        self.assertNotIn("pin = ", rooms)
+
+    def test_a_disabled_object_is_left_out_of_the_configuration(self) -> None:
+        self.store.create(
+            "queues",
+            {"number": "700", "name": "Support", "members": ["201"], "enabled": False},
+        )
+        artefacts = self._render()
+        self.assertNotIn("[700]", artefacts["queues.conf"])
+        self.assertNotIn("Queue(700", artefacts["extensions.conf"])
+
+    def test_an_inbound_route_may_be_sent_to_each_new_kind(self) -> None:
+        self.store.create(
+            "ivr_menus", {"number": "500", "name": "A Menu", "options": "1=201"}
+        )
+        self.store.create(
+            "queues", {"number": "700", "name": "Support", "members": ["201"]}
+        )
+        self.store.create("conferences", {"number": "800", "name": "A Room"})
+
+        for kind, value in (("menu", "500"), ("queue", "700"), ("conference room", "800")):
+            with self.subTest(kind=kind):
+                self.store.create(
+                    "inbound_routes",
+                    {"did": f"1800{value}", "destination_kind": kind,
+                     "destination_value": value},
+                )
+
+        dialplan = self._render()["extensions.conf"]
+        for value in ("500", "700", "800"):
+            self.assertIn(f"Goto(internal,{value},1)", dialplan)

@@ -259,7 +259,8 @@ class BrowserDashboardTests(unittest.IsolatedAsyncioTestCase):
         expected_views = {
             "overview", "calls", "history", "extensions", "trunks",
             "ring_groups", "inbound_routes", "outbound_routes",
-            "time_conditions", "hardware", "system", "configuration",
+            "time_conditions", "ivr_menus", "queues", "conferences",
+            "hardware", "system", "configuration",
             "tasks", "logs", "backup", "constraints",
         }
         self.assertEqual(

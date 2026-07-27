@@ -34,8 +34,9 @@ That is the product's central claim, and it is the one worth checking first,
 because it is where the free field is weakest. An administrator never needs a
 terminal — not for telephony, and not for the operating system underneath it.
 
-From the console: extensions, trunks, ring groups, inbound and outbound routes,
-time conditions and voicemail; live call monitoring and call history; the
+From the console: extensions, trunks, ring groups, interactive menus, call
+queues, conference rooms, inbound and outbound routes, time conditions and
+voicemail; live call monitoring and call history; the
 machine's static addressing, host name, time zone and clock; starting and
 restarting services; **compiling the legacy interface card drivers against the
 running kernel**; generating span configuration; reading logs; backup and
@@ -58,7 +59,7 @@ appliance/     the control plane -- standard library only, no dependencies
 web/           the console -- vanilla markup and scripting, no build step
 scripts/       the staging scripts, the exclusion audit, the privileged helper
 config/        engine, service, network, privilege, and appliance templates
-tests/         the quality assurance suite -- three hundred twelve tests
+tests/         the quality assurance suite -- three hundred twenty-eight tests
 docs/          vision, benchmarks, architecture, user guide, runbook, assurance
 ```
 

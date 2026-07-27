@@ -53,6 +53,9 @@ _DEFAULT_DOCUMENT: dict[str, Any] = {
     "inbound_routes": [],
     "outbound_routes": [],
     "time_conditions": [],
+    "ivr_menus": [],
+    "queues": [],
+    "conferences": [],
     "dialplan": {"inbound_context": "from-trunk", "internal_context": "internal"},
     "hardware": {"spans": []},
 }
@@ -154,6 +157,8 @@ class ConfigurationStore:
             "pjsip.conf": render_endpoints(source, self.secrets),
             "extensions.conf": render_dialplan(source),
             "voicemail.conf": render_voicemail(source, self.secrets),
+            "queues.conf": render_queues(source),
+            "confbridge.conf": render_conferences(source, self.secrets),
             "chan_dahdi.conf": render_hardware_channels(source),
             "manager.conf": render_manager_interface(source),
         }
@@ -453,9 +458,21 @@ def _destination_lines(kind: str, value: str, internal: str) -> list[str]:
         return [" same => n,Hangup()\n"]
     if kind == "voicemail":
         return [f" same => n,VoiceMail({value}@default,u)\n", " same => n,Hangup()\n"]
-    # An extension, a ring group, and a menu are all reached by their number in
-    # the internal context, which is what keeps this table small.
+    # Every other destination -- an extension, a ring group, a queue, a menu,
+    # a conference room -- is reached by its number in the internal context.
+    # That is what keeps this table small and the dialplan uniform: one number
+    # space, and the object that owns the number decides what happens.
     return [f" same => n,Goto({internal},{value},1)\n"]
+
+
+def _parse_options(text: str) -> list[tuple[str, str]]:
+    """Read a menu's options into key and destination pairs."""
+    pairs: list[tuple[str, str]] = []
+    for entry in str(text or "").split(","):
+        key, separator, destination = entry.partition("=")
+        if separator and key.strip() and destination.strip():
+            pairs.append((key.strip(), destination.strip()))
+    return pairs
 
 
 def render_dialplan(document: Mapping[str, Any]) -> str:
@@ -540,6 +557,80 @@ def render_dialplan(document: Mapping[str, Any]) -> str:
         )
         lines.append("\n")
 
+    # -- interactive menus -------------------------------------------------
+    menus = [menu for menu in document.get("ivr_menus", []) or [] if _enabled(menu)]
+    if menus:
+        lines.append("; interactive menus\n")
+    for menu in menus:
+        number = str(menu.get("number", "")).strip()
+        options = _parse_options(menu.get("options", ""))
+        if not number or not options:
+            continue
+
+        greeting = str(menu.get("greeting", "") or "vm-enter-num-to-call")
+        wait = int(menu.get("wait_seconds", 10) or 10)
+
+        lines.append(f"exten => {number},1,NoOp(the menu numbered {number})\n")
+        lines.append(" same => n,Answer()\n")
+        lines.append(f" same => n,Background({greeting})\n")
+        lines.append(f" same => n,WaitExten({wait})\n\n")
+
+        for key, destination in options:
+            lines.append(
+                f"exten => {number}-{key},1,NoOp(the caller chose {key} at the menu "
+                f"numbered {number})\n"
+            )
+            lines.append(f" same => n,Goto({internal},{destination},1)\n\n")
+
+        # The engine matches the pressed key inside the menu's own extension,
+        # so each key is bridged to the option written above.
+        for key, _ in options:
+            lines.append(f"exten => {key},1,NoOp(a key pressed at a menu)\n")
+            lines.append(f" same => n,Goto({internal},{number}-{key},1)\n\n")
+
+        fallback = str(menu.get("timeout_destination", "") or "").strip()
+        for label in ("t", "i"):
+            lines.append(
+                f"exten => {number}-{label},1,NoOp(no usable choice was made at the "
+                f"menu numbered {number})\n"
+            )
+            if fallback:
+                lines.append(f" same => n,Goto({internal},{fallback},1)\n\n")
+            else:
+                lines.append(" same => n,Hangup()\n\n")
+
+    # -- queues -------------------------------------------------------------
+    queues = [queue for queue in document.get("queues", []) or [] if _enabled(queue)]
+    if queues:
+        lines.append("; queues\n")
+    for queue in queues:
+        number = str(queue.get("number", "")).strip()
+        if not number:
+            continue
+        overflow = str(queue.get("overflow_destination", "") or "").strip()
+
+        lines.append(f"exten => {number},1,NoOp(a call to the queue numbered {number})\n")
+        lines.append(" same => n,Answer()\n")
+        lines.append(f" same => n,Queue({number},t)\n")
+        if overflow:
+            lines.append(f" same => n,Goto({internal},{overflow},1)\n")
+        else:
+            lines.append(" same => n,Hangup()\n")
+        lines.append("\n")
+
+    # -- conference rooms ----------------------------------------------------
+    rooms = [room for room in document.get("conferences", []) or [] if _enabled(room)]
+    if rooms:
+        lines.append("; conference rooms\n")
+    for room in rooms:
+        number = str(room.get("number", "")).strip()
+        if not number:
+            continue
+        lines.append(f"exten => {number},1,NoOp(a call to the conference room numbered {number})\n")
+        lines.append(" same => n,Answer()\n")
+        lines.append(f" same => n,ConfBridge({number},{number}-bridge,{number}-user)\n")
+        lines.append(" same => n,Hangup()\n\n")
+
     # -- outbound routes ---------------------------------------------------
     routes = sorted(
         (route for route in document.get("outbound_routes", []) or [] if _enabled(route)),
@@ -597,6 +688,93 @@ def render_dialplan(document: Mapping[str, Any]) -> str:
             )
         )
         lines.append(" same => n,Hangup()\n\n")
+
+    return "".join(lines)
+
+
+_QUEUE_STRATEGIES = {
+    "ring all": "ringall",
+    "least recent": "leastrecent",
+    "fewest calls": "fewestcalls",
+    "random": "random",
+    "round robin memory": "rrmemory",
+}
+
+
+def render_queues(document: Mapping[str, Any]) -> str:
+    """Render every queue and the members that answer it."""
+    lines = [_header("queues")]
+    lines.append("[general]\n")
+    lines.append("persistentmembers = yes\n")
+    lines.append("monitor-type = MixMonitor\n\n")
+
+    queues = [queue for queue in document.get("queues", []) or [] if _enabled(queue)]
+    if not queues:
+        lines.append("; no queue is configured on this system\n")
+        return "".join(lines)
+
+    for queue in queues:
+        number = str(queue.get("number", "")).strip()
+        if not number:
+            continue
+        strategy = _QUEUE_STRATEGIES.get(
+            str(queue.get("strategy", "ring all")).lower(), "ringall"
+        )
+
+        lines.append(f"[{number}]\n")
+        lines.append(f"; {queue.get('name', 'an unnamed queue')}\n")
+        lines.append(f"strategy = {strategy}\n")
+        lines.append(f"timeout = {int(queue.get('ring_seconds', 20) or 20)}\n")
+        lines.append(f"musicclass = {queue.get('music_class', 'default')}\n")
+        lines.append("retry = 5\n")
+        lines.append("wrapuptime = 5\n")
+        lines.append("joinempty = yes\n")
+        lines.append("leavewhenempty = no\n")
+        lines.append("ringinuse = no\n")
+
+        maximum = int(queue.get("maximum_waiting", 0) or 0)
+        if maximum:
+            lines.append(f"maxlen = {maximum}\n")
+
+        for member in queue.get("members", []) or []:
+            lines.append(f"member => PJSIP/{str(member).strip()}\n")
+        lines.append("\n")
+
+    return "".join(lines)
+
+
+def render_conferences(document: Mapping[str, Any], secrets: Any = None) -> str:
+    """Render every conference room, its bridge, and its user profile."""
+    lines = [_header("conference rooms")]
+
+    rooms = [room for room in document.get("conferences", []) or [] if _enabled(room)]
+    if not rooms:
+        lines.append("; no conference room is configured on this system\n")
+        return "".join(lines)
+
+    for room in rooms:
+        number = str(room.get("number", "")).strip()
+        if not number:
+            continue
+        pin = _secret_for(secrets, "conferences", number, "pin")
+
+        lines.append(f"[{number}-bridge]\n")
+        lines.append("type = bridge\n")
+        lines.append(f"; {room.get('name', 'an unnamed room')}\n")
+        lines.append("max_members = 50\n")
+        lines.append("record_conference = no\n\n")
+
+        lines.append(f"[{number}-user]\n")
+        lines.append("type = user\n")
+        lines.append(
+            f"announce_join_leave = {'yes' if room.get('announce_arrivals', True) else 'no'}\n"
+        )
+        lines.append(f"music_on_hold_class = {room.get('music_class', 'default')}\n")
+        if pin:
+            lines.append(f"pin = {pin}\n")
+        else:
+            lines.append("; this room has no entry code and is open to any caller\n")
+        lines.append("dsp_drop_silence = yes\n\n")
 
     return "".join(lines)
 

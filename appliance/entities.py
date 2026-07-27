@@ -44,6 +44,11 @@ _HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$")
 _PATTERN_PATTERN = re.compile(r"^[0-9NXZ._\[\]!+*-]{1,32}$")
 _ELECTRONIC_MAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _TIME_PATTERN = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+#: A menu's options, written as a comma separated list of key equals
+#: destination pairs -- for example "one=two hundred one" is written 1=201,2=600
+#: because both sides are dialled values rather than prose.
+_MAP_PATTERN = re.compile(r"^\s*[0-9*#]\s*=\s*[A-Za-z0-9_-]+\s*(,\s*[0-9*#]\s*=\s*[A-Za-z0-9_-]+\s*)*$")
+_SOUND_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9/_-]{0,127}$")
 
 
 class ValidationError(ValueError):
@@ -65,7 +70,7 @@ class Field:
 
     name: str
     label: str
-    kind: str = "text"          # text, number, secret, boolean, choice, list, time
+    kind: str = "text"          # text, number, secret, boolean, choice, list, time, map
     required: bool = False
     default: Any = None
     help: str = ""
@@ -123,7 +128,10 @@ class EntitySpec:
         }
 
 
-_DESTINATION_KINDS = ("extension", "ring group", "voicemail", "menu", "hang up")
+_DESTINATION_KINDS = (
+    "extension", "ring group", "queue", "menu", "conference room",
+    "voicemail", "hang up",
+)
 
 ENTITY_SPECS: dict[str, EntitySpec] = {}
 
@@ -302,6 +310,99 @@ _register(
                   pattern_help="a destination is the number of an extension or a ring group"),
             Field("enabled", "enabled", "boolean", default=True),
         ),
+    )
+)
+
+
+_register(
+    EntitySpec(
+        kind="ivr_menus",
+        singular="menu",
+        plural="menus",
+        key="number",
+        description="plays a greeting and sends the caller where they choose",
+        fields=(
+            Field("number", "menu number", required=True, pattern=_NUMBER_PATTERN,
+                  pattern_help="a menu number is one to ten digits"),
+            Field("name", "description", required=True, pattern=_NAME_PATTERN,
+                  pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
+            Field("greeting", "greeting recording", default="vm-enter-num-to-call",
+                  pattern=_SOUND_PATTERN,
+                  pattern_help="a recording name uses letters, digits, and the marks slash, underscore, and hyphen",
+                  help="the recording played when the caller arrives"),
+            Field("options", "options", "map", required=True,
+                  pattern=_MAP_PATTERN,
+                  pattern_help="options are written as a key, an equals sign, and a destination, separated by commas",
+                  help="what each key the caller presses leads to, such as one equals an extension"),
+            Field("wait_seconds", "wait time", "number", default=10, minimum=1, maximum=60,
+                  help="how long to wait for the caller to choose"),
+            Field("timeout_destination", "if nobody chooses, send to",
+                  pattern=_NUMBER_PATTERN,
+                  pattern_help="a destination is the number of an extension, a group, or a queue",
+                  help="left empty, the call is hung up"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+        referenced_by=(("inbound_routes", "destination_value"),),
+    )
+)
+
+_register(
+    EntitySpec(
+        kind="queues",
+        singular="queue",
+        plural="queues",
+        key="number",
+        description="holds callers in order until somebody is free to answer",
+        fields=(
+            Field("number", "queue number", required=True, pattern=_NUMBER_PATTERN,
+                  pattern_help="a queue number is one to ten digits"),
+            Field("name", "description", required=True, pattern=_NAME_PATTERN,
+                  pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
+            Field("members", "who answers", "list", required=True, references="extensions",
+                  help="the extensions that take calls from this queue"),
+            Field("strategy", "how calls are offered", "choice", default="ring all",
+                  choices=("ring all", "least recent", "fewest calls", "random",
+                           "round robin memory"),
+                  help="which member a waiting call is offered to next"),
+            Field("ring_seconds", "ring time", "number", default=20, minimum=5, maximum=300,
+                  help="how long one member rings before the call moves on"),
+            Field("maximum_waiting", "most callers waiting", "number", default=0,
+                  minimum=0, maximum=999,
+                  help="callers beyond this are sent to the overflow destination; zero means no limit"),
+            Field("overflow_destination", "when full or timed out, send to",
+                  pattern=_NUMBER_PATTERN,
+                  pattern_help="a destination is the number of an extension, a group, or a menu"),
+            Field("music_class", "music while waiting", default="default",
+                  pattern=_SOUND_PATTERN,
+                  pattern_help="a music class name uses letters, digits, and the marks slash, underscore, and hyphen"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+        referenced_by=(("inbound_routes", "destination_value"),),
+    )
+)
+
+_register(
+    EntitySpec(
+        kind="conferences",
+        singular="conference room",
+        plural="conference rooms",
+        key="number",
+        description="a room several callers can be in at once",
+        fields=(
+            Field("number", "room number", required=True, pattern=_NUMBER_PATTERN,
+                  pattern_help="a room number is one to ten digits"),
+            Field("name", "description", required=True, pattern=_NAME_PATTERN,
+                  pattern_help="a description uses letters, digits, spaces, and the marks period, underscore, and hyphen"),
+            Field("pin", "entry code", "secret", secret=True,
+                  help="callers must enter this to join; leave empty for an open room"),
+            Field("announce_arrivals", "announce arrivals and departures", "boolean",
+                  default=True),
+            Field("music_class", "music while alone", default="default",
+                  pattern=_SOUND_PATTERN,
+                  pattern_help="a music class name uses letters, digits, and the marks slash, underscore, and hyphen"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+        referenced_by=(("inbound_routes", "destination_value"),),
     )
 )
 
@@ -585,6 +686,22 @@ class EntityStore:
                         }
                     )
             return values
+
+        if item.kind == "map":
+            text = str(raw).strip()
+            if item.pattern is not None and not item.pattern.match(text):
+                raise ValidationError({item.name: item.pattern_help or f"{item.label} is not valid"})
+            # A key may appear only once, or the dialplan would silently take
+            # whichever entry happened to be rendered first.
+            keys = [pair.split("=", 1)[0].strip() for pair in text.split(",")]
+            if len(keys) != len(set(keys)):
+                raise ValidationError(
+                    {item.name: f"{item.label} names the same key more than once"}
+                )
+            return ",".join(
+                f"{pair.split('=', 1)[0].strip()}={pair.split('=', 1)[1].strip()}"
+                for pair in text.split(",")
+            )
 
         text = str(raw).strip()
 

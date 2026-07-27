@@ -16,7 +16,7 @@ to a machine.
 
 **Getting started** — [signing in](#signing-in) · [the console at a glance](#the-console-at-a-glance) · [the link indicator](#the-link-indicator)
 
-**Telephony** — [extensions](#extensions) · [trunks](#trunks) · [ring groups](#ring-groups) · [inbound routes](#inbound-routes) · [outbound routes](#outbound-routes) · [time conditions](#time-conditions) · [voicemail](#voicemail)
+**Telephony** — [extensions](#extensions) · [trunks](#trunks) · [ring groups](#ring-groups) · [menus](#menus) · [queues](#queues) · [conference rooms](#conference-rooms) · [inbound routes](#inbound-routes) · [outbound routes](#outbound-routes) · [time conditions](#time-conditions) · [voicemail](#voicemail)
 
 **Watching the system** — [live calls](#live-calls) · [call history](#call-history) · [alarms](#alarms) · [logs](#logs)
 
@@ -58,6 +58,9 @@ bottom.
 | extensions | the telephones |
 | trunks | connections to carriers |
 | ring groups | sets of telephones that ring together |
+| menus | plays a greeting and sends the caller where they choose |
+| queues | holds callers in order until somebody is free |
+| conference rooms | rooms several callers can be in at once |
 | inbound routes | where an arriving call is sent |
 | outbound routes | which trunk carries a dialled number |
 | time conditions | different destinations inside and outside business hours |
@@ -158,6 +161,60 @@ A set of telephones that ring together.
 Choose members from the extensions that exist — the field offers them, so a
 group cannot name a telephone that is not there. **Ring all** rings every member
 at once; **in order** tries them one at a time.
+
+### Menus
+
+A menu answers the call, plays a greeting, and sends the caller wherever they
+choose.
+
+| Field | Notes |
+| --- | --- |
+| menu number | callers reach the menu at this number |
+| greeting recording | the recording played on arrival |
+| options | what each key leads to |
+| wait time | how long to wait for a choice |
+| if nobody chooses, send to | left empty, the call is hung up |
+
+**Writing the options.** One entry per key, a key, an equals sign, and where it
+goes, separated by commas. Press one for reception and two for sales, where
+reception is extension two hundred one and sales is ring group six hundred, is
+written `1=201,2=600`. The star and hash keys may be used as well.
+
+A key may appear only once — naming the same key twice is refused, because the
+engine would silently take whichever entry was written first.
+
+Every menu gets a deliberate ending. A caller who presses nothing, or presses
+something the menu does not offer, goes to the destination you named; if you
+named none, the call is hung up rather than left looping.
+
+### Queues
+
+A queue holds callers in order and offers them to whoever is free.
+
+| Field | Notes |
+| --- | --- |
+| who answers | the extensions that take calls from this queue |
+| how calls are offered | which member the next waiting call goes to |
+| ring time | how long one member rings before the call moves on |
+| most callers waiting | callers beyond this go to the overflow destination; zero means no limit |
+| when full or timed out, send to | where a caller goes who could not be answered |
+| music while waiting | the music class played to waiting callers |
+
+The strategies are ring all, least recent, fewest calls, random, and round
+robin with memory. **Ring all** rings every member at once; the rest offer the
+call to one member at a time, differing in how they choose which.
+
+### Conference rooms
+
+A room several callers can be in at once.
+
+Set an entry code to keep the room private — it is stored as a secret like any
+other password and never shown again. A room with no entry code is open to
+anyone who dials it, and the generated configuration says so explicitly rather
+than inventing a code.
+
+**Announce arrivals and departures** plays a tone as people come and go. Turn
+it off for large rooms, where it becomes noise.
 
 ### Inbound routes
 
@@ -496,6 +553,6 @@ exist:
 - it will never overwrite a generated file you edited without asking;
 - it will never print a digit in a log;
 - it will never ship with a default password;
-- it does not provision handsets, host multiple tenants, run call queues or
-  interactive menus, or record calls. See the competitive benchmark for the
-  full and honest account of what it does not have.
+- it does not provision handsets, host multiple tenants, record calls, or
+  manage the machine's firewall. See the competitive benchmark for the full
+  and honest account of what it does not have.
