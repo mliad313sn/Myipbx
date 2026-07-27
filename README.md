@@ -58,6 +58,7 @@ operation.
 ```
 appliance/     the control plane -- standard library only, no dependencies
 web/           the console -- vanilla markup and scripting, no build step
+iso/           the bootable image build: five stages and a boot test
 scripts/       the staging scripts, the exclusion audit, the privileged helper
 config/        engine, service, network, privilege, and appliance templates
 tests/         the quality assurance suite -- three hundred forty-two tests
@@ -70,7 +71,39 @@ scheduler are all implemented directly, because the target machines are old,
 frequently air gapped, and often have no working package index for their
 vintage. A dependency tree is a liability on this hardware.
 
-## Installing
+## The bootable image
+
+The product ships as one file that boots a machine straight into a working
+appliance: a Linux operating system, the telephony engine, the legacy interface
+card drivers already compiled against the kernel it carries, the control plane,
+the console, and the manual. Nothing is downloaded on first boot, because these
+machines are frequently on networks that can reach nothing.
+
+```bash
+sudo make image              # build it
+sudo make image-boot-test    # start the finished image and prove it boots
+sudo make image-rehearse     # report what the build would do, changing nothing
+```
+
+It boots by both paths — the legacy boot record for older machines and the
+firmware boot manager for modern ones — and carries a hybrid partition table,
+so the same file can be burned to a disc or written straight to a flash device.
+
+Because the appliance never requests an address and never offers one, it has to
+arrive already reachable. It does: a documented static address, printed on the
+boot screen in words, changed from the appliance's own console once you can
+reach it. That is how physical appliances have always solved this, and it is
+the only answer consistent with the exclusion.
+
+The build has five stages, each separately runnable and each recording a
+receipt, so a build interrupted during the slow compression resumes rather than
+restarting. Full detail is in
+[`docs/image-architecture.md`](docs/image-architecture.md).
+
+## Installing onto an existing system
+
+The image is the usual route. This path is for adding the appliance to a Linux
+system that already exists.
 
 The installer needs administrative privilege and the source archives for the
 interface drivers and the telephony engine. Because these appliances are
@@ -188,6 +221,7 @@ report themselves skipped and everything else runs normally.
 | Document | Contents |
 | --- | --- |
 | [`docs/product-vision.md`](docs/product-vision.md) | what the product is and why the constraints exist |
+| [`docs/image-architecture.md`](docs/image-architecture.md) | what is in the bootable image and how it is built |
 | [`docs/market-benchmark.md`](docs/market-benchmark.md) | the field survey and the three defects to overcome |
 | [`docs/system-architecture.md`](docs/system-architecture.md) | the three layers and how each constraint is enforced |
 | [`docs/operations-runbook.md`](docs/operations-runbook.md) | installing, operating, diagnosing, and recovering |

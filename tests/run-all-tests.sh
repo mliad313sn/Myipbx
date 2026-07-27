@@ -30,7 +30,8 @@ printf '\n'
 # operator midway through an installation, so it is caught here first.
 
 printf '  checking the shell scripts\n'
-for script in "${REPOSITORY_ROOT}"/scripts/*.sh "${REPOSITORY_ROOT}"/scripts/lib/*.sh; do
+for script in "${REPOSITORY_ROOT}"/scripts/*.sh "${REPOSITORY_ROOT}"/scripts/lib/*.sh \
+            "${REPOSITORY_ROOT}"/iso/*.sh "${REPOSITORY_ROOT}"/iso/lib/*.sh "${REPOSITORY_ROOT}"/iso/stages/*.sh; do
     [[ -f "${script}" ]] || continue
     bash -n "${script}" || { printf '  the script at %s has a syntax fault\n' "${script}"; exit 1; }
 done

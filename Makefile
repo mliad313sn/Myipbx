@@ -41,7 +41,7 @@ check: check-shell check-python check-browser ## run every syntax gate
 
 .PHONY: check-shell
 check-shell: ## check every staging script for a syntax fault
-	@for script in scripts/*.sh scripts/lib/*.sh tests/*.sh; do \
+	@for script in scripts/*.sh scripts/lib/*.sh tests/*.sh iso/*.sh iso/lib/*.sh iso/stages/*.sh; do \
 		[ -f "$$script" ] || continue; \
 		bash -n "$$script" || exit 1; \
 		printf '  the script at %s is well formed\n' "$$script"; \
@@ -75,6 +75,18 @@ lint: ## static analysis of the console sources
 .PHONY: test-browser
 test-browser: ## drive the real console in a real browser
 	@$(PYTHON) -m unittest test_browser --verbose
+
+.PHONY: image
+image: ## build the bootable appliance image, requires administrative privilege
+	@bash iso/build-iso.sh
+
+.PHONY: image-rehearse
+image-rehearse: ## report what the image build would do, changing nothing
+	@bash iso/build-iso.sh --rehearse
+
+.PHONY: image-boot-test
+image-boot-test: ## start the finished image in an emulator and prove it boots
+	@bash iso/boot-test.sh
 
 .PHONY: audit
 audit: ## run the address allocation exclusion audit against this machine

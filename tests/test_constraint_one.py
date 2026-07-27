@@ -298,3 +298,96 @@ class AuditScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ImageBuildTests(unittest.TestCase):
+    """The bootable image is held to the same constraints as the appliance."""
+
+    ISO_ROOT = REPOSITORY_ROOT / "iso"
+
+    def _scripts(self) -> list[Path]:
+        return sorted(self.ISO_ROOT.rglob("*.sh"))
+
+    def test_the_image_build_exists_and_is_complete(self) -> None:
+        self.assertTrue(self.ISO_ROOT.is_dir(), "there is no image build in the repository")
+        for expected in (
+            "build-iso.sh", "boot-test.sh", "lib/iso-common.sh",
+            "stages/one-bootstrap.sh", "stages/two-payload.sh",
+            "stages/three-configure.sh", "stages/four-compress.sh",
+            "stages/five-master.sh",
+        ):
+            with self.subTest(part=expected):
+                self.assertTrue(
+                    (self.ISO_ROOT / expected).is_file(),
+                    f"the image build is missing {expected}",
+                )
+
+    def test_every_image_script_is_well_formed(self) -> None:
+        import subprocess
+
+        for script in self._scripts():
+            with self.subTest(script=script.name):
+                completed = subprocess.run(
+                    ["bash", "-n", str(script)], capture_output=True, text=True, timeout=60
+                )
+                self.assertEqual(
+                    completed.returncode, 0,
+                    f"{script.name} has a syntax fault: {completed.stderr}",
+                )
+
+    def test_no_image_stage_installs_an_address_allocation_service(self) -> None:
+        """The image may name allocation services only to exclude them."""
+        installing = re.compile(
+            r"install_in_chroot[^\n]*\b(isc-dhcp-server|dnsmasq|udhcpd|kea-dhcp)",
+        )
+        for script in self._scripts():
+            with self.subTest(script=script.name):
+                self.assertIsNone(
+                    installing.search(script.read_text(encoding="utf-8")),
+                    f"{script.name} installs an address allocation service into the image",
+                )
+
+    def test_the_image_build_audits_for_an_allocation_service(self) -> None:
+        bootstrap = (self.ISO_ROOT / "stages/one-bootstrap.sh").read_text(encoding="utf-8")
+        configure = (self.ISO_ROOT / "stages/three-configure.sh").read_text(encoding="utf-8")
+
+        self.assertIn("verify_no_allocation_service", bootstrap)
+        self.assertIn("audit_image", configure)
+        # The audit must be able to fail the build, not merely warn.
+        self.assertIn("the base image carries an address allocation service", bootstrap)
+
+    def test_the_image_masks_every_allocation_service_unit(self) -> None:
+        configure = (self.ISO_ROOT / "stages/three-configure.sh").read_text(encoding="utf-8")
+        for unit in ("isc-dhcp-server", "udhcpd", "kea-dhcp4-server"):
+            with self.subTest(unit=unit):
+                self.assertIn(unit, configure)
+        self.assertIn("systemctl mask", configure)
+
+    def test_the_image_network_configuration_requests_no_address(self) -> None:
+        configure = (self.ISO_ROOT / "stages/three-configure.sh").read_text(encoding="utf-8")
+        self.assertIn("DHCP=no", configure)
+        self.assertIn("Address=${APPLIANCE_DEFAULT_ADDRESS}", configure)
+        self.assertNotIn("DHCP=yes", configure)
+        self.assertNotIn("dhcp4: true", configure)
+
+    def test_the_boot_test_observes_the_exclusion_rather_than_asserting_it(self) -> None:
+        boot_test = (self.ISO_ROOT / "boot-test.sh").read_text(encoding="utf-8")
+        self.assertIn("mentions address allocation", boot_test)
+        self.assertIn("dhcpd", boot_test)
+
+    def test_the_image_ships_no_credential(self) -> None:
+        configure = (self.ISO_ROOT / "stages/three-configure.sh").read_text(encoding="utf-8")
+        self.assertIn("a credential was baked into the image", configure)
+        self.assertIn("credentials.json", configure)
+
+    def test_the_image_carries_both_boot_paths(self) -> None:
+        master = (self.ISO_ROOT / "stages/five-master.sh").read_text(encoding="utf-8")
+        self.assertIn("isolinux.bin", master)
+        self.assertIn("bootx64.efi", master)
+        self.assertIn("isohybrid-mbr", master)
+
+    def test_the_image_build_verifies_its_own_payload(self) -> None:
+        payload = (self.ISO_ROOT / "stages/two-payload.sh").read_text(encoding="utf-8")
+        # The strongest check the build makes: the control plane must import
+        # using the interpreter inside the image.
+        self.assertIn("import appliance.server", payload)
