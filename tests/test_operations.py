@@ -701,9 +701,35 @@ class BackupTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.directory.cleanup()
 
-    def test_a_backup_carries_every_recoverable_file(self) -> None:
+    def test_an_ordinary_backup_carries_the_configuration_and_no_password(self) -> None:
+        """The default, and the one people will actually take.
+
+        An archive is a file people move around: downloaded to a laptop,
+        attached to a message, dropped on a share, kept for years. The secret
+        file inside it carries every telephone and carrier password on the
+        appliance, in the clear, so one careless copy discloses the lot. It
+        travels only when it is asked for.
+        """
         payload, name = backup_module.create(self.context)
         self.assertTrue(name.startswith("myipbx-backup-"))
+        self.assertNotIn("with-secrets", name)
+
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+            members = {member.name for member in archive.getmembers()}
+        self.assertIn("appliance.json", members)
+        self.assertIn(backup_module.MANIFEST_NAME, members)
+        self.assertNotIn("secrets.json", members)
+        self.assertNotIn("credentials.json", members)
+
+        # And the material itself is nowhere in the bytes, not merely absent
+        # from the member list.
+        self.assertNotIn(b"a-password", payload)
+        self.assertNotIn(b"a-derivation", payload)
+
+    def test_a_backup_carries_every_recoverable_file_when_asked(self) -> None:
+        payload, name = backup_module.create(self.context, include_secrets=True)
+        self.assertTrue(name.startswith("myipbx-backup-"))
+        self.assertIn("with-secrets", name)
 
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
             members = {member.name for member in archive.getmembers()}
@@ -713,13 +739,22 @@ class BackupTests(unittest.TestCase):
         self.assertIn(backup_module.MANIFEST_NAME, members)
 
     def test_the_manifest_warns_that_the_archive_carries_secrets(self) -> None:
-        payload, _ = backup_module.create(self.context)
+        payload, _ = backup_module.create(self.context, include_secrets=True)
         described = backup_module.inspect(payload)
         self.assertTrue(described["manifest"]["contains_secrets"])
         self.assertIn("password", described["manifest"]["warning"])
+        self.assertIn("unencrypted", described["manifest"]["warning"])
+
+    def test_the_manifest_says_what_an_ordinary_backup_leaves_out(self) -> None:
+        """So that somebody restoring one is not surprised by it."""
+        payload, _ = backup_module.create(self.context)
+        described = backup_module.inspect(payload)
+        self.assertFalse(described["manifest"]["contains_secrets"])
+        self.assertIn("no secret", described["manifest"]["warning"])
+        self.assertIn("secrets.json", described["manifest"]["withheld"])
 
     def test_a_backup_restores_onto_a_cleared_appliance(self) -> None:
-        payload, _ = backup_module.create(self.context)
+        payload, _ = backup_module.create(self.context, include_secrets=True)
 
         (self.root / "appliance.json").write_text("{}", encoding="utf-8")
         (self.root / "state/secrets.json").unlink()
@@ -803,7 +838,7 @@ class BackupTests(unittest.TestCase):
         last year's password back onto a running appliance, locking out the
         administrator who had changed it since.
         """
-        payload, _ = backup_module.create(self.context)
+        payload, _ = backup_module.create(self.context, include_secrets=True)
 
         credentials = self.root / "state/credentials.json"
         credentials.write_text(
@@ -823,7 +858,7 @@ class BackupTests(unittest.TestCase):
 
     def test_the_administrator_credential_is_restored_when_it_is_asked_for(self) -> None:
         """An appliance whose password is lost has to be recoverable."""
-        payload, _ = backup_module.create(self.context)
+        payload, _ = backup_module.create(self.context, include_secrets=True)
 
         credentials = self.root / "state/credentials.json"
         credentials.write_text(
@@ -841,14 +876,14 @@ class BackupTests(unittest.TestCase):
 
     def test_an_archive_carrying_no_settings_block_restores_unchanged(self) -> None:
         """The guard must not invent a settings block that was never there."""
-        payload, _ = backup_module.create(self.context)
+        payload, _ = backup_module.create(self.context, include_secrets=True)
         outcome = backup_module.restore(self.context, payload)
         settled = json.loads((self.root / "appliance.json").read_text(encoding="utf-8"))
         self.assertNotIn("appliance", settled)
         self.assertEqual(outcome["held_back"], ["the administrator credential"])
 
     def test_a_restored_file_is_owner_readable_only(self) -> None:
-        payload, _ = backup_module.create(self.context)
+        payload, _ = backup_module.create(self.context, include_secrets=True)
         backup_module.restore(self.context, payload)
         self.assertEqual(
             (self.root / "state/secrets.json").stat().st_mode & 0o777, 0o600

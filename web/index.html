@@ -443,9 +443,27 @@
         <section class="panel">
           <h2>backup</h2>
           <p class="hint">
-            a backup carries this appliance's configuration, its secrets, and its
-            administrator credential. store it as you would store a password.
+            a backup carries this appliance's whole configuration: every
+            extension, trunk, route and rule. it does not carry passwords
+            unless you ask it to, so an ordinary backup can be stored wherever
+            is convenient. after restoring one, every password has to be
+            entered again.
           </p>
+          <div class="field field-inline">
+            <label for="backup-secrets">
+              <input type="checkbox" id="backup-secrets"
+                     aria-describedby="backup-secrets-help">
+              also include the passwords and the administrator credential
+            </label>
+            <p class="field-help" id="backup-secrets-help">
+              this puts every telephone password, every carrier account
+              password and the password you sign in with into the file, in the
+              clear. this appliance depends on nothing outside the language it
+              is written in, and that language has no cipher to encrypt them
+              with, so the file is not encrypted and cannot be. keep it the way
+              you keep a password, and delete it once the recovery is done.
+            </p>
+          </div>
           <div class="actions">
             <button type="button" id="backup-button">download a backup</button>
           </div>

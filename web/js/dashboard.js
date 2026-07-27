@@ -1416,21 +1416,32 @@
     /* ------------------------------------------------------------------ */
 
     function downloadBackup() {
-        request('/api/backup').then(function (result) {
-            if (!result.ok || !result.blob) {
-                toast('the backup could not be produced', 'bad');
-                return;
-            }
-            var url = URL.createObjectURL(result.blob);
-            var anchor = element('a');
-            anchor.href = url;
-            anchor.download = 'myipbx-backup.tar.gz';
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-            URL.revokeObjectURL(url);
-            toast('the backup was downloaded; store it as you would store a password');
-        });
+        var includeSecrets = Boolean(
+            nodes.backupSecrets && nodes.backupSecrets.checked
+        );
+        request('/api/backup?include_secrets=' + (includeSecrets ? 'yes' : 'no'))
+            .then(function (result) {
+                if (!result.ok || !result.blob) {
+                    toast('the backup could not be produced', 'bad');
+                    return;
+                }
+                var url = URL.createObjectURL(result.blob);
+                var anchor = element('a');
+                anchor.href = url;
+                /* The file names itself after what is in it, because the
+                 * difference matters months later when somebody finds it on a
+                 * share and has to decide what it is. */
+                anchor.download = includeSecrets
+                    ? 'myipbx-backup-with-secrets.tar.gz'
+                    : 'myipbx-backup.tar.gz';
+                document.body.appendChild(anchor);
+                anchor.click();
+                document.body.removeChild(anchor);
+                URL.revokeObjectURL(url);
+                toast(includeSecrets
+                    ? 'the backup was downloaded, and it carries every password in the clear; keep it as you keep a password'
+                    : 'the backup was downloaded; it carries no password, so it can be stored wherever is convenient');
+            });
     }
 
     function restoreBackup(event) {
@@ -1718,7 +1729,8 @@
             ['taskBody', 'task-body'],
             ['logSource', 'log-source'], ['logLevel', 'log-level'], ['logSearch', 'log-search'],
             ['logForm', 'log-form'], ['logView', 'log-view'],
-            ['backupButton', 'backup-button'], ['restoreForm', 'restore-form'],
+            ['backupButton', 'backup-button'], ['backupSecrets', 'backup-secrets'],
+            ['restoreForm', 'restore-form'],
             ['restoreFile', 'restore-file'], ['restoreOutcome', 'restore-outcome'],
             ['restoreCredentials', 'restore-credentials'],
             ['journalTable', 'journal-table'], ['journalRefresh', 'journal-refresh'],

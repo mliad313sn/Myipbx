@@ -125,7 +125,7 @@ def build_router(context: Any) -> Router:
     router.get("/api/calls", guard.read(lambda request: _call_records(context, request)))
 
     # -- backup and restore -------------------------------------------------
-    router.get("/api/backup", guard.read(lambda request: _backup(context)))
+    router.get("/api/backup", guard.read(lambda request: _backup(context, request)))
     router.post("/api/restore", guard.write(lambda request: _restore(context, request)))
 
     router.serve_static(context.config.web_root)
@@ -1151,10 +1151,19 @@ def _call_records(context: Any, request: Request) -> Response:
 # -- backup and restore ----------------------------------------------------
 
 
-def _backup(context: Any) -> Response:
-    """Produce a complete backup as a single downloadable archive."""
+def _backup(context: Any, request: Request) -> Response:
+    """Produce a backup as a single downloadable archive.
+
+    Secrets travel only when they are asked for. An archive is a file people
+    move around, and one carrying the secret file carries every telephone and
+    carrier password on the appliance in the clear.
+    """
+    include_secrets = str(
+        request.query.get("include_secrets", "")
+    ).strip().lower() in {"yes", "true", "on"}
+
     try:
-        payload, name = backup.create(context)
+        payload, name = backup.create(context, include_secrets=include_secrets)
     except OSError as error:
         return Response.error(500, f"the backup could not be produced: {error}")
 

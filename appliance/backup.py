@@ -65,16 +65,54 @@ def _sources(context: Any) -> dict[str, Path]:
     }
 
 
-def create(context: Any) -> tuple[bytes, str]:
-    """Build a backup archive in memory and return it with a file name."""
+#: The two members that carry material an attacker wants: every telephone and
+#: carrier password on the appliance, and the administrator's own credential.
+SECRET_MEMBERS = ("secrets.json", "credentials.json")
+
+
+def create(context: Any, *, include_secrets: bool = False) -> tuple[bytes, str]:
+    """Build a backup archive in memory and return it with a file name.
+
+    Secrets are left out unless they are asked for, and this is a deliberate
+    narrowing of what the operation used to do.
+
+    An archive is a file people move around: it is downloaded to a laptop,
+    attached to a message, dropped on a share, and kept for years. With the
+    secret file inside it, every telephone password, every carrier account
+    password and the administrator's own credential travel with it, in the
+    clear, and one careless copy discloses the lot.
+
+    They are in the clear because there is nowhere honest to encrypt them.
+    This control plane depends on the standard library alone -- that is what
+    makes it installable on an air-gapped machine with no package index -- and
+    the standard library has no block cipher. Writing one here, or improvising
+    a stream cipher out of a hash function, would be a worse outcome than
+    saying plainly that the archive is not encrypted: home-made cryptography
+    fails quietly and looks exactly like the real thing until somebody
+    competent looks at it.
+
+    So the choice is made where it can be made honestly. A backup without
+    secrets recovers the whole configuration -- every extension, trunk, route
+    and rule -- and can be stored anywhere. A backup with them has to be asked
+    for, and is labelled as something to keep the way a password is kept.
+
+    UNVERIFIED -- needs human confirmation: whether a site's recovery policy
+    can live with re-entering passwords after a restore, or whether an
+    encrypted archive is a requirement. If it is, the honest way to build one
+    is with the system's own cryptographic tool rather than in this file.
+    """
     sources = _sources(context)
     stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     included: list[str] = []
+    withheld: list[str] = []
 
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         for name, path in sources.items():
             if not path.is_file():
+                continue
+            if name in SECRET_MEMBERS and not include_secrets:
+                withheld.append(name)
                 continue
             payload = path.read_bytes()
             info = tarfile.TarInfo(name=name)
@@ -84,18 +122,24 @@ def create(context: Any) -> tuple[bytes, str]:
             archive.addfile(info, io.BytesIO(payload))
             included.append(name)
 
+        carries_secrets = any(name in included for name in SECRET_MEMBERS)
         manifest = json.dumps(
             {
                 "format_version": _FORMAT_VERSION,
                 "product": "Legacy-to-Modern IPBX Appliance",
                 "created_at": stamp,
                 "members": included,
-                "contains_secrets": "secrets.json" in included
-                or "credentials.json" in included,
+                "withheld": withheld,
+                "contains_secrets": carries_secrets,
                 "warning": (
                     "this archive carries the appliance's secrets and its "
-                    "administrator credential; store it as you would store a "
-                    "password"
+                    "administrator credential, in the clear and unencrypted; "
+                    "store it as you would store a password, and delete it "
+                    "when the recovery is done"
+                    if carries_secrets
+                    else "this archive carries no secret and no credential; "
+                    "the configuration in it is complete, and every password "
+                    "will have to be entered again after a restore"
                 ),
             },
             indent=2,
@@ -109,10 +153,11 @@ def create(context: Any) -> tuple[bytes, str]:
 
     payload = buffer.getvalue()
     _LOG.info(
-        "a backup was produced carrying %d file or files",
-        len(included),
+        "a backup was produced carrying %d file or files and withholding %d",
+        len(included), len(withheld),
     )
-    return payload, f"myipbx-backup-{stamp}.tar.gz"
+    suffix = "-with-secrets" if any(n in included for n in SECRET_MEMBERS) else ""
+    return payload, f"myipbx-backup-{stamp}{suffix}.tar.gz"
 
 
 def inspect(payload: bytes) -> dict[str, Any]:
