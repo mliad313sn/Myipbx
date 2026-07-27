@@ -291,3 +291,149 @@ would catch their return.
 **PASS.** The recursive loop terminates. Nine product defects were found
 and repaired across two passes; each is covered by a test that would catch
 its return.
+
+---
+
+# Third pass — the image, and an external review
+
+The verdict above was correct about what it measured and wrong about what it
+implied. This section records what a third pass found, and it is not
+comfortable reading.
+
+## A correction to this document
+
+The header of this report claimed three hundred forty-two tests with zero
+failures. An external reviewer running the same suite reported three hundred
+forty-one passing and one failing — the concurrency case, at four point six
+seconds against a three second budget. Re-running the concurrency suite on the
+machine that produced this report gives six tests passing in about eight
+seconds, so the failure does not reproduce here and is a property of the
+machine the suite runs on rather than of the code.
+
+That is exactly the problem. A timing budget that passes on one machine and
+fails on another is not evidence of anything, and quoting a test count out of
+a document instead of running the suite is how the number in this header
+survived being wrong. **Run the suite. Do not quote this document.**
+
+The deeper correction is worse. A green suite was taken as evidence the
+product worked. It was not, and could not have been, because the one thing the
+product most needed to do was replaced by a mock in every test that touched it.
+
+## Defect ten — the control plane could never gain privilege
+
+**Severity: critical, and the most serious defect found in this product.**
+
+The control plane's service unit sets `NoNewPrivileges=yes`. That directive
+sets the kernel's `no_new_privs` flag, which permanently disables the setuid
+mechanism for the process and everything it spawns. The control plane escalated
+by invoking `sudo`, and under that flag `sudo` refuses to run at all.
+
+Every privileged operation therefore failed on every real installation: service
+start, stop and restart, engine reload, network apply, driver rebuild, span
+generate, firewall apply and clear, hostname, timezone, clock synchronisation,
+reboot and power off. That is the entire system operations vocabulary, and the
+product's central claim is that every operation can be performed from the
+browser.
+
+It was proved before anything was changed, by dropping to an unprivileged
+account with and without the flag:
+
+```
+NoNewPrivileges=no  -> sudo: a password is required
+NoNewPrivileges=yes -> sudo: The "no new privileges" flag is set, which
+                       prevents sudo from running as root.
+```
+
+**Why the suite did not catch it.** `PrivilegedOperations._runner` — the
+function that actually starts the process — was replaced in every single test
+of that path. The tests proved the vocabulary, the validation, the refusals and
+the reporting, all of which were correct. Nothing ever ran the real path, so
+nothing ever discovered that the real path could not run.
+
+**Repair.** A root-run daemon listens on a Unix domain socket, mode `0660`,
+owned `root:myipbx`. It establishes the caller's identity from the kernel's
+peer credentials rather than from anything the request claims, and refuses a
+caller that is not the service account before parsing a byte of what was sent.
+It accepts only the same fixed vocabulary, validated against the same patterns,
+and passes the vector to the helper script as an argument list with no shell on
+the path. The control plane keeps `NoNewPrivileges=yes`. The service account's
+privilege grant is deleted outright: it now holds none.
+
+**Coverage.** `tests/test_privileged_path.py` — seventeen tests that create a
+real daemon on a real socket, connect with the real client and run a real
+script, with nothing on the path replaced. It covers the success and failure
+paths, every verb in the vocabulary, and refusal of unknown verbs, unmanaged
+services, shell metacharacters, wrong argument counts, malformed frames,
+oversized frames and unpermitted callers. Two further tests would catch the
+defect returning: one parses the control plane's source and fails if it ever
+names the escalator again, and one fails if a privilege grant is shipped.
+
+## Defects eleven to fourteen — the image build
+
+**Eleven: a size report could kill a build.** `du | cut` under `pipefail` and
+`errexit` meant that measuring a directory the build could not fully read
+aborted the build. Reporting a size must never be able to fail a build.
+Every failure in that path is now swallowed deliberately and the result is
+checked before use.
+
+**Twelve: rebuilding the boot image broke the boot.** The rebuilt image could
+not create the writable layer over its own read only root and stopped at a
+rescue shell reporting no support for its layering format — with the required
+modules demonstrably present in the archive. The rebuild was reverted rather
+than papered over, and the image ships the one the kernel package produced,
+which is the one the build proves boots.
+
+**Thirteen: ordinary packages regenerated the boot image anyway.** This is the
+defect behind the last one, and it was found only because a later package was
+added. Installing `console-setup` fired an `update-initramfs` trigger and
+silently replaced the proven boot image as a side effect. Every package added
+to the image after the kernel was a chance to do the same. Reverting one
+rebuild had treated the instance; the class stayed open. Boot image
+regeneration is now switched off in the image immediately after the kernel is
+installed, so no package trigger can reach it. The installer switches it back
+on, because an appliance installed to a disk needs a boot image built for that
+disk.
+
+**Fourteen: the appliance did not answer to its own name, and the fix failed.**
+The live boot machinery derives a host name from the disc description and
+writes it over the one in the filesystem. A service unit was added to set the
+name again from userspace; it called `hostnamectl`, which needs a message bus
+that was not up at that point in the boot, and it failed on every start —
+turning a cosmetic problem into a visible failed unit on the console.
+
+The unit was deleted. The live boot machinery accepts a host name as a boot
+argument, which reaches it at the one moment it is listening, so the name is now
+passed there and both boot paths are generated from a single setting so they
+cannot drift apart. The lesson is the ordinary one: a workaround that fails is
+worse than the cosmetic fault it was working around.
+
+## Standing observation — the boot console
+
+The live boot machinery ships scripts written for a desktop installation disc
+and runs all of them regardless of what the image contains. On an appliance
+with no desktop, several reached for directories that were never installed and
+reported errors while the boot proceeded correctly. Those directories are now
+created in the image so the scripts do their work quietly, and the disc no
+longer describes itself as a package disc, which stops the machinery trying to
+read package indexes that were never there.
+
+This is presentation rather than function. It is recorded because a console
+full of errors during a normal boot teaches an operator to ignore errors, and
+an operator who ignores errors will ignore the one that matters.
+
+## What this pass does not claim
+
+- **No real hardware has been driven.** Nothing in this repository shows a real
+  B410P or TDM410P has ever been brought up. Every hardware test uses a
+  simulated fixture. This is the largest gap between what the product is
+  designed to do and what has been shown.
+- **The privileged path is proved against a stand-in helper script**, over a
+  real socket with the real daemon and the real client. The verbs' own effects
+  — restarting a real engine, applying a real network configuration — still
+  need a real machine.
+- **The disk installer is proved in rehearsal only.** It runs end to end and
+  writes nothing. It has not laid an appliance down on a real disk.
+- **There is still no transport security.** The console speaks plain HTTP. An
+  administrator password for an appliance that can reboot the machine and
+  rewrite the firewall crosses the site network in clear text. This is a known,
+  open, blocking defect and it is not fixed in this pass.

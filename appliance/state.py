@@ -271,6 +271,13 @@ class ApplianceState:
             "the telephony engine manager interface is not connected",
             "channel state is unknown until the connection is restored",
         )
+        self._publish_urgently(
+            "engine.disconnected",
+            {
+                "engine_connected": False,
+                "detail": "channel state is unknown until the connection is restored",
+            },
+        )
         return True
 
     # -- alarms ------------------------------------------------------------
@@ -279,11 +286,18 @@ class ApplianceState:
         existing = self.alarms.get(key)
         if existing is not None and existing.severity == severity and existing.message == message:
             return False
-        self.alarms[key] = Alarm(
+        alarm = Alarm(
             key=key, severity=severity, message=message, raised_at=self.clock(), detail=detail
         )
+        self.alarms[key] = alarm
         _LOG.warning("an alarm was raised: %s", message)
         self.touch()
+        # The snapshot the touch above published already carries this alarm,
+        # but that snapshot may be held for a coalescing window and an alarm is
+        # the one thing an operator acts on immediately.  The dedicated topic
+        # is on the transport's bypass list, so it overtakes the window and
+        # drags the held snapshot out with it.
+        self._publish_urgently("alarm.raised", alarm.as_dict(self.clock()))
         return True
 
     def clear_alarm(self, key: str) -> bool:
@@ -291,6 +305,7 @@ class ApplianceState:
             return False
         _LOG.info("the alarm identified as %s was cleared", key)
         self.touch()
+        self._publish_urgently("alarm.cleared", {"key": key})
         return True
 
     # -- publication -------------------------------------------------------
@@ -304,6 +319,15 @@ class ApplianceState:
             except Exception as error:  # noqa: BLE001 - publication is best effort
                 _LOG.error("a state change could not be published: %s", error)
         return self.sequence
+
+    def _publish_urgently(self, topic: str, payload: dict[str, Any]) -> None:
+        """Publish on a topic the transport is told never to hold back."""
+        if self.publisher is None:
+            return
+        try:
+            self.publisher(topic, payload)
+        except Exception as error:  # noqa: BLE001 - publication is best effort
+            _LOG.error("an urgent notice could not be published: %s", error)
 
     # -- introspection -----------------------------------------------------
 

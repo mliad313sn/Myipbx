@@ -125,6 +125,53 @@ to verify its own image by starting it.
 The image is then mastered with a hybrid boot record, and a checksum is written
 beside it.
 
+## From the medium onto a disk
+
+The image can be run from its medium indefinitely, and that is the right shape
+for trying the appliance. It is the wrong shape for owning one: a live system
+forgets everything when the machine stops. An appliance in a rack should be
+running from its own disk.
+
+`iso/installer/myipbx-install-to-disk.sh` travels inside the image and installs
+the running appliance onto a fixed disk. It is deliberately narrow — it lays
+down the appliance that is already here, and does not ask which distribution,
+which packages, or which layout. An appliance that can be installed exactly one
+way is an appliance whose installation can be proved.
+
+What it does, in order: it confirms the machine really is running from the live
+medium, refuses the disk that medium sits on, refuses a disk that is mounted or
+carrying swap in use, and refuses anything that is not a whole disk. It then
+writes a modern partition table with three partitions — a one mebibyte
+partition holding nothing a filesystem would recognise, which is where the
+legacy bootloader keeps its core image because a modern table leaves no gap
+after the boot record for it; a firmware partition the firmware of a modern
+machine reads; and a root partition taking the rest.
+
+It copies the read only root filesystem the live boot mounts rather than the
+running system, because that is exactly what was built and tested, whereas the
+running system carries whatever has happened since the machine started. It then
+turns a live system into an installed one: the live boot machinery is removed,
+a filesystem table is written using filesystem identifiers rather than device
+names, a fresh machine identity is generated because many machines boot the
+same image and no two may claim to be the same machine, and the boot image is
+rebuilt for the disk. Both bootloaders are installed — the legacy one to the
+disk, the firmware one to its partition in the removable location, so that it
+boots on firmware carrying no entry for it.
+
+Every removal is named relative to the target's mount point, so the script
+proves the target is mounted immediately before it removes anything. Had a
+mount silently not happened, those same paths would name the running system's
+own directories.
+
+The static address survives the installation untouched, and every address
+allocation service unit name stays masked. The installed appliance requests no
+address and offers none, exactly as the image did.
+
+`--dry-run` reports every step and writes nothing, which is the only mode that
+can be exercised anywhere but a booted appliance. In that mode the refusals
+above report what would have stopped a real installation and carry on, so the
+path is exercised end to end rather than stopping at the first guard.
+
 ## Verification
 
 Three layers, because each can pass while the next fails.

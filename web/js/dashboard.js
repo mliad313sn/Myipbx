@@ -30,7 +30,11 @@
         currentView: 'overview',
         system: null,
         references: {},
-        pendingConfirm: null
+        pendingConfirm: null,
+        /* Nothing until the first reading arrives, so that a console opened
+         * after a dashboard was shed does not announce it as though it had
+         * just happened. */
+        shedDashboards: null
     };
 
     var nodes = {};
@@ -189,6 +193,60 @@
         renderAlarms(appliance.alarms || []);
         if (appliance.hardware) {
             renderHardware(appliance.hardware);
+        }
+        if (appliance.socket) {
+            renderTransport(appliance.socket);
+        }
+    }
+
+    /* The transport tile is built here rather than in the markup because the
+     * numbers on it only exist once a dashboard has actually connected, and a
+     * tile reading zero before the socket is up would be reporting a fault
+     * that has not happened. */
+    function transportTile() {
+        if (nodes.transportTile) {
+            return nodes.transportTile;
+        }
+        var tiles = document.querySelector('#view-overview .tiles');
+        if (!tiles) {
+            return null;
+        }
+        var tile = element('article', 'tile');
+        tile.appendChild(element('h3', null, 'connected dashboards'));
+        nodes.transportFigure = element('p', 'figure', 'zero');
+        nodes.transportCaption = element('p', 'caption', 'none shed');
+        tile.appendChild(nodes.transportFigure);
+        tile.appendChild(nodes.transportCaption);
+        tiles.appendChild(tile);
+        nodes.transportTile = tile;
+        return tile;
+    }
+
+    function renderTransport(transport) {
+        if (!transportTile()) {
+            return;
+        }
+        nodes.transportFigure.textContent = count(transport.connection_count);
+
+        /* A shed dashboard is not an error the operator caused, but it is the
+         * reason a screen somewhere in the building stopped updating, so it is
+         * named plainly rather than buried in a log.  A rise in the count is
+         * also announced, because a tile nobody happens to be looking at is
+         * not how anyone finds out that a console has gone dark. */
+        var shed = transport.slow_consumer_disconnections || 0;
+        nodes.transportCaption.textContent = shed
+            ? count(shed) + ' shed for falling behind'
+            : 'none shed for falling behind';
+
+        if (state.shedDashboards === null) {
+            state.shedDashboards = shed;
+        } else if (shed > state.shedDashboards) {
+            toast(
+                count(shed - state.shedDashboards) +
+                    ' dashboard connection was shed for falling behind the update rate',
+                'bad'
+            );
+            state.shedDashboards = shed;
         }
     }
 
@@ -1183,6 +1241,20 @@
         });
 
         socket.on('trunk.transition', function () { loadTrunks(); });
+
+        /* The topics the appliance never holds back.  Each one is already
+         * described by the state snapshot that accompanies it, so the handler
+         * only has to say it out loud; the panels redraw from the snapshot. */
+        socket.on('alarm.raised', function (payload) {
+            toast(payload.message || 'an alarm was raised', 'bad');
+        });
+        socket.on('engine.disconnected', function () {
+            toast('the telephony engine connection was lost', 'bad');
+        });
+        socket.on('driver.stage-failed', function (payload) {
+            toast('the driver stage named ' + (payload.verb || 'unknown') + ' failed', 'bad');
+        });
+
         socket.on('task.finished', function () {
             if (state.currentView === 'tasks') {
                 loadTasks();

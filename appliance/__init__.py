@@ -25,7 +25,7 @@ __all__ = ["PRODUCT_NAME", "VERSION", "ASSIGNS_ADDRESSES"]
 PRODUCT_NAME = "Legacy-to-Modern IPBX Appliance"
 
 #: The release, named in words in keeping with Constraint Two.
-VERSION = "one point zero point zero"
+VERSION = "one point two point zero"
 
 #: Stated as a value so that a test can assert the product claim mechanically.
 ASSIGNS_ADDRESSES = False

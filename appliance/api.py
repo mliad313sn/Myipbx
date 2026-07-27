@@ -20,7 +20,7 @@ from .httpd import Request, Response, Router
 from .logging_setup import get_logger
 from .trunks import TrunkState
 
-VERSION = "one point one point zero"
+VERSION = "one point two point zero"
 
 __all__ = ["build_router", "SESSION_COOKIE_NAME"]
 
@@ -30,11 +30,18 @@ SESSION_COOKIE_NAME = "myipbx_session"
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
+#: The privileged operations that make up interface card driver bring-up.  A
+#: failure in one of these is published on the transport's bypass list rather
+#: than left for the next state change, because an operator is standing at the
+#: appliance waiting on the answer when they run one.
+DRIVER_STAGE_VERBS = frozenset({"driver-rebuild", "span-generate"})
+
 
 def build_router(context: Any) -> Router:
     """Build the complete route table for an appliance context."""
     router = Router()
     guard = _Guard(context)
+    state_cache = _StateResponseCache(context)
 
     # -- unauthenticated -------------------------------------------------
     router.get("/api/health", lambda request: _health(context, request))
@@ -42,7 +49,7 @@ def build_router(context: Any) -> Router:
     router.post("/api/session", lambda request: _sign_in(context, request))
 
     # -- authenticated reads ---------------------------------------------
-    router.get("/api/state", guard.read(lambda request: _state(context)))
+    router.get("/api/state", guard.read(lambda request: state_cache.response()))
     router.get("/api/hardware", guard.read(lambda request: _hardware(context)))
     router.get("/api/trunks", guard.read(lambda request: _trunks(context)))
     router.get("/api/tasks", guard.read(lambda request: _tasks(context)))
@@ -210,6 +217,64 @@ def _state(context: Any) -> Response:
     payload["engine"] = context.manager.status() if context.manager else None
     payload["spelled"] = _spelled_summary(payload)
     return Response.json(payload)
+
+
+class _StateResponseCache:
+    """The serialised body of the state route, reused within one window.
+
+    Rebuilding this response means walking every live channel and every alarm,
+    spelling the summary, and serialising the result.  With a hundred calls up
+    that is the most expensive read the interface serves, and a dashboard for
+    every operator on the floor asks for it.  Answering each of them by doing
+    the same work again is what makes the interface feel slow at exactly the
+    moment the appliance is busiest.
+
+    Two things bound how stale the cached body may be.  A change to the live
+    state advances the state sequence number, and a body built under an older
+    sequence is discarded on sight, so a caller can never read a snapshot from
+    before a change it could have observed.  The remaining fields — the socket
+    population, the engine's own status, the elapsed durations — move without
+    any state change behind them, so the body additionally expires once the
+    coalescing window has passed.  A window of zero therefore expires the body
+    immediately and restores the original behaviour exactly.
+
+    The body is shared between callers, which is only sound because this route
+    varies by nothing: the handler never reads the request, and a session
+    carries no role that could narrow what it is shown.
+    """
+
+    def __init__(self, context: Any) -> None:
+        self._context = context
+        self._response: Response | None = None
+        self._sequence: int | None = None
+        self._built_at = 0.0
+
+    def _window_seconds(self) -> float:
+        window = getattr(self._context.config, "broadcast_coalesce_milliseconds", 0)
+        return max(0, int(window)) / 1000.0
+
+    def response(self) -> Response:
+        sequence = getattr(self._context.state, "sequence", None)
+        window = self._window_seconds()
+        now = time.monotonic()
+
+        fresh = (
+            self._response is not None
+            and self._sequence == sequence
+            and now - self._built_at < window
+        )
+        if fresh:
+            return self._response  # type: ignore[return-value]
+
+        # Assembling the body never awaits, so no change can land part way
+        # through it, and the sequence read afterwards is the one the body
+        # genuinely describes.  Recording it after the fact rather than before
+        # keeps that true even if the body ever grows an asynchronous step.
+        response = _state(self._context)
+        self._response = response
+        self._sequence = getattr(self._context.state, "sequence", None)
+        self._built_at = now
+        return response
 
 
 def _hardware(context: Any) -> Response:
@@ -636,7 +701,32 @@ async def _run_operation(context: Any, request: Request) -> Response:
     except sysops.OperationRefused as error:
         return Response.error(400, str(error))
 
+    if verb in DRIVER_STAGE_VERBS and not outcome.succeeded:
+        # Driver bring-up is the one place an operator is watching the console
+        # and cannot proceed until they know, so the failure is put on the
+        # transport's bypass list rather than folded into the next snapshot.
+        _publish_urgently(
+            context,
+            "driver.stage-failed",
+            {
+                "verb": verb,
+                "detail": getattr(outcome, "detail", "")
+                or "the stage did not report a reason",
+            },
+        )
+
     return Response.json(outcome.as_dict(), status=200 if outcome.succeeded else 500)
+
+
+def _publish_urgently(context: Any, topic: str, payload: dict[str, Any]) -> None:
+    """Publish on a topic the transport is told never to hold back."""
+    publisher = getattr(getattr(context, "state", None), "publisher", None)
+    if publisher is None:
+        return
+    try:
+        publisher(topic, payload)
+    except Exception as error:  # noqa: BLE001 - publication is best effort
+        _LOG.error("an urgent notice could not be published: %s", error)
 
 
 def _firewall(context: Any) -> Response:

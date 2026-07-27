@@ -87,6 +87,7 @@ class Appliance:
             missed_limit=self.config.heartbeat_missed_limit,
             maximum_connections=self.config.socket_maximum_connections,
             state_provider=self.state.snapshot,
+            coalesce_milliseconds=self.config.broadcast_coalesce_milliseconds,
         )
         self.state.publisher = self._publish
 
@@ -400,9 +401,14 @@ class Appliance:
             _LOG.debug("the engine event named %s did not match any known channel", name)
 
     def _publish(self, topic: str, payload: dict[str, Any]) -> None:
-        """Push an update to every connected dashboard."""
+        """Offer an update to every connected dashboard.
+
+        The hub decides whether the message goes out now or rides the next
+        coalescing flush; see the topic sets in the transport module for which
+        is which.  Nothing is offered at all when no dashboard is connected.
+        """
         if self.hub.connection_count:
-            self.hub.broadcast(topic, payload)
+            self.hub.publish(topic, payload)
 
     # -- socket upgrade -----------------------------------------------------
 

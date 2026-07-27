@@ -32,6 +32,30 @@ Confirm you have, on the machine:
 
 ## Installing
 
+There are two ways to get an appliance, and which one you want depends on
+whether the machine already runs Linux.
+
+**From the appliance image, onto a bare machine.** Write the image to a flash
+device or burn it, start the machine from it, and the appliance is running
+immediately — but from the medium, so it forgets everything when the machine
+stops. To keep it, install it onto the machine's own disk:
+
+```bash
+myipbx-install-to-disk --dry-run --disk /dev/sda   # report everything, write nothing
+myipbx-install-to-disk --disk /dev/sda             # do it
+```
+
+Everything on that disk is destroyed. The command says exactly what it is about
+to destroy and requires you to type a word to confirm, unless you pass
+`--assume-yes` for an unattended installation. It refuses the disk the live
+medium is on, a disk that is mounted, and a disk carrying swap in use.
+
+The installed appliance keeps the static address the image arrived with, which
+is printed on the boot screen. Change it from the console once you can reach it.
+Remove the medium and start the machine from its disk.
+
+**Onto a machine that already runs Linux**, using the staged installer below.
+
 Rehearse first. Rehearsal changes nothing and reports what each stage would do.
 
 ```bash
@@ -111,6 +135,36 @@ refusal, not a fault. Find it and remove it:
 
 ```bash
 sudo ./scripts/verify-no-dhcp.sh
+```
+
+### A button in the interface reports that the helper is not running
+
+Every operation that needs privilege — restarting the engine, applying a
+network configuration, rebuilding the drivers, restarting the machine — is
+performed by a small daemon that runs as the administrator and listens on a
+local socket. The control plane itself holds no privilege and never will. If
+that daemon is not running, the interface reports it plainly rather than
+failing silently.
+
+```bash
+systemctl status myipbx-helperd.service
+journalctl -u myipbx-helperd.service -n 50
+ls -l /run/myipbx/helper.sock
+```
+
+The socket should exist, be owned `root:myipbx`, and be readable and writable
+by its owner and group and by nobody else. If it is missing, start the daemon:
+
+```bash
+sudo systemctl restart myipbx-helperd.service
+```
+
+If you find a file at `/etc/sudoers.d/myipbx`, an installation older than this
+one left it behind. It grants the service account privilege it no longer needs
+and no longer uses. Remove it:
+
+```bash
+sudo rm /etc/sudoers.d/myipbx
 ```
 
 ### The dashboard loads but shows the engine as disconnected

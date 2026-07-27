@@ -59,6 +59,14 @@ class ApplianceConfig:
     socket_maximum_message_bytes: int = 262144
     socket_maximum_connections: int = 256
     socket_send_queue_limit: int = 512
+    #: How long a state change may be held so that the changes arriving behind
+    #: it can ride out on the same frame.  A busy engine produces several
+    #: hundred events a second and no operator can read a dashboard that
+    #: redraws that often, so the appliance would be spending the loop it needs
+    #: for the engine on frames nobody can perceive.  Zero disables the
+    #: behaviour entirely and restores one frame per event, which is what a
+    #: laboratory measurement of the event path wants.
+    broadcast_coalesce_milliseconds: int = 150
 
     # --- Trunk registration layer ----------------------------------------
     trunk_registration_base_seconds: float = 2.0
@@ -191,6 +199,16 @@ class ApplianceConfig:
             raise ConfigError("the maximum socket message size is implausibly small")
         if self.socket_maximum_connections < 1:
             raise ConfigError("at least one socket connection must be permitted")
+        if self.socket_send_queue_limit < 1:
+            raise ConfigError("a connection must be allowed to queue at least one message")
+        # The ceiling is a second of held state.  Beyond that an operator would
+        # begin to perceive the dashboard as lagging the telephone in front of
+        # them, which is the one impression this appliance cannot afford.
+        if not 0 <= self.broadcast_coalesce_milliseconds <= 1000:
+            raise ConfigError(
+                "the broadcast coalescing window must fall between zero and one "
+                "thousand milliseconds"
+            )
         if self.session_idle_seconds < 60:
             raise ConfigError("the session idle expiry must be at least sixty seconds")
         if self.password_iterations < 100000:
