@@ -276,6 +276,33 @@ through the browser side module. An automated test asserts the two
 implementations agree across the full range exercised by the product and that
 no operator facing surface emits a digit character.
 
+### Where the spelling happens, and why it is not everywhere
+
+The interface serves two audiences with one set of routes, and this is the rule
+that keeps them from fighting:
+
+- **A quantity the console does arithmetic on, compares, or thresholds is sent
+  as a number**, and the browser spells it at the moment it is drawn. Call
+  counts, span counts, queue depths, sequence numbers and uptimes are all of
+  this kind. Sending these as words would mean the console could not tell
+  whether a figure had risen.
+- **A quantity that is only ever read is sent already spelled**, because
+  nothing downstream needs it as a number and spelling it once at the source is
+  one fewer place to forget.
+
+Both kinds exist, deliberately, and the operator sees words either way — the
+difference is only which side of the connection turned the number into them.
+
+The hazard is that the two look identical in a payload, so a field quietly
+changing kind would break its own readout and nothing else. A field sent as a
+number and drawn without spelling puts a digit on screen; a field sent as words
+and passed through the browser's spelling function renders as nonsense. Neither
+would fail a test that only checked the route answered.
+
+`tests/test_numeral_conventions.py` therefore pins the kind of every numeric
+field the interface serves. A field that changes kind fails that test by name,
+and the fix is either to change it back or to change the console with it.
+
 ## Build contract for Agent Four
 
 Deliver: the five staging scripts and orchestrator with a shared library; the
