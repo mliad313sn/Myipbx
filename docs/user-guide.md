@@ -18,7 +18,7 @@ to a machine.
 
 **Telephony** — [extensions](#extensions) · [trunks](#trunks) · [ring groups](#ring-groups) · [menus](#menus) · [queues](#queues) · [conference rooms](#conference-rooms) · [inbound routes](#inbound-routes) · [outbound routes](#outbound-routes) · [time conditions](#time-conditions) · [voicemail](#voicemail)
 
-**Watching the system** — [live calls](#live-calls) · [call history](#call-history) · [alarms](#alarms) · [logs](#logs)
+**Watching the system** — [live calls](#live-calls) · [call history](#call-history) · [reports](#reports) · [alarms](#alarms) · [logs](#logs)
 
 **Legacy hardware** — [what is fitted](#what-is-fitted) · [guided bring up](#guided-bring-up) · [spans and channels](#spans-and-channels) · [when a card will not appear](#when-a-card-will-not-appear)
 
@@ -81,6 +81,7 @@ bottom.
 | overview | headline figures, alarms, and trunk registration |
 | live calls | every channel on the system, as it happens |
 | call history | completed calls, newest first |
+| reports | totals and breakdowns over a period, and files to download |
 | extensions | the telephones |
 | trunks | connections to carriers |
 | ring groups | sets of telephones that ring together |
@@ -98,6 +99,20 @@ bottom.
 | logs | the appliance's and the engine's logs |
 | backup | download a backup, restore from one |
 | constraints | proof that both product constraints hold |
+
+**Every list works the same way.** Extensions, trunks, routes, groups, menus,
+queues, conferences and time conditions all draw the same table, and all of
+them have:
+
+- a **search box** that looks in every column, so you can type what you
+  remember rather than working out which field it is in;
+- a **count** beside it saying what is shown against what exists, so a filtered
+  table is never mistaken for the whole list;
+- **sortable columns** — choose a heading to sort by it, choose it again to
+  reverse. Numbers sort as numbers, so extension two hundred one comes after
+  extension one hundred and not between twenty and twenty-one;
+- **download the list**, which writes every record to a comma separated file.
+  Passwords are never included.
 
 ### The link indicator
 
@@ -302,11 +317,56 @@ known*, not *no calls* — and the alarm on the overview says which.
 
 ### Call history
 
-Completed calls, newest first, with a search box. Durations are spelled.
+Completed calls, newest first, with a search box. Durations are spelled. For
+anything covering more than the last hundred calls — a period, a total, a
+per-extension figure — use [reports](#reports).
 
 If the section reports that no history is available, the engine is not writing
 call detail records to a comma separated file; enable that in the engine and
 the view populates itself.
+
+### Reports
+
+Where you answer the questions somebody asks about the system rather than about
+a call: how many calls were taken, how many were missed, which extension
+answers and which does not, what hour is busiest, whether the average
+conversation is getting longer.
+
+**Choose the period first.** Most of them are named — today, yesterday, the
+last seven days, this month, last month, the last thirty days, everything on
+record — because a typed date is a place to make a mistake the report then
+presents as a fact. *Between two dates* is there when you need it, and only
+then does it show the two date boxes.
+
+**The period at a glance** carries the figures the field judges a telephone
+system on:
+
+| Reading | What it means |
+| --- | --- |
+| answered | the share of calls attempted that were answered. The one number that says whether the system is working |
+| missed | everything that was not answered, however it failed to be, so answered and missed always sum to the calls |
+| average conversation | the mean talk time of the calls that *were* answered. Deliberately not the mean of every call: a thousand unanswered calls of six seconds each would drag that toward zero and tell you nothing |
+| average time to answer | how long a call rings before somebody picks it up |
+| calls in, out, inside | decided by the dialplan context the appliance itself wrote, not guessed from the numbers |
+
+**When the calls came** draws every hour of the day. Each bar is the hour's
+volume against the busiest hour, and the filled part inside it is what was
+answered — so the gap between the two is what you are looking for. The busiest
+hour is named in the sentence above the chart and every hour is in the table
+below it, so nothing in the chart is only available by looking at it.
+
+**The breakdowns** are by extension, by most called destination, by trunk, by
+outcome, by hour of the day and by day. The per-extension table counts an
+extension on whichever end of the call it was, so it is a table of what each
+extension did rather than a division of the calls between them.
+
+**Downloading.** Every breakdown, and the calls behind them, download as a
+comma separated file. Those files carry figures as digits rather than words,
+because a spreadsheet cannot add up a word. This is the one deliberate
+exception to the spelling rule, and the console says so when you download one.
+
+If the section reports that there is nothing to report on, the engine is not
+writing call detail records; see [call history](#call-history).
 
 ### Alarms
 

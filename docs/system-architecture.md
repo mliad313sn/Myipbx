@@ -117,10 +117,34 @@ reconnecting from stale. This is the answer to Benchmark Defect Two.
 ### Representational state transfer interface
 
 A compact route table over the same port. Read routes cover system health,
-hardware inventory, trunk state, channel state, configuration, tasks, and
-logs. Write routes cover authentication, configuration mutation, trunk
-control, task invocation, and reconciliation decisions. Every write route
-requires an authenticated session and a matching origin.
+hardware inventory, trunk state, channel state, configuration, tasks, logs,
+call records, and reports. Write routes cover authentication, configuration
+mutation, trunk control, task invocation, and reconciliation decisions. Every
+write route requires an authenticated session and a matching origin.
+
+Where two routes could both match a path, the one naming the most segments
+outright wins, rather than whichever was declared first. That is not a
+preference: `/api/entities/{kind}/{key}` was declared before
+`/api/entities/{kind}/export` and swallowed it, so the export arrived at the
+reader for a single record as a request for the record named "export".
+
+### Reporting
+
+Aggregation over the engine's call detail records, through the same reader the
+call history uses, so a figure in a report and a row in the history can never
+come from two parsings of one line. It produces a summary — calls, answered,
+missed, answer seizure ratio, total and average conversation, longest call,
+ring time — and breakdowns by extension, destination, trunk, outcome, hour of
+the day and day, over a window that is named rather than typed wherever a name
+will do.
+
+Direction is decided by the dialplan context the appliance itself wrote into
+the engine, not inferred from the numbers, so it cannot drift from the routing.
+
+Every figure is carried twice: as an integer and spelled. The screen reads the
+spelled form because Constraint Two governs what an operator reads; the chart
+geometry and the exported file read the integer, because a bar cannot be drawn
+from a word and a spreadsheet cannot sum one.
 
 ### Automated task execution
 

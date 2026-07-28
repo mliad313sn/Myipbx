@@ -3,7 +3,8 @@ chown: warning: '.' should be ':': 'ubuntu.ubuntu'
 chown: warning: '.' should be ':': 'ubuntu.ubuntu'
 
 
-  Legacy-to-Modern IPBX Appliance
+  Crossbar
+  by Kernel Project
 
   Open a browser at the address 192.168.100.10
   on port number 8088, over a secured connection.
@@ -19,14 +20,14 @@ chown: warning: '.' should be ':': 'ubuntu.ubuntu'
   The administrator password is printed once, on this screen, when the
   appliance first starts.
 
-myipbx login: [  112.017787] myipbx-generate-certificate.sh[732]: 2026-07-28 07:11:58 stage generating this appliance's own certificate
-[  113.131821] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:00 stage ------------------------------------------------------------
-[  113.737906] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:01 information the certificate will name the address 192.168.100.10 and the host name myipbx
-[  114.174477] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:01 information running: mkdir -p /etc/myipbx/tls
-[  114.498378] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:01 information running: chmod 0750 /etc/myipbx/tls
-[  124.074678] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:11 information the certificate was written to /etc/myipbx/tls/appliance.crt
-[  125.092466] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:12 information the private key was written to /etc/myipbx/tls/appliance.key and is readable by root and by the appliance account only
-[  126.142463] myipbx-generate-certificate.sh[732]:   this appliance has its own certificate, which it signed itself.
-[  126.147584] myipbx-generate-certificate.sh[732]:   the first browser to reach the console will warn. compare what it
-[  126.149021] myipbx-generate-certificate.sh[732]:   shows against this fingerprint before accepting it:
-[  126.156929] myipbx-generate-certificate.sh[732]:   3C:7E:56:41:14:CE:FA:4A:40:9E:1D:E1:F9:53:75:C7:08:56:78:F1:BA:FF:2E:CC:26:71:B3:0C:52:64:87:6C
+crossbar login: [  188.705584] crossbar-generate-certificate.sh[755]: 2026-07-28 11:04:27 stage generating this appliance's own certificate
+[  192.040282] crossbar-generate-certificate.sh[755]: 2026-07-28 11:04:32 stage ------------------------------------------------------------
+[  194.944019] crossbar-generate-certificate.sh[755]: 2026-07-28 11:04:35 information the certificate will name the address 192.168.100.10 and the host name crossbar
+[  196.096016] crossbar-generate-certificate.sh[755]: 2026-07-28 11:04:37 information running: mkdir -p /etc/crossbar/tls
+[  197.412636] crossbar-generate-certificate.sh[755]: 2026-07-28 11:04:38 information running: chmod 0750 /etc/crossbar/tls
+[  209.536244] crossbar-generate-certificate.sh[755]: 2026-07-28 11:04:51 information the certificate was written to /etc/crossbar/tls/appliance.crt
+[  209.930736] crossbar-generate-certificate.sh[755]: 2026-07-28 11:04:51 information the private key was written to /etc/crossbar/tls/appliance.key and is readable by root and by the appliance account only
+[  211.104531] crossbar-generate-certificate.sh[755]:   this appliance has its own certificate, which it signed itself.
+[  211.109855] crossbar-generate-certificate.sh[755]:   the first browser to reach the console will warn. compare what it
+[  211.117606] crossbar-generate-certificate.sh[755]:   shows against this fingerprint before accepting it:
+[  211.122579] crossbar-generate-certificate.sh[755]:   2D:35:C0:39:2E:C7:5E:83:4A:55:DD:53:76:E0:50:8A:C9:71:44:63:A0:77:7A:DC:6A:84:31:86:2D:0C:16:DF
