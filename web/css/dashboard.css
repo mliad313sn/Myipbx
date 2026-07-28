@@ -387,6 +387,27 @@ button {
   cursor: pointer;
 }
 
+/* The top margin above belongs to a button that follows a form field. A
+ * button inside a table cell follows nothing: it is the cell's content, and
+ * the margin pushed every row to twice its height and stacked the two actions
+ * apart from each other. */
+.grid td button {
+  margin: 0;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+/* The two actions belong on one line. The column is the last one and the
+ * table gives it whatever width it asks for, so saying it does not wrap is
+ * enough; without it the delete button dropped beneath the edit button and
+ * every row was twice as tall as its content. */
+.grid td.actions-cell {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.grid td button + button { margin-left: 0.4rem; }
+
 button:hover { filter: brightness(1.08); }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 

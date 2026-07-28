@@ -104,7 +104,7 @@
                 row.appendChild(element('td', null, value));
             });
 
-            var actions = element('td');
+            var actions = element('td', 'actions-cell');
             var edit = element('button', 'secondary', 'edit');
             edit.type = 'button';
             edit.addEventListener('click', function () {
@@ -210,6 +210,16 @@
         return 'field-' + spec.kind + '-' + field.name;
     }
 
+    /* "add a extension" is what this console said, on every form, for as long
+     * as the forms have existed. The rule below is the simple one, which is
+     * right for every name the schema actually carries -- extension, inbound
+     * route, outbound route on one side; trunk, queue, menu on the other. It
+     * is spelling, not phonetics: a name beginning with a silent letter or a
+     * sounded "u" would need more, and there is none. */
+    function article(word) {
+        return /^[aeiou]/i.test(String(word || '')) ? 'add an' : 'add a';
+    }
+
     function buildForm(spec, record, references) {
         var editing = Boolean(record);
         var form = element('form', 'entity-form');
@@ -218,7 +228,7 @@
 
         var headingId = 'form-heading-' + spec.kind;
         var heading = element('h3', null,
-            (editing ? 'edit the ' : 'add a ') + spec.singular);
+            (editing ? 'edit the ' : article(spec.singular) + ' ') + spec.singular);
         heading.id = headingId;
         form.setAttribute('aria-labelledby', headingId);
         form.appendChild(heading);
