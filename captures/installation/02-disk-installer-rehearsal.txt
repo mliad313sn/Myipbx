@@ -1,0 +1,118 @@
+
+  Legacy-to-Modern IPBX Appliance
+  installing the appliance onto a disk
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+2026-07-28 05:47:52 warning this is a rehearsal; nothing will be written and every refusal is reported rather than enforced
+
+2026-07-28 05:47:52 stage checking that this machine carries the tools an installation needs
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 warning a real installation would stop here: this machine is missing the tools an installation needs: sgdisk
+
+2026-07-28 05:47:52 stage confirming that this machine is running from the live medium
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 warning a real installation would stop here: this machine is not running from the appliance live medium, so there is nothing to install from
+
+2026-07-28 05:47:52 stage examining the disk the installation was pointed at
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 warning a real installation would stop here: the path /dev/sda is not a block device on this machine
+2026-07-28 05:47:52 warning a real installation would stop here: the live medium's disk is not known, so the disk /dev/sda cannot be shown to be a different disk from the one this script is running from, and installing onto that one would destroy the medium partway through; set the variable named MYIPBX_LIVE_DISK to the live medium's disk, for example /dev/sdb, then run this again
+2026-07-28 05:47:52 warning the size of the disk /dev/sda could not be measured
+
+2026-07-28 05:47:52 stage what this installation will destroy
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 warning everything on the disk /dev/sda is about to be removed and cannot be recovered
+2026-07-28 05:47:52 information the disk currently carries:
+2026-07-28 05:47:52 information and it will be replaced by:
+2026-07-28 05:47:52 information   a partition table of the modern kind, which both older and newer machines can be made to read
+2026-07-28 05:47:52 information   a boot partition of one mebibyte for the legacy bootloader's core image
+2026-07-28 05:47:52 information   a firmware partition of five hundred twelve mebibytes for the modern bootloader
+2026-07-28 05:47:52 information   a root partition taking all of the remaining space, holding the appliance
+2026-07-28 05:47:52 warning the installation was asked to proceed without confirmation
+
+2026-07-28 05:47:52 stage laying out the disk
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 information rehearsal: would run: sgdisk --zap-all /dev/sda
+2026-07-28 05:47:52 information rehearsal: would run: sgdisk --new=1:0:+1M --typecode=1:ef02 --change-name=1:myipbx legacy boot --new=2:0:+512M --typecode=2:ef00 --change-name=2:myipbx firmware boot --new=3:0:0 --typecode=3:8300 --change-name=3:myipbx root /dev/sda
+2026-07-28 05:47:52 information the disk was given three partitions: a legacy boot area, a firmware boot filesystem, and the appliance root
+2026-07-28 05:47:52 information rehearsal: the kernel would be asked to re-read the partition table
+
+2026-07-28 05:47:52 stage making the filesystems
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 information rehearsal: would run: mkfs.vfat -F 32 -n MYIPBXEFI /dev/sda2
+2026-07-28 05:47:52 information rehearsal: would run: mkfs.ext4 -F -L myipbx-root /dev/sda3
+2026-07-28 05:47:52 information the firmware partition and the appliance root were both formatted
+
+2026-07-28 05:47:52 stage mounting the target
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 information rehearsal: the appliance root would be mounted at /run/myipbx-installation-target
+2026-07-28 05:47:52 information rehearsal: the firmware partition would be mounted beneath it
+
+2026-07-28 05:47:52 stage copying the appliance onto the disk
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 warning a real installation would stop here: there is no compressed root filesystem to unpack and no copying tool to fall back on
+
+2026-07-28 05:47:52 stage putting the kernel back where an installed system keeps it
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 information the installed appliance will run the kernel release 6.18.5
+2026-07-28 05:47:52 information rehearsal: the kernel from the live medium would be placed on the disk
+2026-07-28 05:47:52 information rehearsal: the kernel filesystems would be bound into the target
+
+2026-07-28 05:47:52 stage removing the live boot machinery
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 information rehearsal: the live boot settings, hooks and boot scripts would be removed
+
+2026-07-28 05:47:52 stage writing the filesystem table
+2026-07-28 05:47:52 stage ------------------------------------------------------------
+2026-07-28 05:47:52 information rehearsal: would write the file at /etc/fstab into the installed system
+2026-07-28 05:47:53 information the filesystem table names the root and the firmware partition by their unique identifiers
+
+2026-07-28 05:47:53 stage giving this appliance an identity of its own
+2026-07-28 05:47:53 stage ------------------------------------------------------------
+2026-07-28 05:47:53 information rehearsal: a fresh machine identity would be generated on the disk
+
+2026-07-28 05:47:53 stage rebuilding the boot image for the installed root
+2026-07-28 05:47:53 stage ------------------------------------------------------------
+2026-07-28 05:47:53 information rehearsal: would run inside the installed system: update-initramfs -c -k 6.18.5
+2026-07-28 05:47:53 information a boot image was built for the kernel release 6.18.5
+
+2026-07-28 05:47:53 stage keeping the appliance the appliance
+2026-07-28 05:47:53 stage ------------------------------------------------------------
+2026-07-28 05:47:53 information the static address the appliance arrived with is on the disk, unchanged
+2026-07-28 05:47:53 information every address allocation service unit name is masked on the installed disk
+2026-07-28 05:47:53 information the installed appliance allocates no address and keeps the address it was given
+
+2026-07-28 05:47:53 stage installing both bootloaders
+2026-07-28 05:47:53 stage ------------------------------------------------------------
+2026-07-28 05:47:53 information rehearsal: would write the file at /etc/default/grub into the installed system
+2026-07-28 05:47:53 information rehearsal: the legacy bootloader would be written to the disk /dev/sda
+2026-07-28 05:47:53 information rehearsal: the modern bootloader would be written to the firmware partition in its removable form
+2026-07-28 05:47:53 information rehearsal: the boot menu would be generated from the installed kernel
+
+2026-07-28 05:47:53 stage verifying the installed appliance before declaring it done
+2026-07-28 05:47:53 stage ------------------------------------------------------------
+2026-07-28 05:47:53 information rehearsal: would confirm that the kernel is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the boot image is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the boot menu is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the legacy bootloader's core image is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the modern bootloader in its removable form is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the filesystem table is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the machine identity is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the appliance control plane is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the appliance console is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the appliance manual is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the static address the appliance arrived with is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the appliance service is on the disk
+2026-07-28 05:47:53 information rehearsal: would confirm that the appliance configuration is on the disk
+2026-07-28 05:47:53 information confirmed: the live boot machinery is not on the disk
+2026-07-28 05:47:53 information every part the installed appliance needs is present on the disk
+
+
+2026-07-28 05:47:53 stage installation summary
+2026-07-28 05:47:53 stage ------------------------------------------------------------
+2026-07-28 05:47:53 information the appliance was installed onto the disk /dev/sda
+2026-07-28 05:47:53 information it starts on an older machine by the legacy path and on a modern machine by the firmware path
+2026-07-28 05:47:53 information it answers on the address the image arrived with, at the port the boot screen names
+2026-07-28 05:47:53 information remove the live medium and start the machine from its disk
+2026-07-28 05:47:53 information this appliance assigns no addresses; it spells quantities and keeps identifiers
+2026-07-28 05:47:53 information the installation onto the disk is complete

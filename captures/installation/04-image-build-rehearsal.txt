@@ -1,0 +1,76 @@
+
+  Legacy-to-Modern IPBX Appliance
+  building the appliance image
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+
+2026-07-28 05:48:12 stage preflight
+2026-07-28 05:48:12 stage ------------------------------------------------------------
+2026-07-28 05:48:12 information the build tree has twenty-five gibibytes available
+2026-07-28 05:48:12 information the base will be ubuntu at the suite named noble
+2026-07-28 05:48:12 information the image will answer on 192.168.100.10 at port number 8088
+2026-07-28 05:48:13 warning rehearsal mode is active; no image will be produced
+
+2026-07-28 05:48:13 stage beginning image stage one
+2026-07-28 05:48:13 stage ------------------------------------------------------------
+
+  Legacy-to-Modern IPBX Appliance
+  image stage one -- the base operating system
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+2026-07-28 05:48:13 information the image stage named image-stage-one-bootstrap is already satisfied and will not be repeated
+2026-07-28 05:48:13 information image stage one finished in zero seconds
+
+2026-07-28 05:48:13 stage beginning image stage two
+2026-07-28 05:48:13 stage ------------------------------------------------------------
+
+  Legacy-to-Modern IPBX Appliance
+  image stage two -- the payload
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+2026-07-28 05:48:13 information the image stage named image-stage-two-payload is already satisfied and will not be repeated
+2026-07-28 05:48:13 information image stage two finished in zero seconds
+
+2026-07-28 05:48:13 stage beginning image stage three
+2026-07-28 05:48:13 stage ------------------------------------------------------------
+
+  Legacy-to-Modern IPBX Appliance
+  image stage three -- configuring the appliance
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+2026-07-28 05:48:13 information the image stage named image-stage-three-configure is already satisfied and will not be repeated
+2026-07-28 05:48:13 information image stage three finished in zero seconds
+
+2026-07-28 05:48:13 stage beginning image stage four
+2026-07-28 05:48:13 stage ------------------------------------------------------------
+
+  Legacy-to-Modern IPBX Appliance
+  image stage four -- compressing the root filesystem
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+2026-07-28 05:48:13 information the image stage named image-stage-four-compress is already satisfied and will not be repeated
+2026-07-28 05:48:13 information image stage four finished in zero seconds
+
+2026-07-28 05:48:13 stage beginning image stage five
+2026-07-28 05:48:13 stage ------------------------------------------------------------
+
+  Legacy-to-Modern IPBX Appliance
+  image stage five -- making the image bootable
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+2026-07-28 05:48:13 information the image stage named image-stage-five-master is already satisfied and will not be repeated
+2026-07-28 05:48:13 information image stage five finished in zero seconds
+
+
+2026-07-28 05:48:13 stage build summary
+2026-07-28 05:48:13 stage ------------------------------------------------------------
+2026-07-28 05:48:13 information image stage one is satisfied
+2026-07-28 05:48:13 information image stage two is satisfied
+2026-07-28 05:48:13 information image stage three is satisfied
+2026-07-28 05:48:13 information image stage four is satisfied
+2026-07-28 05:48:13 information image stage five is satisfied
+2026-07-28 05:48:13 information the finished image occupies one thousand one hundred forty-seven mebibytes
+2026-07-28 05:48:13 information the image is at /var/tmp/myipbx-image/output/myipbx-appliance.iso
+2026-07-28 05:48:13 information write it to a flash device, or burn it, and start the machine from it
+2026-07-28 05:48:13 information this appliance assigns no addresses; it spells quantities and keeps identifiers
+2026-07-28 05:48:13 information the image build is complete

@@ -1,0 +1,154 @@
+[
+  {
+    "file": "01-sign-in.png",
+    "caption": "The console as it is first met. The appliance ships with no default password; the installer printed one once."
+  },
+  {
+    "file": "02-sign-in-filled.png",
+    "caption": "Signing in. The whole console is reachable from the keyboard alone."
+  },
+  {
+    "file": "03-overview.png",
+    "caption": "The overview. The link lamp beside the heading is the persistent socket, and the figures move without the page being asked."
+  },
+  {
+    "file": "04-hardware.png",
+    "caption": "Interface cards and spans, read from the driver. This machine has no card fitted, and the section says so rather than showing an empty table."
+  },
+  {
+    "file": "05-system.png",
+    "caption": "The machine itself: host name, time, services, and the operations that need privilege."
+  },
+  {
+    "file": "06-extensions-before.png",
+    "caption": "Extensions, before anything has been added."
+  },
+  {
+    "file": "07-extension-form.png",
+    "caption": "Adding a telephone. Every field, its help text and its validation come from one schema the appliance itself validates against."
+  },
+  {
+    "file": "08-extension-created.png",
+    "caption": "The extension is created. Its number keeps its digits because it is dialled; the ring time is spelled because it is a quantity."
+  },
+  {
+    "file": "09-extension-refused.png",
+    "caption": "A value the appliance will not accept. The field is marked, the reason sits beneath it, the refusal is announced, and focus moves to the field that caused it."
+  },
+  {
+    "file": "10-extensions-list.png",
+    "caption": "Three telephones on the system."
+  },
+  {
+    "file": "11-trunk-form.png",
+    "caption": "Adding the connection to a carrier."
+  },
+  {
+    "file": "12-trunks-list.png",
+    "caption": "The trunk is declared. Registration is driven by the appliance and reported as it happens; this one cannot reach its carrier from here, and the state says so."
+  },
+  {
+    "file": "13-inbound-route-form.png",
+    "caption": "Where a call arriving from the carrier is sent. The dialled number keeps its digits: it is a number somebody calls."
+  },
+  {
+    "file": "14-inbound-routes-list.png",
+    "caption": "Inbound routing."
+  },
+  {
+    "file": "15-outbound-route-form.png",
+    "caption": "Which trunk carries a dialled number out."
+  },
+  {
+    "file": "16-outbound-routes-list.png",
+    "caption": "Outbound routing."
+  },
+  {
+    "file": "17-ring-group-form.png",
+    "caption": "A group of telephones that ring together. The members are the extensions that exist, offered by the schema rather than typed."
+  },
+  {
+    "file": "18-ring-groups-list.png",
+    "caption": "The ring group."
+  },
+  {
+    "file": "19-menu-form.png",
+    "caption": "A menu: what each key the caller presses leads to."
+  },
+  {
+    "file": "20-menus-list.png",
+    "caption": "The menu."
+  },
+  {
+    "file": "21-queue-form.png",
+    "caption": "A queue that holds callers in order until somebody is free."
+  },
+  {
+    "file": "22-queues-list.png",
+    "caption": "The queue."
+  },
+  {
+    "file": "23-conferences-list.png",
+    "caption": "A conference room. The entry code is held as a secret and is never shown again, here or in a backup."
+  },
+  {
+    "file": "24-time-condition-form.png",
+    "caption": "Business hours: where calls go inside them and outside them."
+  },
+  {
+    "file": "25-firewall.png",
+    "caption": "The firewall the appliance generates and root loads. Sources are read once, by one reading shared with everything else that reads an address."
+  },
+  {
+    "file": "26-transport-security.png",
+    "caption": "How the console is protected on the wire, including the certificate it is serving and its fingerprint."
+  },
+  {
+    "file": "27-configuration.png",
+    "caption": "The source of truth, what has been rendered from it, and whether anything on disk has diverged from what the appliance wrote."
+  },
+  {
+    "file": "28-tasks.png",
+    "caption": "What the appliance does for itself, on what interval, and when each last ran."
+  },
+  {
+    "file": "29-journal.png",
+    "caption": "Who changed what, and from where. Every change above is in here, with the account and the address behind it. No request body is ever recorded."
+  },
+  {
+    "file": "30-backup.png",
+    "caption": "Backup, restore and the support bundle. Passwords travel only when asked for, and the console says plainly that such an archive is not encrypted."
+  },
+  {
+    "file": "31-constraints.png",
+    "caption": "The exclusion this product is built around, audited on the running machine rather than asserted."
+  },
+  {
+    "file": "32-live-calls.png",
+    "caption": "Live call activity. The engine is not connected here, and the section distinguishes that from a quiet system rather than reporting zero."
+  },
+  {
+    "file": "33-logs.png",
+    "caption": "The logs, read from the appliance itself, spelled before they reach the page."
+  },
+  {
+    "file": "34-overview-dark.png",
+    "caption": "The same overview in the dark theme. Every colour comes from one token layer, and every reading was measured against the ratio it has to meet."
+  },
+  {
+    "file": "35-overview-high-contrast.png",
+    "caption": "The same overview in the high contrast theme. Every colour comes from one token layer, and every reading was measured against the ratio it has to meet."
+  },
+  {
+    "file": "36-overview-system-dark-high-contrast.png",
+    "caption": "What an operator gets when their system asks for dark mode and more contrast together, which is the pairing a low vision operator is most likely to be running."
+  },
+  {
+    "file": "37-telephone-width.png",
+    "caption": "The console on a telephone. The page does not scroll sideways; only the table does, inside a box that can be reached from the keyboard."
+  },
+  {
+    "file": "38-confirmation.png",
+    "caption": "Nothing disruptive happens without being asked. The dialogue takes focus, keeps it, closes on Escape, and gives it back to whatever opened it."
+  }
+]

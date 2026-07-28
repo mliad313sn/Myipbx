@@ -1,0 +1,32 @@
+passwd: password changed.
+chown: warning: '.' should be ':': 'ubuntu.ubuntu'
+chown: warning: '.' should be ':': 'ubuntu.ubuntu'
+
+
+  Legacy-to-Modern IPBX Appliance
+
+  Open a browser at the address 192.168.100.10
+  on port number 8088, over a secured connection.
+
+  This appliance assigns no addresses. It arrived with the address above
+  written into it. Change it from the console once you can reach it.
+
+  This appliance generated its own certificate the first time it started, so
+  no two appliances share one. Your browser will warn about it. The
+  fingerprint to compare against is printed on this screen beside the
+  administrator password.
+
+  The administrator password is printed once, on this screen, when the
+  appliance first starts.
+
+myipbx login: [  112.017787] myipbx-generate-certificate.sh[732]: 2026-07-28 07:11:58 stage generating this appliance's own certificate
+[  113.131821] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:00 stage ------------------------------------------------------------
+[  113.737906] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:01 information the certificate will name the address 192.168.100.10 and the host name myipbx
+[  114.174477] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:01 information running: mkdir -p /etc/myipbx/tls
+[  114.498378] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:01 information running: chmod 0750 /etc/myipbx/tls
+[  124.074678] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:11 information the certificate was written to /etc/myipbx/tls/appliance.crt
+[  125.092466] myipbx-generate-certificate.sh[732]: 2026-07-28 07:12:12 information the private key was written to /etc/myipbx/tls/appliance.key and is readable by root and by the appliance account only
+[  126.142463] myipbx-generate-certificate.sh[732]:   this appliance has its own certificate, which it signed itself.
+[  126.147584] myipbx-generate-certificate.sh[732]:   the first browser to reach the console will warn. compare what it
+[  126.149021] myipbx-generate-certificate.sh[732]:   shows against this fingerprint before accepting it:
+[  126.156929] myipbx-generate-certificate.sh[732]:   3C:7E:56:41:14:CE:FA:4A:40:9E:1D:E1:F9:53:75:C7:08:56:78:F1:BA:FF:2E:CC:26:71:B3:0C:52:64:87:6C

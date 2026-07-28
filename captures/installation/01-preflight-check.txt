@@ -1,0 +1,18 @@
+
+  Legacy-to-Modern IPBX Appliance
+  preflight check
+  this appliance assigns no addresses; it spells quantities and keeps identifiers
+
+2026-07-28 05:47:51 information satisfied: the python interpreter is present at version 3.11, which meets the required version three point eight or later
+2026-07-28 05:47:51 error blocking: kernel headers for the running kernel release 6.18.5 are missing, and the interface card drivers are compiled against them in stage three; install the headers package whose version matches the output of the command uname -r exactly -- the package named linux-headers followed by that release on a Debian derived system, or kernel-devel on a Red Hat derived system -- then run this check again
+2026-07-28 05:47:51 information satisfied: the build toolchain is present, with both a compiler and the make utility on the path
+2026-07-28 05:47:51 warning worth knowing: the running kernel release 6.18.5 is newer than the last tagged driver release, so stage three will clone the driver development tree from the network, and on a site with no route off the premises that clone fails partway through the installation and leaves a half built machine; if this machine has no such route, set the variable named DRIVER_ARCHIVE to a copy of the driver source fetched on a machine that has one, then run this check again
+2026-07-28 05:47:51 warning worth knowing: no Digium interface card is visible on the peripheral bus; this is legitimate when the appliance is being prepared before the card arrives, and the drivers are built regardless so that a card fitted later works at once, but if a card is already fitted then reseat it and check the slot with the command lspci before relying on stage three
+2026-07-28 05:47:51 information satisfied: this machine runs no address allocation service, so the exclusion the specification demands still holds
+2026-07-28 05:47:51 information satisfied: the filesystem holding /usr/src has twenty-five thousand ten mebibytes free, and two thousand forty-eight are needed for the driver and telephony engine source trees
+2026-07-28 05:47:51 information satisfied: the filesystem holding /opt has twenty-five thousand ten mebibytes free, and five hundred twelve are needed for the appliance prefix
+2026-07-28 05:47:51 information satisfied: the filesystem holding /var has twenty-five thousand ten mebibytes free, and one thousand twenty-four are needed for the appliance state, logs and package cache
+2026-07-28 05:47:51 information satisfied: the system clock reads 2026-07-28 05:47:51 in coordinated universal time, which is plausible
+2026-07-28 05:47:51 warning worth knowing: the target network interface has not been named, and the appliance never guesses one; set the variable named APPLIANCE_INTERFACE to the interface the appliance will serve on, chosen from those present on this machine, which are: eth0 lo
+2026-07-28 05:47:52 information the preflight check reports seven satisfied, three worth knowing, and one blocking
+2026-07-28 05:47:52 error the installation may not proceed until every blocking failure above is corrected; correct them and run this check again

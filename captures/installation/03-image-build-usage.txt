@@ -1,0 +1,20 @@
+usage: build-iso.sh [options]
+
+  --rehearse            perform no mutation; report what each stage would do
+  --from-stage NUMBER   begin at this stage, from one to five
+  --to-stage NUMBER     stop after this stage, from one to five
+  --force               re-run stages that already recorded a receipt
+  --boot-test           boot the finished image in an emulator and verify it
+  --clean               remove the whole build tree and start again
+  --help                show this message
+
+the five image stages are:
+
+  one    bootstrap the base operating system
+  two    the payload: kernel, telephony engine, interface drivers, appliance
+  three  configure the appliance: account, static address, services, messages
+  four   compress the root filesystem and lay out the image tree
+  five   install both bootloaders and master the image
+
+the finished image, and a checksum beside it, are written to the output
+directory inside the build tree.
