@@ -366,5 +366,88 @@ class WhenThereIsNoQueueLogTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("gave up", payload["explanation"])
 
 
+class RecordingRouteTests(unittest.IsolatedAsyncioTestCase):
+    """The one route that hands a file off the disk, over real transport."""
+
+    GOOD = "20260727-091500_441632960111_201_1753600000.123456.wav"
+
+    async def asyncSetUp(self) -> None:
+        self.harness = ApplianceHarness()
+        self.harness.write_document(DOCUMENT)
+
+        self.directory = Path(self.harness.root) / "monitor"
+        self.directory.mkdir()
+        (self.directory / self.GOOD).write_bytes(b"RIFF....WAVEfmt ")
+        self.secret = Path(self.harness.root) / "a-secret-outside-the-directory"
+        self.secret.write_bytes(b"this must never be served")
+        self.harness.config.recording_directory = str(self.directory)
+
+        await self.harness.start()
+        await self.harness.sign_in()
+
+    async def asyncTearDown(self) -> None:
+        await self.harness.stop()
+
+    async def test_a_recording_is_listed_from_its_name_alone(self) -> None:
+        status, _, payload = await self.harness.request("GET", "/api/recordings")
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["records"][0]["destination"], "201")
+
+    async def test_a_recording_is_served_as_audio(self) -> None:
+        status, headers, payload = await self.harness.request(
+            "GET", f"/api/recordings/{self.GOOD}"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["content-type"], "audio/wav")
+        self.assertIn("inline", headers["content-disposition"])
+        self.assertEqual(payload, b"RIFF....WAVEfmt ")
+
+    async def test_nothing_outside_the_directory_is_ever_served(self) -> None:
+        for name in (
+            "..%2Fa-secret-outside-the-directory",
+            "..%2F..%2Fetc%2Fpasswd",
+            "..%2F..%2F..%2Fetc%2Fshadow",
+            "20260727-091500_1_2_1.1.conf",
+            "20260727-091500_1_2_1.1.wav.php",
+        ):
+            with self.subTest(name=name):
+                status, _, payload = await self.harness.request(
+                    "GET", f"/api/recordings/{name}"
+                )
+                self.assertEqual(status, 404)
+                self.assertNotIn(b"must never be served", str(payload).encode())
+                self.assertNotIn(b"root:", str(payload).encode())
+
+    async def test_every_name_this_route_refuses_is_refused_the_same_way(self) -> None:
+        """A name that failed the pattern and a name naming a file that is not
+        there must not be distinguishable from outside."""
+        refusals = set()
+        for name in (
+            "20260727-091500_1_2_1.1.conf",     # not a shape this appliance writes
+            "20260727-091500_1_2_9.9.wav",      # the right shape, no such file
+            "notes.txt",                        # not a recording at all
+        ):
+            status, _, payload = await self.harness.request(
+                "GET", f"/api/recordings/{name}"
+            )
+            self.assertEqual(status, 404, name)
+            refusals.add(payload.get("error"))
+        self.assertEqual(len(refusals), 1, refusals)
+
+    async def test_the_route_refuses_an_anonymous_request(self) -> None:
+        for path in ("/api/recordings", f"/api/recordings/{self.GOOD}"):
+            with self.subTest(path=path):
+                status, _, _ = await self.harness.request("GET", path, cookie="")
+                self.assertEqual(status, 401)
+
+    async def test_playing_a_recording_is_recorded_in_the_journal(self) -> None:
+        """Somebody listened to a conversation. That is worth an entry."""
+        await self.harness.request("GET", f"/api/recordings/{self.GOOD}")
+        _, _, payload = await self.harness.request("GET", "/api/journal?limit=50")
+        targets = [entry.get("target", "") for entry in payload["entries"]]
+        self.assertIn("/api/recordings", targets)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -13,7 +13,7 @@
 </head>
 <body>
 
-<!-- The console offers twenty-four sections in one column, so a keyboard
+<!-- The console offers twenty-five sections in one column, so a keyboard
      reaching the page lands in front of all of them. This is the way past. -->
 <a class="mx-skip-link" href="#main-content">skip to the console</a>
 
@@ -61,6 +61,7 @@
       <button type="button" class="nav-item" data-view="calls">live calls</button>
       <button type="button" class="nav-item" data-view="history">call history</button>
       <button type="button" class="nav-item" data-view="reports">reports</button>
+      <button type="button" class="nav-item" data-view="recordings">recordings</button>
       <p class="nav-heading">telephony</p>
       <button type="button" class="nav-item" data-view="extensions">extensions</button>
       <button type="button" class="nav-item" data-view="trunks">trunks</button>
@@ -227,6 +228,32 @@
           <p class="hint" id="report-queues-explanation">loading</p>
           <div class="tiles" id="report-queue-tiles" hidden></div>
           <div id="report-queue-breakdowns"></div>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <!-- Recorded calls. Listed from the names of the files themselves, so a
+           row here and a file on disk cannot come to disagree. -->
+      <section class="view" id="view-recordings" hidden>
+        <section class="panel">
+          <h2>recorded calls</h2>
+          <p class="hint" id="recordings-explanation">loading</p>
+          <p class="hint">
+            recording is off on every extension until it is turned on, under
+            that extension. in most places a caller must be told they are being
+            recorded, and this appliance announces nothing.
+          </p>
+          <div class="actions">
+            <label class="mx-visually-hidden" for="recordings-search">search the recordings</label>
+            <input type="search" id="recordings-search" placeholder="search by number or date">
+            <label for="recordings-from">from</label>
+            <input type="date" id="recordings-from">
+            <label for="recordings-to">to</label>
+            <input type="date" id="recordings-to">
+            <button type="button" id="recordings-refresh">show</button>
+          </div>
+          <p class="failure" id="recordings-note" hidden></p>
+          <div id="recordings-table"></div>
         </section>
       </section>
 

@@ -759,6 +759,91 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* recorded calls                                                      */
+    /* ------------------------------------------------------------------ */
+
+    function loadRecordings() {
+        var query = [];
+        if (nodes.recordingsSearch.value) {
+            query.push('search=' + encodeURIComponent(nodes.recordingsSearch.value));
+        }
+        if (nodes.recordingsFrom.value) {
+            query.push('from=' + encodeURIComponent(nodes.recordingsFrom.value));
+        }
+        if (nodes.recordingsTo.value) {
+            query.push('to=' + encodeURIComponent(nodes.recordingsTo.value));
+        }
+
+        return request('/api/recordings?' + query.join('&')).then(function (result) {
+            var payload = result.payload || {};
+            var holder = nodes.recordingsTable;
+            clear(holder);
+
+            if (!payload.available) {
+                nodes.recordingsExplanation.textContent = numerals.sanitize(
+                    payload.explanation || 'no recording is available'
+                );
+                nodes.recordingsNote.hidden = true;
+                return;
+            }
+
+            nodes.recordingsExplanation.textContent = numerals.sanitize(
+                'showing ' + payload.record_count + ' recordings, newest first'
+            );
+            /* Files somebody put in that directory by hand are not listed and
+             * not served. Said out loud, because an operator who copied them
+             * there would otherwise conclude the appliance had lost them. */
+            nodes.recordingsNote.hidden = !payload.explanation;
+            if (payload.explanation) {
+                nodes.recordingsNote.textContent = numerals.sanitize(payload.explanation);
+            }
+
+            var table = element('table', 'grid');
+            var head = element('thead');
+            var headRow = element('tr');
+            ['when', 'from', 'to', 'size', 'listen'].forEach(function (heading) {
+                headRow.appendChild(element('th', null, heading));
+            });
+            head.appendChild(headRow);
+            table.appendChild(head);
+
+            var body = element('tbody');
+            var records = payload.records || [];
+            if (!records.length) {
+                emptyRow(body, 5, 'no recording matches what was asked for');
+            }
+            records.forEach(function (record) {
+                var row = element('tr');
+                cell(row, record.at);
+                cell(row, record.source);
+                cell(row, record.destination);
+                cell(row, record.size);
+
+                var actions = element('td', 'actions-cell');
+                /* The browser's own player rather than one built here: it is
+                 * reachable from a keyboard, it is what a screen reader
+                 * already knows how to describe, and it costs nothing to
+                 * carry on an appliance that loads nothing from anywhere. */
+                var player = element('audio');
+                player.controls = true;
+                player.preload = 'none';
+                player.src = '/api/recordings/' + encodeURIComponent(record.name);
+                actions.appendChild(player);
+
+                var save = element('a', 'download-link', 'download');
+                save.href = player.src;
+                save.download = record.name;
+                actions.appendChild(save);
+
+                row.appendChild(actions);
+                body.appendChild(row);
+            });
+            table.appendChild(body);
+            holder.appendChild(makeScrollable(table, 'recorded calls'));
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
     /* reports                                                             */
     /* ------------------------------------------------------------------ */
 
@@ -2316,6 +2401,7 @@
         calls: function () { loadState(); },
         history: function () { loadHistory(); },
         reports: function () { loadReport(); },
+        recordings: function () { loadRecordings(); },
         extensions: function () { renderEntityView('extensions'); },
         trunks: function () { renderEntityView('trunks'); },
         ring_groups: function () { renderEntityView('ring_groups'); },
@@ -2493,6 +2579,10 @@
             ['reportQueues', 'report-queues'], ['reportQueueTiles', 'report-queue-tiles'],
             ['reportQueuesExplanation', 'report-queues-explanation'],
             ['reportQueueBreakdowns', 'report-queue-breakdowns'],
+            ['recordingsExplanation', 'recordings-explanation'],
+            ['recordingsSearch', 'recordings-search'], ['recordingsFrom', 'recordings-from'],
+            ['recordingsTo', 'recordings-to'], ['recordingsRefresh', 'recordings-refresh'],
+            ['recordingsTable', 'recordings-table'], ['recordingsNote', 'recordings-note'],
             ['hardwareSummary', 'hardware-summary'], ['cardBody', 'card-body'],
             ['spanBody', 'span-body'], ['hardwareWizard', 'hardware-wizard'],
             ['systemReadings', 'system-readings'], ['interfaceBody', 'interface-body'],
@@ -2540,6 +2630,7 @@
 
         nodes.historyRefresh.addEventListener('click', loadHistory);
         nodes.reportRefresh.addEventListener('click', loadReport);
+        nodes.recordingsRefresh.addEventListener('click', loadRecordings);
         nodes.reportDownloadCalls.addEventListener('click', function () {
             downloadReport('');
         });

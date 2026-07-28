@@ -213,6 +213,15 @@ _register(
                   help="messages are announced to this address when set"),
             Field("ring_seconds", "ring time", "number", default=20, minimum=5, maximum=300,
                   help="how long this telephone rings before the call moves on"),
+            # Recording somebody without telling them is unlawful in most
+            # places this appliance will be installed, so the help text says so
+            # here, where the decision is made, rather than in a manual nobody
+            # opens.
+            Field("record_calls", "record calls", "choice", default="never",
+                  choices=("never", "calls in", "calls out", "always"),
+                  help="in most places a caller must be told they are being "
+                       "recorded; this appliance stores the audio and does not "
+                       "announce anything"),
             Field("enabled", "enabled", "boolean", default=True),
         ),
         referenced_by=(("ring_groups", "members"), ("inbound_routes", "destination_value")),

@@ -142,6 +142,13 @@ def build_router(context: Any) -> Router:
         guard.read(lambda request: _entities_export(context, request)),
     )
 
+    # -- recorded calls -----------------------------------------------------
+    router.get("/api/recordings", guard.read(lambda request: _recordings(context, request)))
+    router.get(
+        "/api/recordings/{name}",
+        guard.read(lambda request: _recording(context, request)),
+    )
+
     # -- backup and restore -------------------------------------------------
     router.get("/api/backup", guard.read(lambda request: _backup(context, request)))
     router.get(
@@ -1344,6 +1351,47 @@ def _flatten(value: Any) -> str:
     if isinstance(value, dict):
         return "; ".join(f"{key}={value[key]}" for key in sorted(value))
     return "" if value is None else str(value)
+
+
+# -- recorded calls --------------------------------------------------------
+
+
+def _recordings(context: Any, request: Request) -> Response:
+    return Response.json(context.recordings.list(
+        since=request.query.get("from", ""),
+        until=request.query.get("to", ""),
+        search=request.query.get("search", ""),
+    ))
+
+
+def _recording(context: Any, request: Request) -> Response:
+    """One recording, played or downloaded.
+
+    The only route in this appliance that hands a file off the disk to a
+    browser. The store decides whether a name may be served at all, and it
+    returns one answer for every way a name can be refused, so a name that
+    failed the pattern and a name that escaped the directory cannot be told
+    apart from outside.
+    """
+    name = request.parameter("name")
+    found = context.recordings.read(name)
+    if found is None:
+        return Response.error(404, "there is no such recording on this appliance")
+
+    payload, media_type = found
+    _record_export(context, request, "/api/recordings", f"played or downloaded: {name}")
+    return Response(
+        status=200,
+        body=payload,
+        content_type=media_type,
+        headers={
+            # Offered inline so the console can play it without downloading it,
+            # and named so that saving it produces a file somebody can identify
+            # six months later.
+            "Content-Disposition": f'inline; filename="{name}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
 
 
 def _attachment(payload: str, name: str) -> Response:

@@ -86,6 +86,15 @@ class ApplianceConfig:
     #: that waited four minutes and was abandoned appears in the call
     #: records as one unanswered call and nowhere says it waited.
     queue_log_file: str = "/var/log/asterisk/queue_log"
+    #: Where the engine writes recorded calls, and how long they are kept.
+    #: Recording fills a disk faster than anything else this appliance
+    #: does, and a telephone system that stops taking calls because its
+    #: disk is full is a worse outcome than a recording nobody kept.
+    #: Zero keeps them indefinitely, which is a decision rather than a
+    #: default nobody chose.
+    recording_directory: str = "/var/spool/asterisk/monitor"
+    recording_keep_days: int = 30
+    recording_retention_interval_seconds: float = 86400.0
     log_level: str = "INFO"
 
     # --- Telephony engine manager interface ------------------------------

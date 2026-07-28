@@ -541,6 +541,35 @@ def _parse_options(text: str) -> list[tuple[str, str]]:
     return pairs
 
 
+
+#: Where recordings are written, and how each one is named.
+#:
+#: The name carries everything a listing needs -- when, from whom, to whom, and
+#: the engine's own identifier for the call -- so that recordings can be listed
+#: and searched without a database beside them that could disagree with the
+#: files on disk. A recording whose name says one thing while a row in a table
+#: says another is worse than no listing at all.
+RECORDING_DIRECTORY = "/var/spool/asterisk/monitor"
+RECORDING_NAME = (
+    "${STRFTIME(${EPOCH},,%Y%m%d-%H%M%S)}"
+    "_${CALLERID(num)}_${EXTEN}_${UNIQUEID}.wav"
+)
+
+
+def _recording_lines(record: Mapping[str, Any], direction: str) -> list[str]:
+    """The one dialplan line that starts a recording, when one is wanted.
+
+    ``b`` on the mixer means the recording begins when the call is answered
+    rather than when it starts ringing, so a recording is a conversation and
+    not thirty seconds of ringback followed by a conversation.
+    """
+    mode = str(record.get("record_calls", "never") or "never").strip().lower()
+    if mode == "never" or (mode != "always" and mode != direction):
+        return []
+    return [
+        f" same => n,MixMonitor({RECORDING_DIRECTORY}/{RECORDING_NAME},b)\n"
+    ]
+
 def render_dialplan(document: Mapping[str, Any]) -> str:
     """Render the complete dialplan from every declared object."""
     dialplan = document.get("dialplan", {}) or {}
@@ -560,6 +589,7 @@ def render_dialplan(document: Mapping[str, Any]) -> str:
         ring = int(extension.get("ring_seconds", 20) or 20)
 
         lines.append(f"exten => {number},1,NoOp(a call to the extension {number})\n")
+        lines.extend(_recording_lines(extension, "calls in"))
         lines.append(f" same => n,Dial({technology}/{number},{ring})\n")
         if extension.get("voicemail", True):
             lines.append(f" same => n,VoiceMail({number}@default,u)\n")

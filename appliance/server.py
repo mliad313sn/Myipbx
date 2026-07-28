@@ -22,6 +22,7 @@ from .config import ApplianceConfig
 from .confstore import ConfigurationStore, DriftDetected
 from .diagnostics import CallRecordReader, LogReader
 from .queuelog import QueueLogReader
+from .recordings import RecordingStore
 from .entities import SecretStore
 from . import firewall as firewall_module
 from .httpd import HttpServer, Request, Response
@@ -91,6 +92,7 @@ class Appliance:
         self.logs = LogReader()
         self.calls = CallRecordReader(self.config.call_record_file)
         self.queue_log = QueueLogReader(self.config.queue_log_file)
+        self.recordings = RecordingStore(self.config.recording_directory)
 
         # -- transport -----------------------------------------------------
         self.hub = SocketHub(
@@ -379,8 +381,34 @@ class Appliance:
             "write a timestamped copy of the source of truth to the state directory",
             blocking=True,
         )
+        self.tasks.register(
+            "recording-retention",
+            self._task_recording_retention,
+            "remove recorded calls older than the retention that was chosen",
+            interval_seconds=self.config.recording_retention_interval_seconds,
+            blocking=True,
+        )
 
     # -- tasks --------------------------------------------------------------
+
+    async def _task_recording_retention(self) -> dict[str, Any]:
+        """Delete recordings past their retention.
+
+        Recording fills a disk faster than anything else this appliance does,
+        and a telephone system that stops taking calls because its disk is full
+        is a worse outcome than a recording nobody kept. A retention of zero
+        keeps everything, which is a decision somebody made rather than a
+        default nobody chose, and this task then does nothing and says so.
+        """
+        outcome = await asyncio.to_thread(
+            self.recordings.prune, self.config.recording_keep_days
+        )
+        return {
+            "removed": numerals.spell_integer(outcome["removed"]),
+            "kept": numerals.spell_integer(outcome["kept"]),
+            "explanation": outcome["explanation"],
+        }
+
 
     async def _task_health_sweep(self) -> dict[str, Any]:
         findings = self.audit.scan()
