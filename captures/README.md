@@ -17,7 +17,7 @@ before there is a browser to look at.
 | File | What it is |
 | --- | --- |
 | `01-preflight-check.txt` | `scripts/preflight-check.sh` run on this machine. It reports what is satisfied, what is worth knowing, and what blocks the installation, and it refuses to go on while anything blocks. Note the line confirming the machine runs no address allocation service — that check is part of the installer, not a claim made about it. |
-| `02-disk-installer-rehearsal.txt` | `scripts/install-to-disk.sh --rehearse`, which reads the disks, works out exactly what it would do to the chosen one, and prints every command without running any of them. |
+| `02-disk-installer-rehearsal.txt` | `iso/installer/crossbar-install-to-disk.sh --rehearse --disk /dev/vda`, which reads the disks, works out exactly what it would do to the chosen one, and prints every command without running any of them. |
 | `03-image-build-usage.txt` | `iso/build-iso.sh --help`: the five stages and the options. |
 | `04-image-build-rehearsal.txt` | `iso/build-iso.sh --rehearse`, each of the five stages reporting what it would do. |
 
