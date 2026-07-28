@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import numerals
+from . import numerals, PRODUCT_FULL_NAME
 from .logging_setup import get_logger
 
 __all__ = ["create", "restore", "RestoreRefused", "MEMBERS", "MANIFEST_NAME"]
@@ -126,7 +126,7 @@ def create(context: Any, *, include_secrets: bool = False) -> tuple[bytes, str]:
         manifest = json.dumps(
             {
                 "format_version": _FORMAT_VERSION,
-                "product": "Legacy-to-Modern IPBX Appliance",
+                "product": PRODUCT_FULL_NAME,
                 "created_at": stamp,
                 "members": included,
                 "withheld": withheld,
@@ -157,7 +157,7 @@ def create(context: Any, *, include_secrets: bool = False) -> tuple[bytes, str]:
         len(included), len(withheld),
     )
     suffix = "-with-secrets" if any(n in included for n in SECRET_MEMBERS) else ""
-    return payload, f"myipbx-backup-{stamp}{suffix}.tar.gz"
+    return payload, f"crossbar-backup-{stamp}{suffix}.tar.gz"
 
 
 def inspect(payload: bytes) -> dict[str, Any]:

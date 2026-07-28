@@ -72,11 +72,11 @@ class LogSource:
 #: which is what keeps the log viewer from becoming a file browser.
 DEFAULT_LOG_SOURCES: tuple[LogSource, ...] = (
     LogSource(
-        "appliance", "appliance control plane", "/var/log/myipbx/appliance.log",
+        "appliance", "appliance control plane", "/var/log/crossbar/appliance.log",
         "what the control plane itself did",
     ),
     LogSource(
-        "installation", "installation", "/var/log/myipbx/installation.log",
+        "installation", "installation", "/var/log/crossbar/installation.log",
         "what the installer did, stage by stage",
     ),
     LogSource(

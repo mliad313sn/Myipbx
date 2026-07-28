@@ -70,7 +70,7 @@ DEFAULT appliance
 
 MENU WIDTH ${ISOLINUX_MENU_WIDTH}
 MENU MARGIN ${ISOLINUX_MENU_MARGIN}
-MENU TITLE ${APPLIANCE_NAME}
+MENU TITLE ${APPLIANCE_NAME} ${APPLIANCE_MAKER}
 
 LABEL appliance
   MENU LABEL Start the appliance
@@ -195,7 +195,7 @@ EOF
     local blocks=$(( 4 * 1024 ))
 
     dd if=/dev/zero of="${efi_image}" bs=1024 count="${blocks}" status=none
-    mkfs.vfat -n MYIPBXEFI "${efi_image}" >/dev/null 2>&1 \
+    mkfs.vfat -n CROSSBAREFI "${efi_image}" >/dev/null 2>&1 \
         || fail "the firmware boot image could not be formatted, and without it the image starts only on a machine old enough to boot by the legacy path"
 
     mmd -i "${efi_image}" ::EFI ::EFI/BOOT >/dev/null 2>&1 || true

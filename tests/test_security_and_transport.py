@@ -254,7 +254,7 @@ class LoginThrottleTests(unittest.TestCase):
 
 class CredentialStoreTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-credential-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-credential-")
         self.path = Path(self.directory.name) / "credentials.json"
         self.store = CredentialStore(self.path, PasswordHasher(100000))
 
@@ -294,13 +294,13 @@ class RequestParsingTests(unittest.TestCase):
         request = parse_request_head(
             b"GET /api/state?verbose=yes HTTP/1.1\r\n"
             b"Host: appliance.example\r\n"
-            b"Cookie: myipbx_session=abc123\r\n"
+            b"Cookie: crossbar_session=abc123\r\n"
         )
         self.assertEqual(request.method, "GET")
         self.assertEqual(request.path, "/api/state")
         self.assertEqual(request.query["verbose"], "yes")
         self.assertEqual(request.header("host"), "appliance.example")
-        self.assertEqual(request.cookie("myipbx_session"), "abc123")
+        self.assertEqual(request.cookie("crossbar_session"), "abc123")
 
     def test_header_names_are_matched_without_regard_to_case(self) -> None:
         request = parse_request_head(b"GET / HTTP/1.1\r\nCONTENT-LENGTH: 42\r\n")
@@ -380,7 +380,7 @@ class ResponseTests(unittest.TestCase):
 
 class StaticFileTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-static-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-static-")
         self.root = Path(self.directory.name)
         (self.root / "index.html").write_text("<p>the dashboard</p>", encoding="utf-8")
         (self.root / "js").mkdir()

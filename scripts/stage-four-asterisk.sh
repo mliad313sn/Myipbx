@@ -19,8 +19,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 STAGE="stage-four-asterisk"
 
-APPLIANCE_SOURCE_DIR="${APPLIANCE_SOURCE_DIR:-/usr/local/src/myipbx}"
-APPLIANCE_BUILD_DIR="${APPLIANCE_BUILD_DIR:-/usr/local/src/myipbx/build}"
+APPLIANCE_SOURCE_DIR="${APPLIANCE_SOURCE_DIR:-/usr/local/src/crossbar}"
+APPLIANCE_BUILD_DIR="${APPLIANCE_BUILD_DIR:-/usr/local/src/crossbar/build}"
 ENGINE_ARCHIVE="${ENGINE_ARCHIVE:-}"
 ENGINE_ARCHIVE_URL="${ENGINE_ARCHIVE_URL:-}"
 ASTERISK_CONFIG_DIR="${ASTERISK_CONFIG_DIR:-/etc/asterisk}"

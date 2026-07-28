@@ -55,9 +55,9 @@ __all__ = [
 
 _LOG = get_logger("helperd")
 
-DEFAULT_SOCKET_PATH = "/run/myipbx/helper.sock"
-DEFAULT_HELPER_PATH = "/opt/myipbx/bin/myipbx-privileged-helper.sh"
-DEFAULT_ACCOUNT = "myipbx"
+DEFAULT_SOCKET_PATH = "/run/crossbar/helper.sock"
+DEFAULT_HELPER_PATH = "/opt/crossbar/bin/crossbar-privileged-helper.sh"
+DEFAULT_ACCOUNT = "crossbar"
 
 #: A request is a small JSON object.  The cap exists so that a caller who has
 #: reached the socket still cannot make the daemon allocate without bound.
@@ -514,9 +514,9 @@ def main(argv: list[str] | None = None) -> int:
     """Entry point for the daemon's service unit."""
     arguments = list(sys.argv[1:] if argv is None else argv)
 
-    socket_path = os.environ.get("MYIPBX_HELPER_SOCKET", DEFAULT_SOCKET_PATH)
-    helper_path = os.environ.get("MYIPBX_HELPER_SCRIPT", DEFAULT_HELPER_PATH)
-    account = os.environ.get("MYIPBX_SERVICE_ACCOUNT", DEFAULT_ACCOUNT)
+    socket_path = os.environ.get("CROSSBAR_HELPER_SOCKET", DEFAULT_SOCKET_PATH)
+    helper_path = os.environ.get("CROSSBAR_HELPER_SCRIPT", DEFAULT_HELPER_PATH)
+    account = os.environ.get("CROSSBAR_SERVICE_ACCOUNT", DEFAULT_ACCOUNT)
 
     if arguments:
         _LOG.warning("the daemon takes no arguments; it is configured by its environment")

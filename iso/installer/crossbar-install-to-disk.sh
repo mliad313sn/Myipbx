@@ -34,8 +34,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMMON_LIBRARY=""
 for candidate in \
     "${SCRIPT_DIR}/../../scripts/lib/common.sh" \
-    "/opt/myipbx/bin/lib/common.sh" \
-    "/usr/lib/myipbx/common.sh"
+    "/opt/crossbar/bin/lib/common.sh" \
+    "/usr/lib/crossbar/common.sh"
 do
     if [[ -f "${candidate}" ]]; then
         COMMON_LIBRARY="${candidate}"
@@ -59,7 +59,7 @@ ASSUME_YES="no"
 # Where the target root filesystem is mounted while it is being built. A path
 # under the volatile run directory is used rather than a temporary directory, so
 # that an operator watching the machine can see what is mounted and where.
-TARGET_MOUNT="${TARGET_MOUNT:-/run/myipbx-installation-target}"
+TARGET_MOUNT="${TARGET_MOUNT:-/run/crossbar-installation-target}"
 
 # The first partition holds nothing a filesystem would recognise. On a disk with
 # a modern partition table there is no gap after the boot record for a legacy
@@ -115,7 +115,7 @@ RSYNC_EXCLUSIONS=(
 
 usage() {
     cat <<'USAGE'
-usage: myipbx-install-to-disk.sh --disk DEVICE [options]
+usage: crossbar-install-to-disk.sh --disk DEVICE [options]
 
   --disk DEVICE   the whole disk to install onto, for example /dev/sda
   --assume-yes    proceed without asking; for an unattended installation
@@ -123,7 +123,7 @@ usage: myipbx-install-to-disk.sh --disk DEVICE [options]
   --help          show this message
 
 environment:
-  MYIPBX_LIVE_DISK  the disk the live medium is on, for the rare medium whose
+  CROSSBAR_LIVE_DISK  the disk the live medium is on, for the rare medium whose
                     device this script cannot identify by itself. it refuses to
                     install rather than guess, because guessing wrong destroys
                     the medium it is reading from partway through.
@@ -378,8 +378,8 @@ assert_disk_is_safe() {
     # here, beside the check it unblocks, rather than beside the detection --
     # a detection that never ran, on a machine with no medium mounted at all,
     # would otherwise skip past it.
-    if [[ -z "${LIVE_MEDIUM_DISK}" && -n "${MYIPBX_LIVE_DISK:-}" ]]; then
-        LIVE_MEDIUM_DISK="${MYIPBX_LIVE_DISK}"
+    if [[ -z "${LIVE_MEDIUM_DISK}" && -n "${CROSSBAR_LIVE_DISK:-}" ]]; then
+        LIVE_MEDIUM_DISK="${CROSSBAR_LIVE_DISK}"
         log_warn "proceeding on your word that the live medium is on the disk ${LIVE_MEDIUM_DISK}"
     fi
 
@@ -393,7 +393,7 @@ assert_disk_is_safe() {
     # was reading itself from, partway through reading it. Stated positively,
     # an unknown live disk is a refusal.
     if [[ -z "${LIVE_MEDIUM_DISK}" ]]; then
-        guard "the live medium's disk is not known, so the disk ${TARGET_DISK} cannot be shown to be a different disk from the one this script is running from, and installing onto that one would destroy the medium partway through; set the variable named MYIPBX_LIVE_DISK to the live medium's disk, for example /dev/sdb, then run this again"
+        guard "the live medium's disk is not known, so the disk ${TARGET_DISK} cannot be shown to be a different disk from the one this script is running from, and installing onto that one would destroy the medium partway through; set the variable named CROSSBAR_LIVE_DISK to the live medium's disk, for example /dev/sdb, then run this again"
     elif [[ "${TARGET_DISK}" == "${LIVE_MEDIUM_DISK}" ]]; then
         guard "the disk ${TARGET_DISK} is the one the live medium is on, and it will not be touched; name a different disk, which the command lsblk will list for you, then run this again"
     fi
@@ -501,13 +501,13 @@ partition_disk() {
     run_command sgdisk \
         --new="1:0:+${BIOS_BOOT_SIZE_MIB}M" \
         --typecode=1:ef02 \
-        --change-name=1:"myipbx legacy boot" \
+        --change-name=1:"crossbar legacy boot" \
         --new="2:0:+${EFI_SIZE_MIB}M" \
         --typecode=2:ef00 \
-        --change-name=2:"myipbx firmware boot" \
+        --change-name=2:"crossbar firmware boot" \
         --new=3:0:0 \
         --typecode=3:8300 \
-        --change-name=3:"myipbx root" \
+        --change-name=3:"crossbar root" \
         "${TARGET_DISK}"
 
     log_info "the disk was given three partitions: a legacy boot area, a firmware boot filesystem, and the appliance root"
@@ -555,12 +555,12 @@ make_filesystems() {
 
     # The firmware reads one kind of filesystem and only one, so there is no
     # choice to make here.
-    run_command mkfs.vfat -F 32 -n MYIPBXEFI "${efi_partition}"
+    run_command mkfs.vfat -F 32 -n CROSSBAREFI "${efi_partition}"
 
     # The root filesystem is the conservative one. A newer filesystem would
     # offer features this appliance does not use, on machines whose recovery
     # tools may not know them.
-    run_command mkfs.ext4 -F -L myipbx-root "${root_partition}"
+    run_command mkfs.ext4 -F -L crossbar-root "${root_partition}"
 
     log_info "the firmware partition and the appliance root were both formatted"
 }
@@ -821,7 +821,7 @@ preserve_appliance_identity() {
     # bare operating system, and puts back anything the removal of the live
     # machinery may have disturbed.
 
-    if [[ -f "${TARGET_MOUNT}/etc/systemd/network/10-myipbx-static.network" ]] || is_rehearsal; then
+    if [[ -f "${TARGET_MOUNT}/etc/systemd/network/10-crossbar-static.network" ]] || is_rehearsal; then
         log_info "the static address the appliance arrived with is on the disk, unchanged"
     else
         log_warn "the static address file did not survive the copy and must be restored from the appliance console"
@@ -830,7 +830,7 @@ preserve_appliance_identity() {
     # These are enabled again rather than assumed, because a package removed
     # during the live machinery's departure can take a dependent link with it.
     local unit
-    for unit in systemd-networkd.service myipbx-hostname.service myipbx.service asterisk.service; do
+    for unit in systemd-networkd.service crossbar-hostname.service crossbar.service asterisk.service; do
         in_target systemctl enable "${unit}" >/dev/null 2>&1 \
             || log_warn "the service unit named ${unit} could not be enabled on the disk"
     done
@@ -891,7 +891,7 @@ install_bootloaders() {
 
     # The boot menu is written before either installation, because both read it.
     write_into_target /etc/default/grub 0644 <<'EOF'
-# Legacy-to-Modern IPBX Appliance -- how this appliance starts
+# Crossbar -- how this appliance starts
 #
 # The console is offered on the screen and on the serial line alike, because an
 # appliance in a rack with no monitor still has to be recoverable.
@@ -899,7 +899,7 @@ install_bootloaders() {
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_TIMEOUT_STYLE=menu
-GRUB_DISTRIBUTOR="Legacy-to-Modern IPBX Appliance"
+GRUB_DISTRIBUTOR="Crossbar"
 GRUB_CMDLINE_LINUX_DEFAULT="quiet console=tty0 console=ttyS0,115200n8"
 GRUB_CMDLINE_LINUX=""
 GRUB_TERMINAL="console serial"
@@ -924,7 +924,7 @@ EOF
     if is_rehearsal; then
         log_info "rehearsal: the modern bootloader would be written to the firmware partition in its removable form"
     elif in_target grub-install --target=x86_64-efi --efi-directory=/boot/efi \
-            --bootloader-id=myipbx --removable --recheck >/dev/null 2>&1; then
+            --bootloader-id=crossbar --removable --recheck >/dev/null 2>&1; then
         log_info "the modern bootloader was written to the firmware partition in its removable form"
     else
         log_warn "the modern bootloader could not be written; this appliance will start only on an older machine"
@@ -996,12 +996,12 @@ verify_installation() {
     expect_on_target /boot/efi/EFI/BOOT/BOOTX64.EFI "the modern bootloader in its removable form"
     expect_on_target /etc/fstab "the filesystem table"
     expect_on_target /etc/machine-id "the machine identity"
-    expect_on_target /opt/myipbx/appliance/server.py "the appliance control plane"
-    expect_on_target /opt/myipbx/web/index.html "the appliance console"
-    expect_on_target /opt/myipbx/docs "the appliance manual"
-    expect_on_target /etc/systemd/network/10-myipbx-static.network "the static address the appliance arrived with"
-    expect_on_target /etc/systemd/system/myipbx.service "the appliance service"
-    expect_on_target /etc/myipbx/appliance.json "the appliance configuration"
+    expect_on_target /opt/crossbar/appliance/server.py "the appliance control plane"
+    expect_on_target /opt/crossbar/web/index.html "the appliance console"
+    expect_on_target /opt/crossbar/docs "the appliance manual"
+    expect_on_target /etc/systemd/network/10-crossbar-static.network "the static address the appliance arrived with"
+    expect_on_target /etc/systemd/system/crossbar.service "the appliance service"
+    expect_on_target /etc/crossbar/appliance.json "the appliance configuration"
 
     # And one thing that must not be there.
     if ! is_rehearsal && [[ -f "${TARGET_MOUNT}/etc/casper.conf" ]]; then

@@ -14,6 +14,7 @@ import json
 import re
 import unittest
 
+from appliance import PRODUCT_FULL_NAME, PRODUCT_NAME
 from support import (
     quantities_left_as_digits,
     ApplianceHarness,
@@ -56,7 +57,7 @@ class InterfaceTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_health_route_is_served_without_a_session(self) -> None:
         status, _, payload = await self.harness.request("GET", "/api/health")
         self.assertEqual(status, 200)
-        self.assertEqual(payload["product"], "Legacy-to-Modern IPBX Appliance")
+        self.assertEqual(payload["product"], PRODUCT_FULL_NAME)
         self.assertFalse(payload["assigns_addresses"])
 
     async def test_every_other_route_refuses_an_anonymous_request(self) -> None:
@@ -228,7 +229,7 @@ class InterfaceTests(unittest.IsolatedAsyncioTestCase):
         status, headers, body = await self.harness.request("GET", "/")
         self.assertEqual(status, 200)
         self.assertIn("text/html", headers["content-type"])
-        self.assertIn(b"Legacy-to-Modern IPBX Appliance", body)
+        self.assertIn(PRODUCT_NAME.encode("utf-8"), body)
 
         status, headers, _ = await self.harness.request("GET", "/js/numerals.js")
         self.assertEqual(status, 200)
@@ -380,7 +381,7 @@ class SocketTests(unittest.IsolatedAsyncioTestCase):
         return client
 
     async def test_the_upgrade_requires_a_valid_session(self) -> None:
-        client = await self._client(cookie="myipbx_session=a-token-we-never-issued")
+        client = await self._client(cookie="crossbar_session=a-token-we-never-issued")
         self.assertFalse(await client.connect())
         self.assertEqual(self.appliance.hub.connection_count, 0)
 
@@ -745,7 +746,7 @@ class SpelledOutputTests(unittest.IsolatedAsyncioTestCase):
 
         import logging
 
-        for handler in logging.getLogger("myipbx").handlers:
+        for handler in logging.getLogger("crossbar").handlers:
             handler.flush()
 
         log_file = self.harness.root / "appliance.log"

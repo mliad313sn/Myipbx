@@ -73,7 +73,7 @@ _RETRY_INITIAL_SECONDS = 0.05
 
 #: The services the appliance is permitted to control.  Anything outside this
 #: set is refused, so a request cannot reach an unrelated system service.
-MANAGED_SERVICES = ("asterisk", "myipbx", "dahdi")
+MANAGED_SERVICES = ("asterisk", "crossbar", "dahdi")
 
 _SERVICE_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 _INTERFACE_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9._-]{0,15}$")
@@ -220,8 +220,8 @@ class PrivilegedOperations:
 
     def __init__(
         self,
-        helper_path: str | Path = "/opt/myipbx/bin/myipbx-privileged-helper.sh",
-        socket_path: str | Path = "/run/myipbx/helper.sock",
+        helper_path: str | Path = "/opt/crossbar/bin/crossbar-privileged-helper.sh",
+        socket_path: str | Path = "/run/crossbar/helper.sock",
         runner: Runner | None = None,
     ) -> None:
         self.helper_path = Path(helper_path)

@@ -190,7 +190,7 @@ class TheCheckIsHonestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "broken.nft"
             path.write_text(
-                "table inet myipbx {\n"
+                "table inet crossbar {\n"
                 "    chain input {\n"
                 "        this is not a rule at all\n"
                 "    }\n"

@@ -1,22 +1,22 @@
 [Unit]
-Description=Legacy-to-Modern IPBX Appliance privileged helper
-Documentation=file:/opt/myipbx/docs/system-architecture.md
+Description=Crossbar privileged helper
+Documentation=file:/opt/crossbar/docs/system-architecture.md
 
 # The helper must be listening before the control plane starts, or the first
 # operation an operator asks for after a restart would be refused for no reason
 # the operator could act on.
-Before=myipbx.service
+Before=crossbar.service
 
 [Service]
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/opt/myipbx
+WorkingDirectory=/opt/crossbar
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
-Environment=MYIPBX_HELPER_SOCKET=/run/myipbx/helper.sock
-Environment=MYIPBX_HELPER_SCRIPT=/opt/myipbx/bin/myipbx-privileged-helper.sh
-Environment=MYIPBX_SERVICE_ACCOUNT=myipbx
+Environment=CROSSBAR_HELPER_SOCKET=/run/crossbar/helper.sock
+Environment=CROSSBAR_HELPER_SCRIPT=/opt/crossbar/bin/crossbar-privileged-helper.sh
+Environment=CROSSBAR_SERVICE_ACCOUNT=crossbar
 ExecStart=/usr/bin/python3 -m appliance.helperd
 Restart=on-failure
 RestartSec=5
@@ -25,7 +25,7 @@ TimeoutStopSec=20
 # The socket directory is created by the service manager rather than by the
 # daemon, so that it exists with the right ownership before anything can race
 # to create it with the wrong ownership.
-RuntimeDirectory=myipbx
+RuntimeDirectory=crossbar
 RuntimeDirectoryMode=0750
 
 # This daemon holds privilege on purpose, so the hardening below is what can be
@@ -48,8 +48,8 @@ RestrictAddressFamilies=AF_UNIX
 # outside this list is writable, so a defect in a helper verb cannot reach the
 # rest of the filesystem.
 ProtectSystem=full
-ReadWritePaths=/var/lib/myipbx /var/log/myipbx /run/myipbx
-ReadWritePaths=-/etc/asterisk -/etc/dahdi -/etc/systemd/network -/etc/myipbx
+ReadWritePaths=/var/lib/crossbar /var/log/crossbar /run/crossbar
+ReadWritePaths=-/etc/asterisk -/etc/dahdi -/etc/systemd/network -/etc/crossbar
 
 [Install]
 WantedBy=multi-user.target

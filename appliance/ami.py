@@ -372,7 +372,7 @@ class ManagerClient:
         if writer is None:
             raise ManagerNotConnected("the manager interface is not connected")
 
-        identifier = f"myipbx-{next(self._identifiers)}"
+        identifier = f"crossbar-{next(self._identifiers)}"
         payload = dict(fields or {})
         payload["ActionID"] = identifier
 

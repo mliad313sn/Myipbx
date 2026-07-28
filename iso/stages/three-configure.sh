@@ -49,12 +49,12 @@ configure_service_account() {
     fi
 
     in_chroot bash -c '
-        id -u myipbx >/dev/null 2>&1 || \
-            useradd --system --home-dir /opt/myipbx --shell /usr/sbin/nologin \
-                    --comment "appliance control plane" myipbx
-        mkdir -p /var/lib/myipbx/receipts /var/lib/myipbx/backups /var/log/myipbx /etc/myipbx
-        chown -R myipbx:myipbx /var/lib/myipbx /var/log/myipbx
-        chmod 0750 /var/lib/myipbx /var/log/myipbx /etc/myipbx
+        id -u crossbar >/dev/null 2>&1 || \
+            useradd --system --home-dir /opt/crossbar --shell /usr/sbin/nologin \
+                    --comment "appliance control plane" crossbar
+        mkdir -p /var/lib/crossbar/receipts /var/lib/crossbar/backups /var/log/crossbar /etc/crossbar
+        chown -R crossbar:crossbar /var/lib/crossbar /var/log/crossbar
+        chmod 0750 /var/lib/crossbar /var/log/crossbar /etc/crossbar
     ' || fail "the service account could not be created"
 }
 
@@ -108,7 +108,7 @@ EOF
     # therefore left in place too: they are noisy on a machine with no desktop,
     # and noise is a smaller fault than a rescue shell.
     write_into_chroot /etc/initramfs-tools/modules 0644 <<'EOF'
-# Legacy-to-Modern IPBX Appliance -- modules any rebuilt boot image must carry
+# Crossbar -- modules any rebuilt boot image must carry
 #
 # These are not applied during the image build. They are here so that a rebuild
 # performed later, on the appliance itself, carries what the boot depends on.
@@ -139,7 +139,7 @@ EOF
 
     # Any rebuilt boot image should carry the wide driver set rather than only
     # the modules of the machine that happened to rebuild it.
-    write_into_chroot /etc/initramfs-tools/conf.d/myipbx.conf 0644 <<'EOF'
+    write_into_chroot /etc/initramfs-tools/conf.d/crossbar.conf 0644 <<'EOF'
 # Carry the wide driver set: this image boots machines nobody has inspected.
 MODULES=most
 EOF
@@ -216,7 +216,7 @@ configure_static_network() {
     # Note what is absent: there is no address request directive anywhere in
     # this file, and no allocation service anywhere in the image. Every address
     # this appliance has was written down by somebody.
-    write_into_chroot /etc/systemd/network/10-myipbx-static.network 0644 <<EOF
+    write_into_chroot /etc/systemd/network/10-crossbar-static.network 0644 <<EOF
 # ${APPLIANCE_NAME} -- the address this appliance arrives with
 #
 # This appliance requests no address and offers no address. Change this from
@@ -249,27 +249,27 @@ configure_appliance() {
         return 0
     fi
 
-    write_into_chroot /etc/myipbx/appliance.json 0640 <<EOF
+    write_into_chroot /etc/crossbar/appliance.json 0640 <<EOF
 {
   "appliance": {
     "listen_address": "${APPLIANCE_DEFAULT_ADDRESS}",
     "listen_port": ${APPLIANCE_CONSOLE_PORT},
     "tls_enabled": true,
-    "tls_certificate": "/etc/myipbx/tls/appliance.crt",
-    "tls_private_key": "/etc/myipbx/tls/appliance.key",
+    "tls_certificate": "/etc/crossbar/tls/appliance.crt",
+    "tls_private_key": "/etc/crossbar/tls/appliance.key",
     "tls_minimum_version": "TLSv1.2",
     "plain_http_redirect_port": ${APPLIANCE_REDIRECT_PORT},
     "session_cookie_secure": true,
-    "web_root": "/opt/myipbx/web",
-    "state_directory": "/var/lib/myipbx",
+    "web_root": "/opt/crossbar/web",
+    "state_directory": "/var/lib/crossbar",
     "asterisk_configuration_directory": "/etc/asterisk",
-    "log_file": "/var/log/myipbx/appliance.log",
+    "log_file": "/var/log/crossbar/appliance.log",
     "log_level": "INFO",
     "manager_host": "127.0.0.1",
     "manager_port": 5038,
-    "manager_username": "myipbx",
+    "manager_username": "crossbar",
     "manager_secret": "",
-    "privileged_helper": "/opt/myipbx/bin/myipbx-privileged-helper.sh",
+    "privileged_helper": "/opt/crossbar/bin/crossbar-privileged-helper.sh",
     "fail_on_address_allocation_server": true
   },
   "revision": 1,
@@ -289,7 +289,7 @@ configure_appliance() {
 }
 EOF
 
-    in_chroot chown root:myipbx /etc/myipbx/appliance.json || true
+    in_chroot chown root:crossbar /etc/crossbar/appliance.json || true
 }
 
 configure_services() {
@@ -302,7 +302,7 @@ configure_services() {
     # The privileged helper is enabled before the control plane, because the
     # control plane can perform no system operation until the helper is
     # listening and an operator would have no way to tell why.
-    in_chroot systemctl enable myipbx-helperd.service >/dev/null 2>&1 \
+    in_chroot systemctl enable crossbar-helperd.service >/dev/null 2>&1 \
         || log_warn "the privileged helper service could not be enabled"
 
     # No certificate travels inside this image, so each appliance booted from
@@ -310,10 +310,10 @@ configure_services() {
     # before the control plane and does nothing at all on every boot after the
     # first, which is what keeps it from becoming the kind of unit that fails
     # forever in an image nobody rebuilt.
-    in_chroot systemctl enable myipbx-certificate.service >/dev/null 2>&1 \
+    in_chroot systemctl enable crossbar-certificate.service >/dev/null 2>&1 \
         || log_warn "the certificate generation service could not be enabled"
 
-    in_chroot systemctl enable myipbx.service >/dev/null 2>&1 \
+    in_chroot systemctl enable crossbar.service >/dev/null 2>&1 \
         || log_warn "the appliance service could not be enabled"
     in_chroot systemctl enable asterisk.service >/dev/null 2>&1 \
         || log_warn "the telephony engine service could not be enabled"
@@ -361,6 +361,7 @@ configure_boot_message() {
     write_into_chroot /etc/issue 0644 <<EOF
 
   ${APPLIANCE_NAME}
+  ${APPLIANCE_MAKER}
 
   Open a browser at ${address_line}
   on ${port_line}, over a secured connection.
@@ -383,9 +384,10 @@ EOF
     write_into_chroot /etc/motd 0644 <<EOF
 
   ${APPLIANCE_NAME}
+  ${APPLIANCE_MAKER}
 
   Everything is done from the browser console. This shell is a recovery tool.
-  The manual is in the directory /opt/myipbx/docs.
+  The manual is in the directory /opt/crossbar/docs.
 
 EOF
 }
@@ -411,9 +413,9 @@ remove_superseded_artefacts() {
     # explicitly, and this list is where one belongs when a design is replaced.
     local artefact
     for artefact in \
-        /etc/systemd/system/myipbx-hostname.service \
-        /etc/systemd/system/multi-user.target.wants/myipbx-hostname.service \
-        /etc/sudoers.d/myipbx
+        /etc/systemd/system/crossbar-hostname.service \
+        /etc/systemd/system/multi-user.target.wants/crossbar-hostname.service \
+        /etc/sudoers.d/crossbar
     do
         if [[ -e "${CHROOT_DIR}${artefact}" || -L "${CHROOT_DIR}${artefact}" ]]; then
             rm -f "${CHROOT_DIR}${artefact}"
@@ -448,7 +450,7 @@ tidy_image() {
     # Nor the appliance's own certificate, for exactly the same reason. The
     # build tree is reused between runs, so a certificate generated by anything
     # that ran inside the chroot would otherwise sit there and ship.
-    rm -f "${CHROOT_DIR}"/etc/myipbx/tls/appliance.* 2>/dev/null || true
+    rm -f "${CHROOT_DIR}"/etc/crossbar/tls/appliance.* 2>/dev/null || true
 }
 
 audit_image() {
@@ -471,7 +473,7 @@ audit_image() {
     fi
 
     # No credential may ship inside an image that anybody can download.
-    if [[ -f "${CHROOT_DIR}/var/lib/myipbx/credentials.json" ]]; then
+    if [[ -f "${CHROOT_DIR}/var/lib/crossbar/credentials.json" ]]; then
         log_error "a credential was baked into the image"
         findings=$(( findings + 1 ))
     fi
@@ -482,8 +484,8 @@ audit_image() {
     # is a worse position than plain transport, because it would look secured.
     local material
     for material in \
-        "${CHROOT_DIR}/etc/myipbx/tls/appliance.key" \
-        "${CHROOT_DIR}/etc/myipbx/tls/appliance.crt"
+        "${CHROOT_DIR}/etc/crossbar/tls/appliance.key" \
+        "${CHROOT_DIR}/etc/crossbar/tls/appliance.crt"
     do
         if [[ -e "${material}" ]]; then
             log_error "transport security material was baked into the image at ${material#"${CHROOT_DIR}"}"
@@ -494,11 +496,11 @@ audit_image() {
     # And the unit that generates one on the appliance itself must be present,
     # or an image booted appliance would come up with no certificate and the
     # console would refuse to serve.
-    if [[ ! -f "${CHROOT_DIR}/etc/systemd/system/myipbx-certificate.service" ]]; then
+    if [[ ! -f "${CHROOT_DIR}/etc/systemd/system/crossbar-certificate.service" ]]; then
         log_error "the certificate generation service is missing from the image"
         findings=$(( findings + 1 ))
     fi
-    if [[ ! -x "${CHROOT_DIR}/opt/myipbx/bin/myipbx-generate-certificate.sh" ]]; then
+    if [[ ! -x "${CHROOT_DIR}/opt/crossbar/bin/crossbar-generate-certificate.sh" ]]; then
         log_error "the certificate generator is missing from the image"
         findings=$(( findings + 1 ))
     fi
@@ -506,21 +508,21 @@ audit_image() {
     # The service account must hold no privilege of its own.  It reaches
     # privilege by asking a daemon that holds it, and a grant here would mean
     # the account could act directly instead.
-    if [[ -e "${CHROOT_DIR}/etc/sudoers.d/myipbx" ]]; then
+    if [[ -e "${CHROOT_DIR}/etc/sudoers.d/crossbar" ]]; then
         log_error "the service account was granted privilege directly in the image"
         findings=$(( findings + 1 ))
     fi
 
     # And the daemon that does hold the privilege must actually be there, or
     # every operation offered by the interface would fail on a real machine.
-    if [[ ! -f "${CHROOT_DIR}/etc/systemd/system/myipbx-helperd.service" ]]; then
+    if [[ ! -f "${CHROOT_DIR}/etc/systemd/system/crossbar-helperd.service" ]]; then
         log_error "the privileged helper's service is missing from the image"
         findings=$(( findings + 1 ))
     fi
 
     # A unit that a superseded design left behind would still be enabled, and
     # would still fail on every boot.
-    if [[ -e "${CHROOT_DIR}/etc/systemd/system/myipbx-hostname.service" ]]; then
+    if [[ -e "${CHROOT_DIR}/etc/systemd/system/crossbar-hostname.service" ]]; then
         log_error "a superseded service unit survived into the image"
         findings=$(( findings + 1 ))
     fi

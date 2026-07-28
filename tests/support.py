@@ -141,7 +141,7 @@ class ApplianceHarness:
     """An appliance built in a temporary directory tree, bound to a free port."""
 
     def __init__(self, **overrides: Any) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-test-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-test-")
         self.root = Path(self.directory.name)
         (self.root / "state").mkdir()
         (self.root / "asterisk").mkdir()
@@ -288,7 +288,7 @@ class ApplianceHarness:
             self.appliance = None
 
         # Release the log file before the temporary tree is removed.
-        root_logger = logging.getLogger("myipbx")
+        root_logger = logging.getLogger("crossbar")
         for handler in list(root_logger.handlers):
             root_logger.removeHandler(handler)
             try:

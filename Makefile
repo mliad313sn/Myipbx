@@ -1,4 +1,4 @@
-# Legacy-to-Modern IPBX Appliance
+# Crossbar, by Kernel Project
 #
 # Nothing here fetches anything.  The control plane depends on the standard
 # library alone, so there is no dependency step to run and no package index to
@@ -14,7 +14,7 @@ export PYTHONDONTWRITEBYTECODE := 1
 
 .PHONY: help
 help: ## show this message
-	@printf '\n  Legacy-to-Modern IPBX Appliance\n\n'
+	@printf '\n  Crossbar\n  by Kernel Project\n\n'
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  %-22s %s\n", $$1, $$2}'
 	@printf '\n  this appliance assigns no addresses and spells every numeral in full letters\n\n'

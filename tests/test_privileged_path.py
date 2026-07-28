@@ -65,7 +65,7 @@ class _RealHelperFixture(unittest.TestCase):
         self.daemon = HelperDaemon(
             socket_path=self.socket_path,
             helper_path=self.helper_path,
-            account="myipbx",
+            account="crossbar",
             # The test runs as whoever runs the suite, so that identity is what
             # the daemon must accept.  The refusal path is proved separately by
             # constructing a daemon that does not admit this account.
@@ -132,7 +132,7 @@ class RealSocketOperationTests(_RealHelperFixture):
             "address": "192.168.100.10",
             "prefix": "24",
             "gateway": "",
-            "hostname": "myipbx",
+            "hostname": "crossbar",
             "timezone": "UTC",
         }
 
@@ -238,7 +238,7 @@ class CallerIdentityTests(unittest.TestCase):
         daemon = HelperDaemon(
             socket_path=root / "helper.sock",
             helper_path=helper,
-            account="myipbx",
+            account="crossbar",
             permitted_users=(impossible,),
         )
         daemon.start()
@@ -510,7 +510,7 @@ class NoSudoAnywhereTests(unittest.TestCase):
             Path(__file__).resolve().parents[1]
             / "config"
             / "systemd"
-            / "myipbx.service"
+            / "crossbar.service"
         )
         self.assertIn("NoNewPrivileges=yes", unit.read_text(encoding="utf-8"))
 

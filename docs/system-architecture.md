@@ -210,8 +210,8 @@ configuration, recompiling the interface card drivers, restarting the machine.
 
 The control plane runs as an unprivileged account under a unit that sets
 `NoNewPrivileges`. It reaches privilege by asking a small daemon that already
-holds it, over a Unix domain socket at `/run/myipbx/helper.sock`, mode `0660`,
-owned `root:myipbx`. The exchange is one length-prefixed JSON request and one
+holds it, over a Unix domain socket at `/run/crossbar/helper.sock`, mode `0660`,
+owned `root:crossbar`. The exchange is one length-prefixed JSON request and one
 reply. The daemon establishes who is calling by asking the kernel for the peer
 credentials of the connection rather than by believing anything the request
 says, and refuses any caller that is not the appliance's own service account

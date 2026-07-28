@@ -26,7 +26,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 IMAGE = Path(
-    os.environ.get("MYIPBX_IMAGE", "/var/tmp/myipbx-image/output/myipbx-appliance.iso")
+    os.environ.get("CROSSBAR_IMAGE", "/var/tmp/crossbar-image/output/crossbar-appliance.iso")
 )
 FIRMWARE = Path("/usr/share/ovmf/OVMF.fd")
 
@@ -99,7 +99,7 @@ def convert(source: Path, destination: Path) -> tuple[bool, str]:
 def capture(mode: str, destination: Path, schedule: list[tuple[float, str]]) -> int:
     """Boot once and take a frame at each moment in the schedule."""
     destination.mkdir(parents=True, exist_ok=True)
-    work = Path("/tmp/myipbx-boot-capture") / mode
+    work = Path("/tmp/crossbar-boot-capture") / mode
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)

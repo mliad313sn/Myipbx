@@ -82,7 +82,7 @@ class SupportBundleTests(unittest.IsolatedAsyncioTestCase):
 
     def _bundle(self) -> tuple[bytes, dict[str, bytes]]:
         payload, name = supportbundle.create(self.appliance)
-        self.assertTrue(name.startswith("myipbx-support-"))
+        self.assertTrue(name.startswith("crossbar-support-"))
         members: dict[str, bytes] = {}
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
             for member in archive.getmembers():

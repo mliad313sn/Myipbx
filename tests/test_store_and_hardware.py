@@ -56,7 +56,7 @@ DOCUMENT = {
 
 class ConfigurationStoreTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-store-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-store-")
         base = Path(self.directory.name)
         self.output = base / "asterisk"
         self.store = ConfigurationStore(
@@ -340,7 +340,7 @@ class SpanDocumentParsingTests(unittest.TestCase):
 
 class HardwareInventoryTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-hardware-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-hardware-")
         self.base = Path(self.directory.name)
 
     def tearDown(self) -> None:

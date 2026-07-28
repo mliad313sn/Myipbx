@@ -426,7 +426,7 @@ class CoalescingConfigurationTests(unittest.TestCase):
     def test_the_window_can_be_set_from_the_environment(self) -> None:
         config = ApplianceConfig.load(
             path="/nonexistent/appliance.json",
-            environment={"MYIPBX_BROADCAST_COALESCE_MILLISECONDS": "0"},
+            environment={"CROSSBAR_BROADCAST_COALESCE_MILLISECONDS": "0"},
         )
         self.assertEqual(config.broadcast_coalesce_milliseconds, 0)
 

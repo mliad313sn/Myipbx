@@ -36,7 +36,7 @@ import tarfile
 import time
 from typing import Any
 
-from . import entities
+from . import entities, PRODUCT_FULL_NAME
 from .logging_setup import get_logger
 
 __all__ = ["create", "REDACTED", "WITHHELD_FIELDS"]
@@ -149,7 +149,7 @@ def create(context: Any) -> tuple[bytes, str]:
             archive,
             "READ-ME-FIRST.txt",
             (
-                "Legacy-to-Modern IPBX Appliance -- support bundle\n"
+                f"{PRODUCT_FULL_NAME} -- support bundle\n"
                 "\n"
                 "This file describes one appliance at one moment. It carries no\n"
                 "telephone password, no carrier account password, no\n"
@@ -179,7 +179,7 @@ def create(context: Any) -> tuple[bytes, str]:
         add(
             "appliance.json",
             lambda: {
-                "product": "Legacy-to-Modern IPBX Appliance",
+                "product": PRODUCT_FULL_NAME,
                 "produced_at": stamp,
                 "uptime_seconds": max(0, int(time.time() - context.started_at)),
                 "python": platform.python_version(),
@@ -263,7 +263,7 @@ def create(context: Any) -> tuple[bytes, str]:
         "a support bundle was produced carrying %d document or documents",
         len(collected) + 1,
     )
-    return payload, f"myipbx-support-{stamp}.tar.gz"
+    return payload, f"crossbar-support-{stamp}.tar.gz"
 
 
 def _collect_logs(context: Any) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-# Product Vision — Legacy-to-Modern Internet Protocol Private Branch Exchange Appliance
+# Product Vision — Crossbar
 
 Author: Agent One, Chief Executive Officer role.
 Status: Ratified. Feeds Agent Two and Agent Three.

@@ -21,14 +21,14 @@ source "${REPOSITORY_ROOT}/scripts/lib/common.sh"
 # Where the build happens, and what it produces
 # ---------------------------------------------------------------------------
 
-BUILD_ROOT="${BUILD_ROOT:-/var/tmp/myipbx-image}"
+BUILD_ROOT="${BUILD_ROOT:-/var/tmp/crossbar-image}"
 CHROOT_DIR="${CHROOT_DIR:-${BUILD_ROOT}/rootfs}"
 STAGING_DIR="${STAGING_DIR:-${BUILD_ROOT}/staging}"
 OUTPUT_DIR="${OUTPUT_DIR:-${BUILD_ROOT}/output}"
 RECEIPT_DIR="${RECEIPT_DIR:-${BUILD_ROOT}/receipts}"
 
-IMAGE_NAME="${IMAGE_NAME:-myipbx-appliance}"
-IMAGE_LABEL="${IMAGE_LABEL:-MYIPBX_APPLIANCE}"
+IMAGE_NAME="${IMAGE_NAME:-crossbar-appliance}"
+IMAGE_LABEL="${IMAGE_LABEL:-CROSSBAR_APPLIANCE}"
 
 # ---------------------------------------------------------------------------
 # What goes inside the image
@@ -61,7 +61,7 @@ APPLIANCE_REDIRECT_PORT="${APPLIANCE_REDIRECT_PORT:-8080}"
 # into the root filesystem alone is discarded at boot.  Passing it as a boot
 # argument reaches the live boot machinery at the only moment it is listening,
 # which is why the name lives here rather than in the configuration stage.
-APPLIANCE_HOST_NAME="${APPLIANCE_HOST_NAME:-myipbx}"
+APPLIANCE_HOST_NAME="${APPLIANCE_HOST_NAME:-crossbar}"
 
 # The marker the firmware bootloader searches for to find the image.  It is the
 # appliance's own file rather than the package disc marker a distribution would

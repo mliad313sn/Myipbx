@@ -177,7 +177,7 @@ class TheInstalledAppliancePathTests(unittest.TestCase):
         path in a branch that never runs. This lays the package down and looks
         at what is on disk afterwards.
         """
-        with tempfile.TemporaryDirectory(prefix="myipbx-prefix-") as name:
+        with tempfile.TemporaryDirectory(prefix="crossbar-prefix-") as name:
             prefix = Path(name)
             result = subprocess.run(
                 ["bash", "-c",
@@ -208,7 +208,7 @@ class TheInstalledAppliancePathTests(unittest.TestCase):
     def test_the_module_looks_where_the_installer_puts_it(self) -> None:
         """The two halves have to name the same place."""
         looked_in = {str(path) for path in hardware._CATALOGUE_LOCATIONS}
-        self.assertIn("/opt/myipbx/share/digium-cards.tsv", looked_in)
+        self.assertIn("/opt/crossbar/share/digium-cards.tsv", looked_in)
 
     def test_the_image_carries_it_and_checks_that_it_did(self) -> None:
         """The same gap, in the other place the package is laid down.
@@ -226,14 +226,14 @@ class TheInstalledAppliancePathTests(unittest.TestCase):
             "the image build does not carry the data the control plane reads",
         )
         self.assertIn(
-            "/opt/myipbx/share/digium-cards.tsv", payload,
+            "/opt/crossbar/share/digium-cards.tsv", payload,
             "the image build never checks that the catalogue arrived, so a "
             "silent omission would ship",
         )
 
     def test_the_preflight_script_looks_there_too(self) -> None:
         text = PREFLIGHT.read_text(encoding="utf-8")
-        self.assertIn("APPLIANCE_PREFIX:-/opt/myipbx}/share/digium-cards.tsv", text)
+        self.assertIn("APPLIANCE_PREFIX:-/opt/crossbar}/share/digium-cards.tsv", text)
 
 
 class BothConsumersReadTheSameFileTests(unittest.TestCase):

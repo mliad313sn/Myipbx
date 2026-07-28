@@ -51,8 +51,8 @@ DIGIUM_VENDOR_IDENTIFIER = 0xD161
 _CATALOGUE_LOCATIONS: tuple[Path, ...] = (
     Path(__file__).resolve().parent.parent / "share" / "digium-cards.tsv",
     Path(__file__).resolve().parent / "share" / "digium-cards.tsv",
-    Path("/opt/myipbx/share/digium-cards.tsv"),
-    Path("/usr/share/myipbx/digium-cards.tsv"),
+    Path("/opt/crossbar/share/digium-cards.tsv"),
+    Path("/usr/share/crossbar/digium-cards.tsv"),
 )
 
 

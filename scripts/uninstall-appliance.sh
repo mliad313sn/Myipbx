@@ -51,9 +51,9 @@ stop_service() {
         log_warn "the service manager is not available; stop the control plane by hand"
         return 0
     fi
-    if systemctl list-unit-files 2>/dev/null | grep -q '^myipbx.service'; then
-        run_command systemctl disable --now myipbx.service || log_warn "the service could not be disabled cleanly"
-        run_command rm -f /etc/systemd/system/myipbx.service
+    if systemctl list-unit-files 2>/dev/null | grep -q '^crossbar.service'; then
+        run_command systemctl disable --now crossbar.service || log_warn "the service could not be disabled cleanly"
+        run_command rm -f /etc/systemd/system/crossbar.service
         run_command systemctl daemon-reload
         log_info "the appliance service unit was removed"
     else
@@ -71,7 +71,7 @@ remove_program_files() {
         log_info "no control plane directory is present"
     fi
 
-    if [[ -f /etc/modules-load.d/myipbx-dahdi.conf ]]; then
+    if [[ -f /etc/modules-load.d/crossbar-dahdi.conf ]]; then
         log_info "the interface driver module configuration is left in place so the cards continue to work"
     fi
 }

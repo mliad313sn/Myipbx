@@ -67,7 +67,7 @@ require_static_parameters() {
 }
 
 render_netplan() {
-    local destination="/etc/netplan/60-myipbx-static.yaml"
+    local destination="/etc/netplan/60-crossbar-static.yaml"
     log_info "writing a static configuration for the interface named ${APPLIANCE_INTERFACE} to ${destination}"
 
     if is_rehearsal; then
@@ -112,7 +112,7 @@ EOF
 }
 
 render_systemd_networkd() {
-    local destination="/etc/systemd/network/60-myipbx-static.network"
+    local destination="/etc/systemd/network/60-crossbar-static.network"
     log_info "writing a static configuration for the interface named ${APPLIANCE_INTERFACE} to ${destination}"
 
     if is_rehearsal; then
@@ -141,7 +141,7 @@ render_systemd_networkd() {
 }
 
 render_interfaces_file() {
-    local destination="/etc/network/interfaces.d/60-myipbx-static"
+    local destination="/etc/network/interfaces.d/60-crossbar-static"
     ensure_directory "$(dirname "${destination}")"
     log_info "writing a static configuration for the interface named ${APPLIANCE_INTERFACE} to ${destination}"
 

@@ -1,4 +1,6 @@
-# Legacy-to-Modern IPBX Appliance
+# Crossbar
+
+*by Kernel Project*
 
 Turns an older generation machine carrying legacy Digium interface cards into a
 modern, browser managed telephony appliance. The interface card drivers are
@@ -131,7 +133,7 @@ sudo ./scripts/verify-no-dhcp.sh
 sudo APPLIANCE_INTERFACE=eth0 \
      APPLIANCE_ADDRESS=192.0.2.20 \
      APPLIANCE_GATEWAY=192.0.2.1 \
-     APPLIANCE_SOURCE_DIR=/usr/local/src/myipbx \
+     APPLIANCE_SOURCE_DIR=/usr/local/src/crossbar \
      ./scripts/install-appliance.sh
 ```
 

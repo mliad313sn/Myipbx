@@ -1,6 +1,6 @@
 [Unit]
-Description=Legacy-to-Modern IPBX Appliance control plane
-Documentation=file:/opt/myipbx/README.md
+Description=Crossbar control plane
+Documentation=file:/opt/crossbar/README.md
 After=network-online.target asterisk.service
 Wants=network-online.target
 
@@ -14,17 +14,17 @@ After=dahdi.service
 # than a requirement: if the generation fails, the control plane still starts
 # and refuses to serve with a message naming the file it could not read, which
 # tells an operator more than a dependency that was never scheduled.
-Wants=myipbx-certificate.service
-After=myipbx-certificate.service
+Wants=crossbar-certificate.service
+After=crossbar-certificate.service
 
 [Service]
 Type=simple
-User=myipbx
-Group=myipbx
-WorkingDirectory=/opt/myipbx
+User=crossbar
+Group=crossbar
+WorkingDirectory=/opt/crossbar
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
-Environment=MYIPBX_CONFIGURATION_DOCUMENT=/etc/myipbx/appliance.json
+Environment=CROSSBAR_CONFIGURATION_DOCUMENT=/etc/crossbar/appliance.json
 ExecStart=/usr/bin/python3 -m appliance
 Restart=on-failure
 RestartSec=5
@@ -52,8 +52,8 @@ MemoryDenyWriteExecute=yes
 # and its driver is loaded.  Without the dash, systemd refuses to set up the
 # mount namespace and the appliance fails to start on exactly the machines it
 # is meant to be brought up on first.
-ReadWritePaths=/var/lib/myipbx /var/log/myipbx -/etc/asterisk
-ReadOnlyPaths=-/etc/myipbx -/proc/dahdi
+ReadWritePaths=/var/lib/crossbar /var/log/crossbar -/etc/asterisk
+ReadOnlyPaths=-/etc/crossbar -/proc/dahdi
 
 # The appliance serves the dashboard and speaks to the engine over the
 # loopback address.  It has no reason for any other address family, and no

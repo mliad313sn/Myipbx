@@ -17,7 +17,7 @@ from typing import Any, Mapping
 
 __all__ = ["ApplianceConfig", "ConfigError", "ENVIRONMENT_PREFIX"]
 
-ENVIRONMENT_PREFIX = "MYIPBX_"
+ENVIRONMENT_PREFIX = "CROSSBAR_"
 
 
 class ConfigError(ValueError):
@@ -44,7 +44,7 @@ class ApplianceConfig:
     #: silent exposure discovered later by somebody else's scanner.
     listen_address: str = "127.0.0.1"
     listen_port: int = 8088
-    web_root: str = "/opt/myipbx/web"
+    web_root: str = "/opt/crossbar/web"
     allowed_origins: tuple[str, ...] = ()
 
     # --- Transport security -----------------------------------------------
@@ -54,8 +54,8 @@ class ApplianceConfig:
     #: in the clear, so the secured listener is the shipped default and turning
     #: it off is a deliberate act by somebody who has read this line.
     tls_enabled: bool = True
-    tls_certificate: str = "/etc/myipbx/tls/appliance.crt"
-    tls_private_key: str = "/etc/myipbx/tls/appliance.key"
+    tls_certificate: str = "/etc/crossbar/tls/appliance.crt"
+    tls_private_key: str = "/etc/crossbar/tls/appliance.key"
     #: Everything below this version has a published attack against it.  The
     #: setting exists so that a site may raise the floor, not lower it; the
     #: validator refuses anything older.
@@ -68,25 +68,25 @@ class ApplianceConfig:
     plain_http_redirect_port: int = 8080
 
     # --- Persistent state ------------------------------------------------
-    state_directory: str = "/var/lib/myipbx"
-    configuration_document: str = "/etc/myipbx/appliance.json"
+    state_directory: str = "/var/lib/crossbar"
+    configuration_document: str = "/etc/crossbar/appliance.json"
     asterisk_configuration_directory: str = "/etc/asterisk"
-    log_file: str = "/var/log/myipbx/appliance.log"
-    privileged_helper: str = "/opt/myipbx/bin/myipbx-privileged-helper.sh"
+    log_file: str = "/var/log/crossbar/appliance.log"
+    privileged_helper: str = "/opt/crossbar/bin/crossbar-privileged-helper.sh"
 
     # Where the daemon that holds the privilege is listening.  The control
     # plane holds none of its own and reaches every system operation through
     # this socket, so an appliance whose daemon listens elsewhere -- a second
     # appliance on one machine, or a test standing one up in a temporary
     # directory -- could not be configured at all while this was fixed in code.
-    privileged_socket: str = "/run/myipbx/helper.sock"
+    privileged_socket: str = "/run/crossbar/helper.sock"
     call_record_file: str = "/var/log/asterisk/cdr-csv/Master.csv"
     log_level: str = "INFO"
 
     # --- Telephony engine manager interface ------------------------------
     manager_host: str = "127.0.0.1"
     manager_port: int = 5038
-    manager_username: str = "myipbx"
+    manager_username: str = "crossbar"
     manager_secret: str = ""
     manager_connect_timeout_seconds: float = 5.0
     manager_action_timeout_seconds: float = 10.0

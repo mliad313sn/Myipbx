@@ -139,7 +139,7 @@ def build_tls_context(
             raise TlsConfigurationError(
                 f"the transport security {description} at {path} does not exist; "
                 "generate one by running the script named "
-                "myipbx-generate-certificate.sh, or name an existing file in the "
+                "crossbar-generate-certificate.sh, or name an existing file in the "
                 "configuration document"
             )
         if not path.is_file():
@@ -153,7 +153,7 @@ def build_tls_context(
             raise TlsConfigurationError(
                 f"the transport security {description} at {path} could not be read "
                 f"by this appliance: {error}; the private key is expected to be "
-                "readable by the group named myipbx and by nobody else"
+                "readable by the group named crossbar and by nobody else"
             ) from error
 
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -199,7 +199,7 @@ def validate_certificate_pair(certificate_pem: str, private_key_pem: str) -> str
     # Written with owner only permissions into a directory that is removed
     # whatever happens, so an uploaded key is never left on disk by a
     # validation that failed halfway.
-    with tempfile.TemporaryDirectory(prefix="myipbx-certificate-") as workspace:
+    with tempfile.TemporaryDirectory(prefix="crossbar-certificate-") as workspace:
         directory = Path(workspace)
         certificate_path = directory / "candidate.crt"
         key_path = directory / "candidate.key"

@@ -21,7 +21,7 @@ PATTERN="${1:-test_*.py}"
 VERBOSITY="${VERBOSITY:-1}"
 
 printf '\n'
-printf '  Legacy-to-Modern IPBX Appliance -- quality assurance suite\n'
+printf '  Crossbar -- quality assurance suite\n'
 printf '  running the pattern %s\n' "${PATTERN}"
 printf '\n'
 

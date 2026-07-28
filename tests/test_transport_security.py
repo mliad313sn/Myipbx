@@ -80,7 +80,7 @@ def generate_certificate(
         "prompt = no\n"
         "\n"
         "[appliance_name]\n"
-        "O = Legacy-to-Modern IPBX Appliance\n"
+        "O = Crossbar\n"
         f"CN = {common_name}\n"
         "\n"
         "[appliance_extensions]\n"
@@ -193,7 +193,7 @@ class TlsContextTests(unittest.TestCase):
         _require_openssl()
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-tls-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-tls-")
         self.root = Path(self.directory.name)
         self.addCleanup(self.directory.cleanup)
 
@@ -212,7 +212,7 @@ class TlsContextTests(unittest.TestCase):
         reason = str(raised.exception)
         self.assertIn(str(absent), reason, "the refusal does not name the file")
         self.assertIn(
-            "myipbx-generate-certificate.sh", reason,
+            "crossbar-generate-certificate.sh", reason,
             "the refusal does not tell the operator what to run",
         )
 
@@ -287,7 +287,7 @@ class CertificatePairValidationTests(unittest.TestCase):
         _require_openssl()
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-pair-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-pair-")
         self.root = Path(self.directory.name)
         self.addCleanup(self.directory.cleanup)
 
@@ -334,7 +334,7 @@ class SecuredApplianceTestCase(unittest.IsolatedAsyncioTestCase):
         _require_openssl()
 
     async def asyncSetUp(self) -> None:
-        self.material = tempfile.TemporaryDirectory(prefix="myipbx-serving-")
+        self.material = tempfile.TemporaryDirectory(prefix="crossbar-serving-")
         self.addCleanup(self.material.cleanup)
         certificate, private_key = generate_certificate(Path(self.material.name))
         self.certificate = certificate
@@ -471,7 +471,7 @@ class SecuredListenerTests(SecuredApplianceTestCase):
 
     async def test_a_client_that_verifies_a_different_authority_is_refused(self) -> None:
         """The handshake is real, so a wrong certificate has to fail it."""
-        other = tempfile.TemporaryDirectory(prefix="myipbx-other-")
+        other = tempfile.TemporaryDirectory(prefix="crossbar-other-")
         self.addCleanup(other.cleanup)
         unrelated, _ = generate_certificate(Path(other.name), stem="unrelated")
 
@@ -512,7 +512,7 @@ class RefusalToServeWithoutACertificateTests(unittest.IsolatedAsyncioTestCase):
         _require_openssl()
 
     async def test_the_appliance_refuses_to_start_without_its_certificate(self) -> None:
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-absent-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-absent-")
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
 
@@ -529,10 +529,10 @@ class RefusalToServeWithoutACertificateTests(unittest.IsolatedAsyncioTestCase):
 
         reason = str(raised.exception)
         self.assertIn("absent.crt", reason)
-        self.assertIn("myipbx-generate-certificate.sh", reason)
+        self.assertIn("crossbar-generate-certificate.sh", reason)
 
     async def test_the_appliance_refuses_to_start_on_a_mismatched_pair(self) -> None:
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-mismatch-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-mismatch-")
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
         certificate, _ = generate_certificate(root, stem="first")
@@ -557,7 +557,7 @@ class RefusalToServeWithoutACertificateTests(unittest.IsolatedAsyncioTestCase):
         appliance would answer on an unsecured port while reporting that it had
         refused to start.
         """
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-partial-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-partial-")
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
 
@@ -688,7 +688,7 @@ class CertificateUploadTests(SecuredApplianceTestCase):
 
     async def test_a_key_that_does_not_match_its_certificate_is_refused(self) -> None:
         cookie = await self.signed_in_cookie()
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-upload-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-upload-")
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
         certificate, _ = generate_certificate(root, stem="first")
@@ -717,7 +717,7 @@ class CertificateUploadTests(SecuredApplianceTestCase):
 
     async def test_a_matching_pair_is_accepted_and_staged_but_not_applied(self) -> None:
         cookie = await self.signed_in_cookie()
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-upload-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-upload-")
         self.addCleanup(directory.cleanup)
         certificate, private_key = generate_certificate(Path(directory.name), stem="site")
 
@@ -751,7 +751,7 @@ class CertificateUploadTests(SecuredApplianceTestCase):
 
     async def test_the_response_warns_that_applying_ends_every_session(self) -> None:
         cookie = await self.signed_in_cookie()
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-upload-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-upload-")
         self.addCleanup(directory.cleanup)
         certificate, private_key = generate_certificate(Path(directory.name), stem="site")
 
@@ -779,7 +779,7 @@ class CertificateUploadTests(SecuredApplianceTestCase):
         )
 
     async def test_an_unauthenticated_caller_cannot_upload_a_certificate(self) -> None:
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-upload-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-upload-")
         self.addCleanup(directory.cleanup)
         certificate, private_key = generate_certificate(Path(directory.name), stem="site")
 
@@ -872,7 +872,7 @@ class GeneratedRulesetReachabilityTests(unittest.IsolatedAsyncioTestCase):
 class CertificateGeneratorScriptTests(unittest.TestCase):
     """The script each appliance runs to give itself a certificate."""
 
-    SCRIPT = REPOSITORY_ROOT / "scripts/myipbx-generate-certificate.sh"
+    SCRIPT = REPOSITORY_ROOT / "scripts/crossbar-generate-certificate.sh"
 
     def test_the_generator_is_present_and_executable(self) -> None:
         self.assertTrue(self.SCRIPT.is_file(), "the certificate generator is absent")
@@ -923,22 +923,22 @@ class CertificateGeneratorScriptTests(unittest.TestCase):
                 "this test run does not hold"
             )
 
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-generator-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-generator-")
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        (root / "etc/myipbx").mkdir(parents=True)
-        (root / "var/log/myipbx").mkdir(parents=True)
-        (root / "var/lib/myipbx").mkdir(parents=True)
-        (root / "etc/myipbx/appliance.json").write_text(
+        (root / "etc/crossbar").mkdir(parents=True)
+        (root / "var/log/crossbar").mkdir(parents=True)
+        (root / "var/lib/crossbar").mkdir(parents=True)
+        (root / "etc/crossbar/appliance.json").write_text(
             json.dumps({"appliance": {"listen_address": "192.0.2.15"}}), encoding="utf-8"
         )
 
         environment = dict(os.environ)
         environment.update(
             {
-                "APPLIANCE_CONFIG_DIR": str(root / "etc/myipbx"),
-                "APPLIANCE_LOG_DIR": str(root / "var/log/myipbx"),
-                "APPLIANCE_STATE_DIR": str(root / "var/lib/myipbx"),
+                "APPLIANCE_CONFIG_DIR": str(root / "etc/crossbar"),
+                "APPLIANCE_LOG_DIR": str(root / "var/log/crossbar"),
+                "APPLIANCE_STATE_DIR": str(root / "var/lib/crossbar"),
             }
         )
 
@@ -951,8 +951,8 @@ class CertificateGeneratorScriptTests(unittest.TestCase):
             f"the generator failed: {first.stdout[-2000:]} {first.stderr[-2000:]}",
         )
 
-        certificate = root / "etc/myipbx/tls/appliance.crt"
-        private_key = root / "etc/myipbx/tls/appliance.key"
+        certificate = root / "etc/crossbar/tls/appliance.crt"
+        private_key = root / "etc/crossbar/tls/appliance.key"
         self.assertTrue(certificate.is_file(), "no certificate was generated")
         self.assertTrue(private_key.is_file(), "no private key was generated")
 
@@ -996,19 +996,19 @@ class CertificateGeneratorScriptTests(unittest.TestCase):
                 "the certificate generator requires administrative privilege"
             )
 
-        directory = tempfile.TemporaryDirectory(prefix="myipbx-generator-words-")
+        directory = tempfile.TemporaryDirectory(prefix="crossbar-generator-words-")
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        (root / "etc/myipbx").mkdir(parents=True)
-        (root / "var/log/myipbx").mkdir(parents=True)
-        (root / "var/lib/myipbx").mkdir(parents=True)
+        (root / "etc/crossbar").mkdir(parents=True)
+        (root / "var/log/crossbar").mkdir(parents=True)
+        (root / "var/lib/crossbar").mkdir(parents=True)
 
         environment = dict(os.environ)
         environment.update(
             {
-                "APPLIANCE_CONFIG_DIR": str(root / "etc/myipbx"),
-                "APPLIANCE_LOG_DIR": str(root / "var/log/myipbx"),
-                "APPLIANCE_STATE_DIR": str(root / "var/lib/myipbx"),
+                "APPLIANCE_CONFIG_DIR": str(root / "etc/crossbar"),
+                "APPLIANCE_LOG_DIR": str(root / "var/log/crossbar"),
+                "APPLIANCE_STATE_DIR": str(root / "var/lib/crossbar"),
             }
         )
         completed = subprocess.run(
@@ -1059,8 +1059,8 @@ class CertificateServiceUnitTests(unittest.TestCase):
     serve is exactly the kind that must not become that.
     """
 
-    UNIT = REPOSITORY_ROOT / "config/systemd/myipbx-certificate.service"
-    APPLIANCE_UNIT = REPOSITORY_ROOT / "config/systemd/myipbx.service"
+    UNIT = REPOSITORY_ROOT / "config/systemd/crossbar-certificate.service"
+    APPLIANCE_UNIT = REPOSITORY_ROOT / "config/systemd/crossbar.service"
 
     def setUp(self) -> None:
         self.assertTrue(self.UNIT.is_file(), "the certificate service unit is absent")
@@ -1074,13 +1074,13 @@ class CertificateServiceUnitTests(unittest.TestCase):
         )
 
     def test_the_unit_runs_before_the_console(self) -> None:
-        self.assertIn("Before=myipbx.service", self.text)
+        self.assertIn("Before=crossbar.service", self.text)
 
     def test_the_console_orders_itself_after_the_certificate(self) -> None:
         appliance_unit = self.APPLIANCE_UNIT.read_text(encoding="utf-8")
-        self.assertIn("After=myipbx-certificate.service", appliance_unit)
+        self.assertIn("After=crossbar-certificate.service", appliance_unit)
         self.assertIn(
-            "Wants=myipbx-certificate.service", appliance_unit,
+            "Wants=crossbar-certificate.service", appliance_unit,
             "the console requires the certificate unit, so a failure there would "
             "stop the console from starting and reporting why",
         )
@@ -1100,10 +1100,10 @@ class CertificateServiceUnitTests(unittest.TestCase):
         self.assertIn("Restart=no", self.text)
 
     def test_the_unit_runs_the_generator_that_is_actually_installed(self) -> None:
-        self.assertIn("ExecStart=/opt/myipbx/bin/myipbx-generate-certificate.sh", self.text)
+        self.assertIn("ExecStart=/opt/crossbar/bin/crossbar-generate-certificate.sh", self.text)
         payload = (REPOSITORY_ROOT / "iso/stages/two-payload.sh").read_text(encoding="utf-8")
         self.assertIn(
-            "myipbx-generate-certificate.sh", payload,
+            "crossbar-generate-certificate.sh", payload,
             "the unit runs a script the image never installs",
         )
 
@@ -1111,11 +1111,11 @@ class CertificateServiceUnitTests(unittest.TestCase):
         configure = (REPOSITORY_ROOT / "iso/stages/three-configure.sh").read_text(
             encoding="utf-8"
         )
-        self.assertIn("systemctl enable myipbx-certificate.service", configure)
+        self.assertIn("systemctl enable crossbar-certificate.service", configure)
 
     def test_the_image_installs_the_unit(self) -> None:
         payload = (REPOSITORY_ROOT / "iso/stages/two-payload.sh").read_text(encoding="utf-8")
-        self.assertIn("myipbx-certificate.service", payload)
+        self.assertIn("crossbar-certificate.service", payload)
 
 
 class NoCertificateTravelsInTheImageTests(unittest.TestCase):
@@ -1131,7 +1131,7 @@ class NoCertificateTravelsInTheImageTests(unittest.TestCase):
     def test_the_image_is_tidied_of_any_certificate_a_build_left_behind(self) -> None:
         """The reused build tree is how the last superseded artefact shipped."""
         text = self.CONFIGURE.read_text(encoding="utf-8")
-        self.assertIn("rm -f \"${CHROOT_DIR}\"/etc/myipbx/tls/appliance.*", text)
+        self.assertIn("rm -f \"${CHROOT_DIR}\"/etc/crossbar/tls/appliance.*", text)
 
     def test_no_certificate_or_key_is_committed_to_the_repository(self) -> None:
         offenders: list[str] = []

@@ -16,6 +16,7 @@ import time
 from typing import Any
 
 from . import api, hardware as hardware_module, httpd, numerals, wsproto
+from . import PRODUCT_FULL_NAME
 from .ami import ManagerClient, ManagerMessage
 from .config import ApplianceConfig
 from .confstore import ConfigurationStore, DriftDetected
@@ -633,7 +634,7 @@ class Appliance:
 
     def _welcome_payload(self, connection: SocketConnection) -> dict[str, Any]:
         return {
-            "product": "Legacy-to-Modern IPBX Appliance",
+            "product": PRODUCT_FULL_NAME,
             "connection": connection.identifier,
             "username": connection.username,
             "heartbeat_interval_seconds": self.config.heartbeat_interval_seconds,
@@ -747,9 +748,9 @@ def run(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        prog="myipbx",
+        prog="crossbar",
         description=(
-            "the control plane of the Legacy-to-Modern IPBX Appliance. this "
+            "the control plane of the Crossbar. this "
             "appliance assigns no addresses and spells every numeral in full letters."
         ),
     )

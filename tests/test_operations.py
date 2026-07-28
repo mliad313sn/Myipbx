@@ -63,7 +63,7 @@ class PrivilegedOperationTests(unittest.IsolatedAsyncioTestCase):
                     self.operations.validate(verb)
 
     def test_only_the_appliance_own_services_may_be_controlled(self) -> None:
-        for service in ("asterisk", "myipbx", "dahdi"):
+        for service in ("asterisk", "crossbar", "dahdi"):
             with self.subTest(service=service):
                 vector = self.operations.validate("service-restart", {"service": service})
                 self.assertEqual(vector, ["service-restart", service])
@@ -201,7 +201,7 @@ class PrivilegedOperationTests(unittest.IsolatedAsyncioTestCase):
 
 class SystemStatusTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-system-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-system-")
         self.root = Path(self.directory.name)
         (self.root / "proc").mkdir()
         (self.root / "etc").mkdir()
@@ -279,7 +279,7 @@ class SystemStatusTests(unittest.TestCase):
 
 class EntityStoreTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-entities-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-entities-")
         self.secrets = SecretStore(Path(self.directory.name) / "secrets.json")
         self.document: dict = {
             "extensions": [], "trunks": [], "ring_groups": [],
@@ -507,9 +507,9 @@ class EntityStoreTests(unittest.TestCase):
 
 class LogReaderTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-logs-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-logs-")
         self.root = Path(self.directory.name)
-        target = self.root / "var/log/myipbx"
+        target = self.root / "var/log/crossbar"
         target.mkdir(parents=True)
 
         lines = []
@@ -519,7 +519,7 @@ class LogReaderTests(unittest.TestCase):
         (target / "appliance.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
         self.reader = LogReader(
-            sources=(LogSource("appliance", "the appliance", "/var/log/myipbx/appliance.log"),),
+            sources=(LogSource("appliance", "the appliance", "/var/log/crossbar/appliance.log"),),
             root=self.root,
         )
 
@@ -574,7 +574,7 @@ class LogReaderTests(unittest.TestCase):
 
 class CallRecordTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-cdr-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-cdr-")
         self.root = Path(self.directory.name)
         target = self.root / "var/log/asterisk/cdr-csv"
         target.mkdir(parents=True)
@@ -682,7 +682,7 @@ class _BackupContext:
 
 class BackupTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-backup-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-backup-")
         self.root = Path(self.directory.name)
         (self.root / "state").mkdir()
 
@@ -711,7 +711,7 @@ class BackupTests(unittest.TestCase):
         travels only when it is asked for.
         """
         payload, name = backup_module.create(self.context)
-        self.assertTrue(name.startswith("myipbx-backup-"))
+        self.assertTrue(name.startswith("crossbar-backup-"))
         self.assertNotIn("with-secrets", name)
 
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
@@ -728,7 +728,7 @@ class BackupTests(unittest.TestCase):
 
     def test_a_backup_carries_every_recoverable_file_when_asked(self) -> None:
         payload, name = backup_module.create(self.context, include_secrets=True)
-        self.assertTrue(name.startswith("myipbx-backup-"))
+        self.assertTrue(name.startswith("crossbar-backup-"))
         self.assertIn("with-secrets", name)
 
         with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
@@ -968,7 +968,7 @@ class MenuQueueAndConferenceTests(unittest.TestCase):
     """The object kinds added to close the field's biggest feature gap."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-menus-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-menus-")
         self.secrets = SecretStore(Path(self.directory.name) / "secrets.json")
         self.document: dict = {
             "extensions": [], "trunks": [], "ring_groups": [],
@@ -1266,7 +1266,7 @@ class FirewallTests(unittest.TestCase):
 
     def test_only_the_appliance_table_is_touched(self) -> None:
         ruleset = firewall.render_ruleset([], management_port=8088)
-        self.assertIn("table inet myipbx {", ruleset)
+        self.assertIn("table inet crossbar {", ruleset)
         self.assertEqual(ruleset.count("table inet"), 1)
 
     def test_the_summary_spells_its_figures_and_warns_about_exposure(self) -> None:
@@ -1290,7 +1290,7 @@ class FirewallTests(unittest.TestCase):
         self.assertIn("limited to declared networks", summary["advice"])
 
     def test_a_firewall_rule_is_validated_by_the_same_schema(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="myipbx-fw-") as name:
+        with tempfile.TemporaryDirectory(prefix="crossbar-fw-") as name:
             store = EntityStore({"firewall_rules": []}, SecretStore(Path(name) / "s.json"))
             with self.assertRaises(ValidationError):
                 store.create("firewall_rules",

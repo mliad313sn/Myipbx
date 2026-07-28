@@ -1,6 +1,6 @@
 # Enterprise Interface Assessment
 
-The current state of the MyIPBX console, measured rather than described, and
+The current state of the Crossbar console, measured rather than described, and
 what has to change for it to become a communication operations platform.
 
 Every score below is supported by something a reader can check in the

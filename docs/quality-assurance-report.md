@@ -366,7 +366,7 @@ the reporting, all of which were correct. Nothing ever ran the real path, so
 nothing ever discovered that the real path could not run.
 
 **Repair.** A root-run daemon listens on a Unix domain socket, mode `0660`,
-owned `root:myipbx`. It establishes the caller's identity from the kernel's
+owned `root:crossbar`. It establishes the caller's identity from the kernel's
 peer credentials rather than from anything the request claims, and refuses a
 caller that is not the service account before parsing a byte of what was sent.
 It accepts only the same fixed vocabulary, validated against the same patterns,
@@ -518,7 +518,7 @@ does. The generated firewall ruleset is asserted to keep both console ports open
 ahead of every declared rule.
 
 **The trade that was made in the key's permissions.** The private key is mode
-`0640`, owned `root:myipbx`, rather than the `0600` that would be tighter. It
+`0640`, owned `root:crossbar`, rather than the `0600` that would be tighter. It
 cannot be owner read only: the control plane runs as the unprivileged appliance
 account and opens this file when it binds the listener, so a key that account
 cannot read is an appliance that cannot start. The group holds only that one

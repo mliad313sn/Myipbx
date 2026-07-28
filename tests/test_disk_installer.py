@@ -28,7 +28,7 @@ from pathlib import Path
 
 from support import IDENTIFIER_SHAPES, REPOSITORY_ROOT
 
-INSTALLER = REPOSITORY_ROOT / "iso" / "installer" / "myipbx-install-to-disk.sh"
+INSTALLER = REPOSITORY_ROOT / "iso" / "installer" / "crossbar-install-to-disk.sh"
 
 #: A refusal that does not say what to do about it leaves the technician
 #: exactly where they were. The same rule the pre-flight check is held to.
@@ -84,17 +84,17 @@ class TheLiveMediumTests(unittest.TestCase):
         """An operator who knows the target is a different disk has to be able
         to say so, or the script is unusable on the media it cannot name."""
         report = rehearse()
-        self.assertIn("MYIPBX_LIVE_DISK", report)
+        self.assertIn("CROSSBAR_LIVE_DISK", report)
 
     def test_naming_the_live_disk_gets_past_the_check(self) -> None:
-        report = rehearse(MYIPBX_LIVE_DISK="/dev/sdz")
+        report = rehearse(CROSSBAR_LIVE_DISK="/dev/sdz")
         self.assertIn("proceeding on your word", report)
         self.assertNotIn("the live medium's disk is not known", report)
 
     def test_naming_the_target_as_the_live_disk_still_refuses(self) -> None:
         """The override says where the medium is; it does not say the target is
         safe. Pointing both at one disk must still be refused."""
-        report = rehearse(disk="/dev/sdz", MYIPBX_LIVE_DISK="/dev/sdz")
+        report = rehearse(disk="/dev/sdz", CROSSBAR_LIVE_DISK="/dev/sdz")
         self.assertIn(
             "is the one the live medium is on", report,
             "the override was taken as permission to install onto the live disk",

@@ -27,6 +27,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Mapping
 
+from . import PRODUCT_NAME
 from .logging_setup import get_logger
 
 __all__ = [
@@ -404,7 +405,7 @@ def render_endpoints(document: Mapping[str, Any], secrets: Any = None) -> str:
     lines = [_header("trunks and telephones")]
     lines.append("[global]\n")
     lines.append("type = global\n")
-    lines.append("user_agent = Legacy-to-Modern IPBX Appliance\n\n")
+    lines.append(f"user_agent = {PRODUCT_NAME}\n\n")
 
     lines.append("; ------------------------------------------------------------\n")
     lines.append("; trunks\n")
@@ -920,7 +921,7 @@ def render_manager_interface(document: Mapping[str, Any]) -> str:
     interface to the network would add risk and no capability.
     """
     manager = document.get("manager", {}) or {}
-    username = str(manager.get("username", "myipbx"))
+    username = str(manager.get("username", "crossbar"))
 
     lines = [_header("engine manager interface")]
     lines.append("[general]\n")

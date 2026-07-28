@@ -32,7 +32,7 @@ class JournalFileTests(unittest.TestCase):
     """The file itself."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-journal-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-journal-")
         self.addCleanup(self.directory.cleanup)
         self.path = Path(self.directory.name) / "operations.jsonl"
         self.journal = AuditJournal(self.path)

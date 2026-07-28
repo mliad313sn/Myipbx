@@ -1,4 +1,4 @@
-"""Legacy-to-Modern IPBX Appliance — control plane.
+"""Crossbar — control plane.
 
 An appliance that brings older generation hardware carrying legacy Digium
 interface cards up as a modern, browser managed telephony system.
@@ -20,9 +20,17 @@ index for their vintage.
 
 from __future__ import annotations
 
-__all__ = ["PRODUCT_NAME", "VERSION", "ASSIGNS_ADDRESSES"]
+__all__ = [
+    "PRODUCT_NAME", "PRODUCT_MAKER", "PRODUCT_FULL_NAME",
+    "VERSION", "ASSIGNS_ADDRESSES",
+]
 
-PRODUCT_NAME = "Legacy-to-Modern IPBX Appliance"
+#: The name, and who made it. Kept apart because they are set on two lines
+#: wherever there is room for two -- the boot menu, the login screen, the
+#: console masthead -- and joined into one where there is not.
+PRODUCT_NAME = "Crossbar"
+PRODUCT_MAKER = "by Kernel Project"
+PRODUCT_FULL_NAME = f"{PRODUCT_NAME} {PRODUCT_MAKER}"
 
 #: The release, named in words in keeping with Constraint Two.
 VERSION = "one point two point zero"

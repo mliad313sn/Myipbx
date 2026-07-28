@@ -28,7 +28,7 @@ TRANSCRIPT="${TRANSCRIPT:-${BUILD_ROOT}/boot-transcript.txt}"
 # of anything. What proves a boot is the appliance's own text appearing and a
 # login prompt being offered, because both come from userspace.
 declare -a REQUIRED_MARKERS=(
-    "Legacy-to-Modern IPBX Appliance"   # the appliance's own message reached the console
+    "Crossbar"   # the appliance's own message reached the console
     "login:"                            # userspace started and offered a session
 )
 

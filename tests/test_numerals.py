@@ -282,7 +282,7 @@ class LoggingConstraintTests(unittest.TestCase):
         self.assertEqual(len(second.handlers), count)
 
     def tearDown(self) -> None:
-        logging.getLogger("myipbx").handlers.clear()
+        logging.getLogger("crossbar").handlers.clear()
 
 
 class CrossImplementationAgreementTests(unittest.TestCase):
@@ -403,7 +403,7 @@ AGREEMENT_CORPUS: tuple[str, ...] = (
     "eth0", "lo0", "enp3s0", "wlan0", "ttyS0", "sda1", "nvme0",
     "dahdi1", "span2", "zap3",
     # A path, a response code, a mode, an error number, a socket pair, a port.
-    "/var/log/myipbx/appliance.log", "SIP 403", "HTTP 500", "status 404",
+    "/var/log/crossbar/appliance.log", "SIP 403", "HTTP 500", "status 404",
     "chmod 0750", "mode 644", "Errno 111", "error number 2",
     "('127.0.0.1', 15038)", "port 8088", "port number 5060", "extension 0450",
     # Every family of interface card model.

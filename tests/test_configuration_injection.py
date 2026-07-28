@@ -56,7 +56,7 @@ class DialplanInjectionTests(unittest.TestCase):
     """A route destination must not be able to become an engine instruction."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-injection-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-injection-")
         self.addCleanup(self.directory.cleanup)
         root = Path(self.directory.name)
         (root / "asterisk").mkdir()
@@ -143,7 +143,7 @@ class FirewallInjectionTests(unittest.TestCase):
     )
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-fw-injection-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-fw-injection-")
         self.addCleanup(self.directory.cleanup)
         root = Path(self.directory.name)
         (root / "asterisk").mkdir()

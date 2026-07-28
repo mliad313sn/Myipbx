@@ -128,8 +128,8 @@ install_interface_drivers() {
     fi
 
     # Persist the module load configuration either way.
-    write_into_chroot /etc/modules-load.d/myipbx-dahdi.conf 0644 <<'EOF'
-# Legacy-to-Modern IPBX Appliance -- interface driver modules loaded at start up
+    write_into_chroot /etc/modules-load.d/crossbar-dahdi.conf 0644 <<'EOF'
+# Crossbar -- interface driver modules loaded at start up
 dahdi
 EOF
 }
@@ -181,7 +181,7 @@ install_control_plane() {
         return 0
     fi
 
-    local prefix="${CHROOT_DIR}/opt/myipbx"
+    local prefix="${CHROOT_DIR}/opt/crossbar"
     mkdir -p "${prefix}/appliance" "${prefix}/web/js" "${prefix}/web/css" \
              "${prefix}/bin/lib" "${prefix}/share"
 
@@ -197,11 +197,11 @@ install_control_plane() {
     install -m 0644 "${REPOSITORY_ROOT}"/share/* "${prefix}/share/"
 
     # The privileged helper and the staging scripts it delegates to.
-    install -m 0755 "${REPOSITORY_ROOT}/scripts/myipbx-privileged-helper.sh" "${prefix}/bin/"
+    install -m 0755 "${REPOSITORY_ROOT}/scripts/crossbar-privileged-helper.sh" "${prefix}/bin/"
     install -m 0644 "${REPOSITORY_ROOT}/scripts/lib/common.sh" "${prefix}/bin/lib/"
     local script
     for script in stage-two-network-static.sh stage-three-dahdi-drivers.sh verify-no-dhcp.sh \
-                  myipbx-generate-certificate.sh; do
+                  crossbar-generate-certificate.sh; do
         install -m 0755 "${REPOSITORY_ROOT}/scripts/${script}" "${prefix}/bin/"
     done
 
@@ -224,18 +224,18 @@ install_control_plane() {
     # certificate inside this image would be the same certificate, and the same
     # private key, on every appliance anybody ever booted from it.
     local unit
-    for unit in myipbx.service myipbx-helperd.service myipbx-certificate.service; do
+    for unit in crossbar.service crossbar-helperd.service crossbar-certificate.service; do
         install -m 0644 "${REPOSITORY_ROOT}/config/systemd/${unit}" \
             "${CHROOT_DIR}/etc/systemd/system/${unit}"
     done
-    rm -f "${CHROOT_DIR}/etc/sudoers.d/myipbx"
+    rm -f "${CHROOT_DIR}/etc/sudoers.d/crossbar"
 
     # The appliance installs itself onto a fixed disk from here, so the script
     # that does it travels inside the image rather than beside it.
-    install -m 0755 "${REPOSITORY_ROOT}/iso/installer/myipbx-install-to-disk.sh" \
-        "${prefix}/bin/myipbx-install-to-disk.sh"
-    ln -sf "${prefix#"${CHROOT_DIR}"}/bin/myipbx-install-to-disk.sh" \
-        "${CHROOT_DIR}/usr/local/sbin/myipbx-install-to-disk" 2>/dev/null || true
+    install -m 0755 "${REPOSITORY_ROOT}/iso/installer/crossbar-install-to-disk.sh" \
+        "${prefix}/bin/crossbar-install-to-disk.sh"
+    ln -sf "${prefix#"${CHROOT_DIR}"}/bin/crossbar-install-to-disk.sh" \
+        "${CHROOT_DIR}/usr/local/sbin/crossbar-install-to-disk" 2>/dev/null || true
 
     log_info "the control plane was installed into the image"
 }
@@ -253,15 +253,15 @@ verify_payload() {
         log_error "the telephony engine is not present in the image"
         failures=$(( failures + 1 ))
     fi
-    if ! in_chroot test -f /opt/myipbx/appliance/server.py; then
+    if ! in_chroot test -f /opt/crossbar/appliance/server.py; then
         log_error "the control plane is not present in the image"
         failures=$(( failures + 1 ))
     fi
-    if ! in_chroot test -f /opt/myipbx/web/index.html; then
+    if ! in_chroot test -f /opt/crossbar/web/index.html; then
         log_error "the console is not present in the image"
         failures=$(( failures + 1 ))
     fi
-    if ! in_chroot test -f /opt/myipbx/share/digium-cards.tsv; then
+    if ! in_chroot test -f /opt/crossbar/share/digium-cards.tsv; then
         log_error "the interface card catalogue is not present in the image, so every fitted card would be reported as unrecognised"
         failures=$(( failures + 1 ))
     fi
@@ -272,7 +272,7 @@ verify_payload() {
 
     # The control plane must import cleanly with the interpreter in the image,
     # which is the only way to know the two are compatible before boot.
-    if ! in_chroot python3 -c 'import sys; sys.path.insert(0, "/opt/myipbx"); import appliance.server' 2>/dev/null; then
+    if ! in_chroot python3 -c 'import sys; sys.path.insert(0, "/opt/crossbar"); import appliance.server' 2>/dev/null; then
         log_error "the control plane does not import with the interpreter in the image"
         failures=$(( failures + 1 ))
     fi

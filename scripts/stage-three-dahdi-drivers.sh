@@ -24,8 +24,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 STAGE="stage-three-dahdi-drivers"
 
-APPLIANCE_SOURCE_DIR="${APPLIANCE_SOURCE_DIR:-/usr/local/src/myipbx}"
-APPLIANCE_BUILD_DIR="${APPLIANCE_BUILD_DIR:-/usr/local/src/myipbx/build}"
+APPLIANCE_SOURCE_DIR="${APPLIANCE_SOURCE_DIR:-/usr/local/src/crossbar}"
+APPLIANCE_BUILD_DIR="${APPLIANCE_BUILD_DIR:-/usr/local/src/crossbar/build}"
 DRIVER_ARCHIVE="${DRIVER_ARCHIVE:-}"
 TOOLS_ARCHIVE="${TOOLS_ARCHIVE:-}"
 DRIVER_ARCHIVE_URL="${DRIVER_ARCHIVE_URL:-}"
@@ -262,7 +262,7 @@ load_and_persist_modules() {
     fi
     log_info "the interface driver is loaded"
 
-    local persist="/etc/modules-load.d/myipbx-dahdi.conf"
+    local persist="/etc/modules-load.d/crossbar-dahdi.conf"
     ensure_directory "$(dirname "${persist}")"
     {
         printf '# %s -- interface driver modules loaded at start up\n' "${APPLIANCE_NAME}"

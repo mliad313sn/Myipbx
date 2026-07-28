@@ -43,7 +43,7 @@ only from the machine itself. The installer says so in as many words when it
 finishes. This is deliberate: a console that can reboot the machine, rewrite
 the firewall and recompile kernel modules should appear on a network somebody
 chose for it, and on no other. To change it afterwards, edit `listen_address`
-in `/etc/myipbx/appliance.json` and restart `myipbx.service`.
+in `/etc/crossbar/appliance.json` and restart `crossbar.service`.
 
 ## Installing
 
@@ -56,8 +56,8 @@ immediately — but from the medium, so it forgets everything when the machine
 stops. To keep it, install it onto the machine's own disk:
 
 ```bash
-myipbx-install-to-disk --dry-run --disk /dev/sda   # report everything, write nothing
-myipbx-install-to-disk --disk /dev/sda             # do it
+crossbar-install-to-disk --dry-run --disk /dev/sda   # report everything, write nothing
+crossbar-install-to-disk --disk /dev/sda             # do it
 ```
 
 Everything on that disk is destroyed. The command says exactly what it is about
@@ -85,7 +85,7 @@ sudo APPLIANCE_INTERFACE=eth0 \
      APPLIANCE_PREFIX_LENGTH=24 \
      APPLIANCE_GATEWAY=192.0.2.1 \
      APPLIANCE_RESOLVERS=192.0.2.2,192.0.2.3 \
-     APPLIANCE_SOURCE_DIR=/usr/local/src/myipbx \
+     APPLIANCE_SOURCE_DIR=/usr/local/src/crossbar \
      ./scripts/install-appliance.sh
 ```
 
@@ -106,7 +106,7 @@ of the connection.
 If you missed the fingerprint, read it back on the appliance itself:
 
 ```bash
-sudo openssl x509 -in /etc/myipbx/tls/appliance.crt -noout -fingerprint -sha256
+sudo openssl x509 -in /etc/crossbar/tls/appliance.crt -noout -fingerprint -sha256
 ```
 
 The appliance also listens on port number eight thousand and eighty. That port
@@ -149,13 +149,13 @@ sudo FORCE_RERUN=yes ./scripts/install-appliance.sh --from-stage 3 --to-stage 3
 ## Daily operation
 
 The dashboard is served on the address and port recorded in
-`/etc/myipbx/appliance.json`. Everything below can also be done from it; the
+`/etc/crossbar/appliance.json`. Everything below can also be done from it; the
 commands are given for when the dashboard is what you are trying to diagnose.
 
 ```bash
-systemctl status myipbx.service      # is the control plane running
-journalctl -u myipbx.service -f      # follow the control plane log
-tail -f /var/log/myipbx/appliance.log
+systemctl status crossbar.service      # is the control plane running
+journalctl -u crossbar.service -f      # follow the control plane log
+tail -f /var/log/crossbar/appliance.log
 ```
 
 ### Reading the link indicator
@@ -177,8 +177,8 @@ displaying. Treat the figures on screen as history, not as current state.
 ### The dashboard will not load
 
 ```bash
-systemctl status myipbx.service
-journalctl -u myipbx.service -n 50
+systemctl status crossbar.service
+journalctl -u crossbar.service -n 50
 ```
 
 If the service refuses to start with a message about an address allocation
@@ -195,8 +195,8 @@ not fall back to serving in the clear. The message names the file it could not
 read. Generate one:
 
 ```bash
-sudo /opt/myipbx/bin/myipbx-generate-certificate.sh
-sudo systemctl restart myipbx.service
+sudo /opt/crossbar/bin/crossbar-generate-certificate.sh
+sudo systemctl restart crossbar.service
 ```
 
 That script does nothing at all if the appliance already holds a usable
@@ -212,13 +212,13 @@ and its host name. Reach it by that name, or regenerate the certificate after
 correcting `listen_address`:
 
 ```bash
-sudo /opt/myipbx/bin/myipbx-generate-certificate.sh --force
-sudo systemctl restart myipbx.service
+sudo /opt/crossbar/bin/crossbar-generate-certificate.sh --force
+sudo systemctl restart crossbar.service
 ```
 
 If the console is unreachable from anywhere except the machine itself, the
 installation was given no management address and bound the loopback address.
-Set `listen_address` in `/etc/myipbx/appliance.json`, regenerate the
+Set `listen_address` in `/etc/crossbar/appliance.json`, regenerate the
 certificate with `--force` so that it names the new address, and restart.
 
 ### A button in the interface reports that the helper is not running
@@ -231,24 +231,24 @@ that daemon is not running, the interface reports it plainly rather than
 failing silently.
 
 ```bash
-systemctl status myipbx-helperd.service
-journalctl -u myipbx-helperd.service -n 50
-ls -l /run/myipbx/helper.sock
+systemctl status crossbar-helperd.service
+journalctl -u crossbar-helperd.service -n 50
+ls -l /run/crossbar/helper.sock
 ```
 
-The socket should exist, be owned `root:myipbx`, and be readable and writable
+The socket should exist, be owned `root:crossbar`, and be readable and writable
 by its owner and group and by nobody else. If it is missing, start the daemon:
 
 ```bash
-sudo systemctl restart myipbx-helperd.service
+sudo systemctl restart crossbar-helperd.service
 ```
 
-If you find a file at `/etc/sudoers.d/myipbx`, an installation older than this
+If you find a file at `/etc/sudoers.d/crossbar`, an installation older than this
 one left it behind. It grants the service account privilege it no longer needs
 and no longer uses. Remove it:
 
 ```bash
-sudo rm /etc/sudoers.d/myipbx
+sudo rm /etc/sudoers.d/crossbar
 ```
 
 ### The dashboard loads but shows the engine as disconnected
@@ -261,7 +261,7 @@ systemctl status asterisk
 sudo asterisk -rx "manager show connected"
 ```
 
-The credential the control plane uses is in `/etc/myipbx/appliance.json`; the
+The credential the control plane uses is in `/etc/crossbar/appliance.json`; the
 engine's copy is in its own manager configuration. If they disagree, the engine
 will refuse the login and the control plane will retry with a lengthening
 backoff, reporting the refusal in its log each time.
@@ -369,17 +369,17 @@ Remove the credential file and restart. The control plane generates a new
 credential on its next start and prints it once.
 
 ```bash
-sudo rm /var/lib/myipbx/credentials.json
-sudo systemctl restart myipbx.service
-sudo journalctl -u myipbx.service -n 30    # the new password is printed here
+sudo rm /var/lib/crossbar/credentials.json
+sudo systemctl restart crossbar.service
+sudo journalctl -u crossbar.service -n 30    # the new password is printed here
 ```
 
 ### The configuration is wrong and you want the last good one
 
 ```bash
-ls -l /var/lib/myipbx/backups/
-sudo cp /var/lib/myipbx/backups/appliance-<stamp>.json /etc/myipbx/appliance.json
-sudo systemctl restart myipbx.service
+ls -l /var/lib/crossbar/backups/
+sudo cp /var/lib/crossbar/backups/appliance-<stamp>.json /etc/crossbar/appliance.json
+sudo systemctl restart crossbar.service
 ```
 
 Then render the engine configuration from the restored source of truth, from
@@ -406,7 +406,7 @@ the same maintenance window as the upgrade:
 ```bash
 sudo reboot                                         # into the new kernel
 sudo FORCE_RERUN=yes ./scripts/install-appliance.sh --from-stage 1 --to-stage 3
-sudo systemctl restart asterisk myipbx.service
+sudo systemctl restart asterisk crossbar.service
 ```
 
 Stage one is included because it verifies that headers matching the *new*

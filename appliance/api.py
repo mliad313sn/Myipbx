@@ -15,6 +15,7 @@ import time
 from typing import Any, Callable
 
 from . import backup, entities, firewall, httpd, numerals, supportbundle, sysops
+from . import PRODUCT_FULL_NAME
 from .confstore import DocumentRefused, DriftDetected
 from .httpd import Request, Response, Router
 from .logging_setup import get_logger
@@ -26,7 +27,7 @@ __all__ = ["build_router", "SESSION_COOKIE_NAME"]
 
 _LOG = get_logger("api")
 
-SESSION_COOKIE_NAME = "myipbx_session"
+SESSION_COOKIE_NAME = "crossbar_session"
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -295,7 +296,7 @@ def _health(context: Any, request: Request) -> Response:
 
     return Response.json(
         {
-            "product": "Legacy-to-Modern IPBX Appliance",
+            "product": PRODUCT_FULL_NAME,
             "healthy": bool(snapshot.get("engine_connected"))
             and not alarms
             and not unregistered,

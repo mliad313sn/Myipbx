@@ -1530,8 +1530,8 @@
                  * difference matters months later when somebody finds it on a
                  * share and has to decide what it is. */
                 anchor.download = includeSecrets
-                    ? 'myipbx-backup-with-secrets.tar.gz'
-                    : 'myipbx-backup.tar.gz';
+                    ? 'crossbar-backup-with-secrets.tar.gz'
+                    : 'crossbar-backup.tar.gz';
                 document.body.appendChild(anchor);
                 anchor.click();
                 document.body.removeChild(anchor);
@@ -1558,7 +1558,7 @@
             var url = URL.createObjectURL(result.blob);
             var anchor = element('a');
             anchor.href = url;
-            anchor.download = 'myipbx-support.tar.gz';
+            anchor.download = 'crossbar-support.tar.gz';
             document.body.appendChild(anchor);
             anchor.click();
             document.body.removeChild(anchor);

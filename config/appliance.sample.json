@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Legacy-to-Modern IPBX Appliance -- configuration document.",
+    "Crossbar -- configuration document.",
     "This file is the single source of truth. Every engine configuration file",
     "is a rendered artefact of it, and the control plane refuses to overwrite a",
     "rendered artefact that was modified outside the appliance.",
@@ -11,15 +11,15 @@
   "appliance": {
     "listen_address": "0.0.0.0",
     "listen_port": 8088,
-    "web_root": "/opt/myipbx/web",
-    "state_directory": "/var/lib/myipbx",
+    "web_root": "/opt/crossbar/web",
+    "state_directory": "/var/lib/crossbar",
     "asterisk_configuration_directory": "/etc/asterisk",
-    "log_file": "/var/log/myipbx/appliance.log",
+    "log_file": "/var/log/crossbar/appliance.log",
     "log_level": "INFO",
 
     "manager_host": "127.0.0.1",
     "manager_port": 5038,
-    "manager_username": "myipbx",
+    "manager_username": "crossbar",
     "manager_secret": "",
 
     "heartbeat_interval_seconds": 5.0,

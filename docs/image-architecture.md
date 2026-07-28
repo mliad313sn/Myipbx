@@ -132,7 +132,7 @@ for trying the appliance. It is the wrong shape for owning one: a live system
 forgets everything when the machine stops. An appliance in a rack should be
 running from its own disk.
 
-`iso/installer/myipbx-install-to-disk.sh` travels inside the image and installs
+`iso/installer/crossbar-install-to-disk.sh` travels inside the image and installs
 the running appliance onto a fixed disk. It is deliberately narrow — it lays
 down the appliance that is already here, and does not ask which distribution,
 which packages, or which layout. An appliance that can be installed exactly one

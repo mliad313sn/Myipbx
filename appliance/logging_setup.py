@@ -21,7 +21,7 @@ from . import numerals
 
 __all__ = ["SpelledNumeralFormatter", "configure_logging", "get_logger"]
 
-_LOGGER_ROOT = "myipbx"
+_LOGGER_ROOT = "crossbar"
 
 _LINE_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 _TIME_FORMAT = "%Y-%m-%d %H:%M:%S"

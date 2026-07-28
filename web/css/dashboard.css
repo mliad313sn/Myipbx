@@ -62,6 +62,17 @@ body {
   letter-spacing: 0.01em;
 }
 
+/* Set under the name rather than beside it, and quieter than the name without
+   disappearing: it still has to clear the contrast floor against the brand
+   colour it sits on, so this is an opacity the token layer was measured at. */
+.masthead .maker {
+  margin: 0.1rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+
 .subtitle {
   margin: 0.15rem 0 0;
   font-size: 0.85rem;

@@ -42,7 +42,7 @@ FORCE="no"
 
 usage() {
     cat <<'EOF'
-Usage: myipbx-generate-certificate.sh [--force]
+Usage: crossbar-generate-certificate.sh [--force]
 
 Generates the appliance's transport security certificate if it does not
 already hold a usable one. With --force, replaces whatever is there.
@@ -89,7 +89,7 @@ configured_hostname() {
     local name=""
     name="$(hostname 2>/dev/null || true)"
     if [[ -z "${name}" ]]; then
-        name="myipbx"
+        name="crossbar"
     fi
     printf '%s' "${name}"
 }
@@ -140,7 +140,7 @@ write_openssl_configuration() {
         printf 'prompt = no\n'
         printf '\n'
         printf '[appliance_name]\n'
-        printf 'O = Legacy-to-Modern IPBX Appliance\n'
+        printf 'O = Crossbar\n'
         printf 'OU = %s\n' "${host}"
         printf 'CN = %s\n' "${address}"
         printf '\n'

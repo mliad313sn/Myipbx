@@ -131,7 +131,7 @@ class TaskScheduler:
         self._schedules: dict[str, asyncio.Task[None]] = {}
         self._history: list[TaskRun] = []
         self._pool = ThreadPoolExecutor(
-            max_workers=worker_pool_size, thread_name_prefix="myipbx-worker"
+            max_workers=worker_pool_size, thread_name_prefix="crossbar-worker"
         )
         self._stopping = False
 

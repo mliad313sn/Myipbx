@@ -45,7 +45,7 @@ from pathlib import Path
 
 from support import REPOSITORY_ROOT
 
-HELPER = REPOSITORY_ROOT / "scripts" / "myipbx-privileged-helper.sh"
+HELPER = REPOSITORY_ROOT / "scripts" / "crossbar-privileged-helper.sh"
 
 #: What a stolen file would contain. Distinctive enough that finding it
 #: anywhere in the installed material is unambiguous.
@@ -81,7 +81,7 @@ class CertificateStagingTests(unittest.TestCase):
     def setUp(self) -> None:
         if not _openssl_available():
             self.skipTest("openssl is not installed on this machine")
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-tls-test-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-tls-test-")
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.staged = self.root / "staged"

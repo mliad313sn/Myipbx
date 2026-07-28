@@ -1,4 +1,4 @@
-# Legacy-to-Modern IPBX Appliance -- static network configuration reference
+# Crossbar -- static network configuration reference
 #
 # Constraint One in template form.  Every address on this appliance is written
 # down by an administrator.  There is no address request directive here and

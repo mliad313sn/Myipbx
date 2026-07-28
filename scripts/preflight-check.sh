@@ -203,11 +203,11 @@ digium_card_catalogue() {
     here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local candidate
     for candidate in \
-        "${MYIPBX_CARD_CATALOGUE:-}" \
+        "${CROSSBAR_CARD_CATALOGUE:-}" \
         "${here}/../share/digium-cards.tsv" \
         "${here}/../../share/digium-cards.tsv" \
-        "${APPLIANCE_PREFIX:-/opt/myipbx}/share/digium-cards.tsv" \
-        "/usr/share/myipbx/digium-cards.tsv"
+        "${APPLIANCE_PREFIX:-/opt/crossbar}/share/digium-cards.tsv" \
+        "/usr/share/crossbar/digium-cards.tsv"
     do
         if [[ -n "${candidate}" && -f "${candidate}" ]]; then
             printf '%s' "${candidate}"
@@ -326,7 +326,7 @@ check_driver_source() {
     # A local archive satisfies every path. If one is named and present, the
     # question of reaching anything does not arise.
     local candidate
-    for candidate in "${DRIVER_ARCHIVE:-}" "${MYIPBX_DRIVER_ARCHIVE:-}"; do
+    for candidate in "${DRIVER_ARCHIVE:-}" "${CROSSBAR_DRIVER_ARCHIVE:-}"; do
         if [[ -n "${candidate}" && -f "${candidate}" ]]; then
             report_pass "the interface driver source is already on this machine at ${candidate}, so stage three needs to reach nothing"
             return 0

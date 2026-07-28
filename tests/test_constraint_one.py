@@ -34,7 +34,7 @@ class RunTimeAuditTests(unittest.TestCase):
     """The run time arm: the audit that runs at startup and every health sweep."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-audit-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-audit-")
         self.base = Path(self.directory.name)
 
     def tearDown(self) -> None:
@@ -104,7 +104,7 @@ class StartupRefusalTests(unittest.IsolatedAsyncioTestCase):
     """The appliance must refuse to serve on a machine that allocates addresses."""
 
     async def test_the_appliance_refuses_to_start_beside_an_allocation_service(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="myipbx-refusal-") as name:
+        with tempfile.TemporaryDirectory(prefix="crossbar-refusal-") as name:
             root = build_fixture_root(Path(name), allocation_service=True)
             harness = ApplianceHarness(fail_on_address_allocation_server=True)
 
@@ -121,7 +121,7 @@ class StartupRefusalTests(unittest.IsolatedAsyncioTestCase):
             harness.directory.cleanup()
 
     async def test_the_appliance_serves_normally_on_a_clean_machine(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="myipbx-clean-") as name:
+        with tempfile.TemporaryDirectory(prefix="crossbar-clean-") as name:
             root = build_fixture_root(Path(name), allocation_service=False)
             harness = ApplianceHarness(fail_on_address_allocation_server=True)
 
@@ -243,7 +243,7 @@ class RepositoryExclusionTests(unittest.TestCase):
                 self.assertIn("addresses:", content)
 
     def test_the_service_unit_does_not_want_or_require_an_allocation_service(self) -> None:
-        unit = (REPOSITORY_ROOT / "config/systemd/myipbx.service").read_text(encoding="utf-8")
+        unit = (REPOSITORY_ROOT / "config/systemd/crossbar.service").read_text(encoding="utf-8")
         for directive in ("Requires=", "Wants=", "After=", "BindsTo="):
             for line in unit.splitlines():
                 if line.startswith(directive):

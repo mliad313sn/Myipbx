@@ -16,12 +16,17 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-APPLIANCE_NAME="Legacy-to-Modern IPBX Appliance"
-APPLIANCE_USER="${APPLIANCE_USER:-myipbx}"
-APPLIANCE_PREFIX="${APPLIANCE_PREFIX:-/opt/myipbx}"
-APPLIANCE_STATE_DIR="${APPLIANCE_STATE_DIR:-/var/lib/myipbx}"
-APPLIANCE_CONFIG_DIR="${APPLIANCE_CONFIG_DIR:-/etc/myipbx}"
-APPLIANCE_LOG_DIR="${APPLIANCE_LOG_DIR:-/var/log/myipbx}"
+# The name, and who made it. Kept apart because they are set on two lines
+# wherever there is room for two -- the boot menu, the login screen, the
+# console masthead -- and joined into one where there is not.
+APPLIANCE_NAME="Crossbar"
+APPLIANCE_MAKER="by Kernel Project"
+APPLIANCE_FULL_NAME="${APPLIANCE_NAME} ${APPLIANCE_MAKER}"
+APPLIANCE_USER="${APPLIANCE_USER:-crossbar}"
+APPLIANCE_PREFIX="${APPLIANCE_PREFIX:-/opt/crossbar}"
+APPLIANCE_STATE_DIR="${APPLIANCE_STATE_DIR:-/var/lib/crossbar}"
+APPLIANCE_CONFIG_DIR="${APPLIANCE_CONFIG_DIR:-/etc/crossbar}"
+APPLIANCE_LOG_DIR="${APPLIANCE_LOG_DIR:-/var/log/crossbar}"
 APPLIANCE_RECEIPT_DIR="${APPLIANCE_RECEIPT_DIR:-${APPLIANCE_STATE_DIR}/receipts}"
 APPLIANCE_INSTALL_LOG="${APPLIANCE_INSTALL_LOG:-${APPLIANCE_LOG_DIR}/installation.log}"
 
@@ -454,6 +459,8 @@ assert_no_address_allocation_service() {
 banner() {
     printf '\n'
     printf '  %s\n' "${APPLIANCE_NAME}"
+    printf '  %s\n' "${APPLIANCE_MAKER}"
+    printf '\n'
     printf '  %s\n' "$(spell_all "$1")"
     printf '  this appliance assigns no addresses; it spells quantities and keeps identifiers\n'
     printf '\n'

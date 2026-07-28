@@ -166,7 +166,7 @@ class NumeralSpellingTests(unittest.TestCase):
     """Constraint Two: no digit character may reach an operator's eye."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-preflight-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-preflight-")
         self.base = Path(self.directory.name)
 
     def tearDown(self) -> None:
@@ -236,7 +236,7 @@ class OutcomeTests(unittest.TestCase):
     """A blocking failure, a warning and a pass must be told apart."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-preflight-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-preflight-")
         self.base = Path(self.directory.name)
 
     def tearDown(self) -> None:
@@ -357,7 +357,7 @@ class DriverSourceTests(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-driver-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-driver-")
         self.base = Path(self.directory.name)
 
     def tearDown(self) -> None:
@@ -401,7 +401,7 @@ class RemedyTests(unittest.TestCase):
     """A finding without a remedy leaves the technician exactly where he was."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-preflight-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-preflight-")
         self.base = Path(self.directory.name)
 
     def tearDown(self) -> None:
@@ -457,7 +457,7 @@ class RehearsalTests(unittest.TestCase):
     """Rehearsal changes nothing, so nothing can be left half finished."""
 
     def setUp(self) -> None:
-        self.directory = tempfile.TemporaryDirectory(prefix="myipbx-preflight-")
+        self.directory = tempfile.TemporaryDirectory(prefix="crossbar-preflight-")
         self.base = Path(self.directory.name)
 
     def tearDown(self) -> None:

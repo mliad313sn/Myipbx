@@ -49,8 +49,8 @@ running a site on it. When you are ready to keep it, install it onto the
 machine's own disk from the console, or from the machine's own keyboard:
 
 ```
-myipbx-install-to-disk --dry-run --disk /dev/sda
-myipbx-install-to-disk --disk /dev/sda
+crossbar-install-to-disk --dry-run --disk /dev/sda
+crossbar-install-to-disk --disk /dev/sda
 ```
 
 The first command reports every step and writes nothing. The second does it,
@@ -608,9 +608,9 @@ must: an interface that could reset its own administrator password without
 authentication would not be a security boundary.
 
 ```bash
-sudo rm /var/lib/myipbx/credentials.json
-sudo systemctl restart myipbx.service
-sudo journalctl -u myipbx.service -n 30    # the new password is printed once
+sudo rm /var/lib/crossbar/credentials.json
+sudo systemctl restart crossbar.service
+sudo journalctl -u crossbar.service -n 30    # the new password is printed once
 ```
 
 ### What this appliance will not do

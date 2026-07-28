@@ -69,8 +69,8 @@ install_privileged_helper() {
     ensure_directory "${APPLIANCE_PREFIX}/bin" 0755
     ensure_directory "${APPLIANCE_PREFIX}/bin/lib" 0755
 
-    install_file "${REPOSITORY_ROOT}/scripts/myipbx-privileged-helper.sh" \
-        "${APPLIANCE_PREFIX}/bin/myipbx-privileged-helper.sh" 0755
+    install_file "${REPOSITORY_ROOT}/scripts/crossbar-privileged-helper.sh" \
+        "${APPLIANCE_PREFIX}/bin/crossbar-privileged-helper.sh" 0755
     install_file "${REPOSITORY_ROOT}/scripts/lib/common.sh" \
         "${APPLIANCE_PREFIX}/bin/lib/common.sh" 0644
 
@@ -78,12 +78,12 @@ install_privileged_helper() {
     # so they must be beside it once installed.
     local stage
     for stage in stage-two-network-static.sh stage-three-dahdi-drivers.sh verify-no-dhcp.sh \
-                 myipbx-generate-certificate.sh; do
+                 crossbar-generate-certificate.sh; do
         install_file "${REPOSITORY_ROOT}/scripts/${stage}" \
             "${APPLIANCE_PREFIX}/bin/${stage}" 0755
     done
 
-    local unit="${REPOSITORY_ROOT}/config/systemd/myipbx-helperd.service"
+    local unit="${REPOSITORY_ROOT}/config/systemd/crossbar-helperd.service"
     [[ -f "${unit}" ]] || fail "the privileged helper's service unit is missing from the repository"
 
     if is_rehearsal; then
@@ -103,8 +103,8 @@ install_privileged_helper() {
     # removed here rather than left to confuse a later reader, and because a
     # privilege grant that is no longer needed should not survive the reason
     # for it.
-    if [[ -f /etc/sudoers.d/myipbx ]]; then
-        rm -f /etc/sudoers.d/myipbx
+    if [[ -f /etc/sudoers.d/crossbar ]]; then
+        rm -f /etc/sudoers.d/crossbar
         log_info "the obsolete privilege grant was removed; the service account now has none"
     fi
 
@@ -113,10 +113,10 @@ install_privileged_helper() {
         return 0
     fi
 
-    install_file "${unit}" /etc/systemd/system/myipbx-helperd.service 0644
+    install_file "${unit}" /etc/systemd/system/crossbar-helperd.service 0644
     run_command systemctl daemon-reload
-    run_command systemctl enable myipbx-helperd.service
-    run_command systemctl restart myipbx-helperd.service
+    run_command systemctl enable crossbar-helperd.service
+    run_command systemctl restart crossbar-helperd.service
     log_info "the privileged helper is listening; the service account holds no privilege of its own"
 }
 
@@ -183,7 +183,7 @@ write_configuration_document() {
     "log_level": "INFO",
     "manager_host": "127.0.0.1",
     "manager_port": 5038,
-    "manager_username": "myipbx",
+    "manager_username": "crossbar",
     "manager_secret": "${manager_secret}",
     "fail_on_address_allocation_server": true
   },
@@ -210,7 +210,7 @@ generate_certificate() {
     # travelled with the software would be the same certificate on every
     # appliance running it, and one private key shared by every site is worse
     # than the plain transport it would appear to have replaced.
-    local generator="${APPLIANCE_PREFIX}/bin/myipbx-generate-certificate.sh"
+    local generator="${APPLIANCE_PREFIX}/bin/crossbar-generate-certificate.sh"
     [[ -x "${generator}" ]] || fail "the certificate generator was not installed beside the helper"
 
     if is_rehearsal; then
@@ -225,23 +225,23 @@ generate_certificate() {
 install_service_unit() {
     log_step "installing the service unit"
 
-    local source="${REPOSITORY_ROOT}/config/systemd/myipbx.service"
+    local source="${REPOSITORY_ROOT}/config/systemd/crossbar.service"
     [[ -f "${source}" ]] || fail "the service unit template is missing from the repository"
 
-    local certificate_unit="${REPOSITORY_ROOT}/config/systemd/myipbx-certificate.service"
+    local certificate_unit="${REPOSITORY_ROOT}/config/systemd/crossbar-certificate.service"
     [[ -f "${certificate_unit}" ]] || fail "the certificate service unit is missing from the repository"
 
     if [[ -d /etc/systemd/system ]]; then
-        install_file "${source}" /etc/systemd/system/myipbx.service 0644
+        install_file "${source}" /etc/systemd/system/crossbar.service 0644
         # The generation runs again before every start, and does nothing at all
         # on every start after the first. It is installed even though this
         # stage has already generated one, because an appliance whose
         # certificate is later removed or expires should recover on a reboot
         # rather than wait for somebody to notice.
-        install_file "${certificate_unit}" /etc/systemd/system/myipbx-certificate.service 0644
+        install_file "${certificate_unit}" /etc/systemd/system/crossbar-certificate.service 0644
         run_command systemctl daemon-reload
-        run_command systemctl enable myipbx-certificate.service
-        run_command systemctl enable myipbx.service
+        run_command systemctl enable crossbar-certificate.service
+        run_command systemctl enable crossbar.service
         log_info "the appliance service unit is installed and enabled"
     else
         log_warn "this machine has no service unit directory; start the control plane with the module invocation instead"
@@ -260,12 +260,12 @@ start_appliance() {
         return 0
     fi
 
-    systemctl restart myipbx.service || fail "the appliance service did not start; inspect the service journal for the reason"
+    systemctl restart crossbar.service || fail "the appliance service did not start; inspect the service journal for the reason"
 
     local attempt
     for attempt in one two three four five; do
         sleep 1
-        if systemctl is-active --quiet myipbx.service; then
+        if systemctl is-active --quiet crossbar.service; then
             log_info "the appliance service is running"
             return 0
         fi
