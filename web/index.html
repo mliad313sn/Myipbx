@@ -13,7 +13,7 @@
 </head>
 <body>
 
-<!-- The console offers twenty-three sections in one column, so a keyboard
+<!-- The console offers twenty-four sections in one column, so a keyboard
      reaching the page lands in front of all of them. This is the way past. -->
 <a class="mx-skip-link" href="#main-content">skip to the console</a>
 
@@ -71,6 +71,7 @@
       <button type="button" class="nav-item" data-view="queues">queues</button>
       <button type="button" class="nav-item" data-view="conferences">conference rooms</button>
       <button type="button" class="nav-item" data-view="time_conditions">time conditions</button>
+      <button type="button" class="nav-item" data-view="tariffs">tariffs</button>
       <p class="nav-heading">the machine</p>
       <button type="button" class="nav-item" data-view="hardware">hardware</button>
       <button type="button" class="nav-item" data-view="system">system</button>
@@ -216,6 +217,17 @@
         </section>
 
         <section class="panel" id="report-breakdowns" hidden></section>
+
+        <!-- Queues, drawn from the engine's queue log rather than its call
+             records. Separate because the two files are separate: a queue can
+             be reported on when the records are absent, and the records when no
+             queue was ever configured. -->
+        <section class="panel" id="report-queues">
+          <h3>queues</h3>
+          <p class="hint" id="report-queues-explanation">loading</p>
+          <div class="tiles" id="report-queue-tiles" hidden></div>
+          <div id="report-queue-breakdowns"></div>
+        </section>
       </section>
 
       <!-- one view per kind of telephony object, built from the schema -->
@@ -228,6 +240,7 @@
       <section class="view" id="view-queues" hidden></section>
       <section class="view" id="view-conferences" hidden></section>
       <section class="view" id="view-time_conditions" hidden></section>
+      <section class="view" id="view-tariffs" hidden></section>
 
       <!-- ---------------------------------------------------------- -->
       <section class="view" id="view-hardware" hidden>

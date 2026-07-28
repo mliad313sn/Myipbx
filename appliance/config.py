@@ -81,6 +81,11 @@ class ApplianceConfig:
     # directory -- could not be configured at all while this was fixed in code.
     privileged_socket: str = "/run/crossbar/helper.sock"
     call_record_file: str = "/var/log/asterisk/cdr-csv/Master.csv"
+    #: The engine's queue log, which is a different file in a different
+    #: format from the call records and answers different questions: a call
+    #: that waited four minutes and was abandoned appears in the call
+    #: records as one unanswered call and nowhere says it waited.
+    queue_log_file: str = "/var/log/asterisk/queue_log"
     log_level: str = "INFO"
 
     # --- Telephony engine manager interface ------------------------------

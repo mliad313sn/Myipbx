@@ -259,5 +259,112 @@ class WhenTheEngineWritesNoRecordsTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("no call records", payload["error"])
 
 
+class QueueReportingRouteTests(unittest.IsolatedAsyncioTestCase):
+    """The queue report is a separate file and so a separate availability.
+
+    A site with queues and no call record file still has a queue report, and a
+    site with records and no queue has the rest; folding the two together would
+    make each unavailable whenever the other was.
+    """
+
+    async def asyncSetUp(self) -> None:
+        self.harness = ApplianceHarness()
+        document = json.loads(json.dumps(DOCUMENT))
+        document["queues"] = [{
+            "number": "700", "name": "the switchboard", "members": ["201", "202"],
+            "strategy": "ring all", "ring_seconds": 20,
+            "service_level_seconds": 20, "enabled": True,
+        }]
+        self.harness.write_document(document)
+
+        self.queue_log = Path(self.harness.root) / "queue_log"
+        self.queue_log.write_text("\n".join([
+            "1784160000|1.1|700|NONE|ENTERQUEUE||441632960111|1",
+            "1784160010|1.1|700|PJSIP/201|CONNECT|10|1.2|3",
+            "1784160130|1.1|700|PJSIP/201|COMPLETEAGENT|10|120|1",
+            "1784160200|1.2|700|NONE|ENTERQUEUE||441632960222|1",
+            "1784160290|1.2|700|NONE|ABANDON|1|1|90",
+        ]) + "\n", encoding="utf-8")
+        self.harness.config.queue_log_file = str(self.queue_log)
+
+        # No call record file at all, deliberately.
+        self.harness.config.call_record_file = str(
+            Path(self.harness.root) / "there-is-no-such-file.csv"
+        )
+
+        await self.harness.start()
+        await self.harness.sign_in()
+
+    async def asyncTearDown(self) -> None:
+        await self.harness.stop()
+
+    async def test_the_queues_report_even_with_no_call_records(self) -> None:
+        status, _, payload = await self.harness.request(
+            "GET", "/api/reports/queues?window=everything"
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["summary"]["offered"]["count"], 2)
+        self.assertEqual(payload["summary"]["answered"]["count"], 1)
+        self.assertEqual(payload["summary"]["abandoned"]["count"], 1)
+
+    async def test_the_call_report_is_unavailable_at_the_same_moment(self) -> None:
+        _, _, payload = await self.harness.request("GET", "/api/reports?window=everything")
+        self.assertFalse(payload["available"])
+
+    async def test_the_queue_carries_the_name_and_promise_it_was_configured_with(self) -> None:
+        _, _, payload = await self.harness.request(
+            "GET", "/api/reports/queues?window=everything"
+        )
+        rows = {row["key"]: row for row in payload["breakdowns"]["by_queue"]}
+        self.assertEqual(rows["700"]["label"], "the switchboard")
+        # Answered in ten seconds, inside the queue's twenty.
+        self.assertEqual(rows["700"]["figures"]["service_level"]["count"], 100.0)
+
+    async def test_a_queue_breakdown_downloads_as_a_file(self) -> None:
+        status, headers, payload = await self.harness.request(
+            "GET", "/api/reports/export?window=everything&breakdown=queue:by_queue"
+        )
+        self.assertEqual(status, 200)
+        self.assertIn("crossbar-queues-by-queue", headers["content-disposition"])
+        self.assertIn(b"700", payload)
+
+    async def test_a_bad_window_is_refused_here_too(self) -> None:
+        status, _, payload = await self.harness.request(
+            "GET", "/api/reports/queues?window=last-fortnight"
+        )
+        self.assertEqual(status, 422)
+        self.assertIn("last-fortnight", payload["error"])
+
+    async def test_the_route_refuses_an_anonymous_request(self) -> None:
+        status, _, _ = await self.harness.request(
+            "GET", "/api/reports/queues?window=today", cookie=""
+        )
+        self.assertEqual(status, 401)
+
+
+class WhenThereIsNoQueueLogTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.harness = ApplianceHarness()
+        self.harness.write_document(DOCUMENT)
+        self.harness.config.queue_log_file = str(
+            Path(self.harness.root) / "no-queue-log-here"
+        )
+        await self.harness.start()
+        await self.harness.sign_in()
+
+    async def asyncTearDown(self) -> None:
+        await self.harness.stop()
+
+    async def test_it_says_what_the_call_records_cannot_answer(self) -> None:
+        status, _, payload = await self.harness.request(
+            "GET", "/api/reports/queues?window=today"
+        )
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["available"])
+        self.assertIn("queue log", payload["explanation"])
+        self.assertIn("gave up", payload["explanation"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,7 @@ from .ami import ManagerClient, ManagerMessage
 from .config import ApplianceConfig
 from .confstore import ConfigurationStore, DriftDetected
 from .diagnostics import CallRecordReader, LogReader
+from .queuelog import QueueLogReader
 from .entities import SecretStore
 from . import firewall as firewall_module
 from .httpd import HttpServer, Request, Response
@@ -89,6 +90,7 @@ class Appliance:
         )
         self.logs = LogReader()
         self.calls = CallRecordReader(self.config.call_record_file)
+        self.queue_log = QueueLogReader(self.config.queue_log_file)
 
         # -- transport -----------------------------------------------------
         self.hub = SocketHub(

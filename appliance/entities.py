@@ -49,6 +49,16 @@ _LOG = get_logger("entities")
 _NUMBER_PATTERN = re.compile(r"^[0-9]{1,10}$")
 _NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
 _IDENTIFIER_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
+#: A dialled prefix a rate covers. Empty is permitted and means "everything no
+#: other tariff claims", which is what gives a rate table a floor.
+_PREFIX_PATTERN = re.compile(r"^(\+?[0-9]{1,15})?$")
+#: An amount of money as it is typed. Narrow on purpose: a comma is a thousands
+#: separator in one country and a decimal point in another, and a pattern that
+#: accepted both would silently misread one of them by a factor of a thousand.
+_AMOUNT_PATTERN = re.compile(r"^[0-9]{1,9}(\.[0-9]{1,6})?$")
+#: A currency written as it is said rather than as a symbol, because every
+#: figure on these screens is read out in words.
+_CURRENCY_PATTERN = re.compile(r"^[A-Za-z][A-Za-z ]{0,23}$")
 _HOST_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$")
 _PATTERN_PATTERN = re.compile(r"^[0-9NXZ._\[\]!+*-]{1,32}$")
 _ELECTRONIC_MAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -409,6 +419,13 @@ _register(
             Field("maximum_waiting", "most callers waiting", "number", default=0,
                   minimum=0, maximum=999,
                   help="callers beyond this are sent to the overflow destination; zero means no limit"),
+            # The promise this queue is reported against. Per queue rather than
+            # global, because a switchboard and an out-of-hours line are not
+            # held to the same one.
+            Field("service_level_seconds", "answer within", "number", default=20,
+                  minimum=1, maximum=600,
+                  help="the queue report says what share of answered calls were "
+                       "picked up inside this many seconds"),
             Field("overflow_destination", "when full or timed out, send to", identifier=True,
                   pattern=_NUMBER_PATTERN,
                   pattern_help="a destination is the number of an extension, a group, or a menu"),
@@ -444,6 +461,53 @@ _register(
             Field("enabled", "enabled", "boolean", default=True),
         ),
         referenced_by=(("inbound_routes", "destination_value"),),
+    )
+)
+
+
+_register(
+    EntitySpec(
+        kind="tariffs",
+        singular="tariff",
+        plural="tariffs",
+        key="name",
+        description=(
+            "what a call to a range of numbers costs, so the reports can total it"
+        ),
+        fields=(
+            Field("name", "tariff name", required=True, pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="a tariff name uses letters, digits, and the marks period, underscore, and hyphen",
+                  help="how this rate is named in the reports"),
+            # The prefix is dialled digits, so it is an identifier and keeps
+            # them. Left empty it covers everything no other tariff claims,
+            # which is how a table is given a floor.
+            Field("prefix", "numbers beginning", identifier=True,
+                  pattern=_PREFIX_PATTERN,
+                  pattern_help="a prefix is up to fifteen digits, or the plus sign followed by digits",
+                  help="the longest matching prefix wins; leave this empty for the "
+                       "rate that covers everything no other tariff claims"),
+            Field("currency", "currency", required=True, default="pounds",
+                  pattern=_CURRENCY_PATTERN,
+                  pattern_help="a currency is one or two words of letters, written as it should be read aloud",
+                  help="written as it is said rather than as a symbol, because "
+                       "every figure on these screens is read out in words"),
+            Field("connection_fee", "charge to connect", default="0",
+                  pattern=_AMOUNT_PATTERN,
+                  pattern_help="an amount is digits, optionally with a decimal point and up to six places",
+                  help="charged once when the call is answered"),
+            Field("per_minute", "charge a minute", default="0",
+                  pattern=_AMOUNT_PATTERN,
+                  pattern_help="an amount is digits, optionally with a decimal point and up to six places",
+                  help="charged for the conversation, billed in whole increments"),
+            Field("increment_seconds", "billed in blocks of", "number", default=60,
+                  minimum=1, maximum=3600,
+                  help="a carrier selling by the minute charges a whole minute "
+                       "for a call of four seconds; set this to one to bill by the second"),
+            Field("minimum_seconds", "shortest charged call", "number", default=0,
+                  minimum=0, maximum=3600,
+                  help="a call shorter than this is charged as though it lasted this long"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
     )
 )
 

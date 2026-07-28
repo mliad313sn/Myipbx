@@ -126,12 +126,43 @@ class WhereTheConsoleAndTheApplianceHaveToAgreeTests(unittest.TestCase):
         wanted = re.findall(r"key:\s*'([^']+)'", block)
         self.assertTrue(wanted)
 
+        # With a rate table, so that the cost figures -- which exist only when
+        # one is configured -- are present to be checked. A console tile the
+        # appliance never produces is the defect this looks for; a tile it
+        # produces conditionally is not.
         summary = reports.build_report(
-            [], reports.resolve_window("today")
+            [], reports.resolve_window("today"),
+            tariffs=[{
+                "name": "national", "prefix": "0", "currency": "pounds",
+                "connection_fee": "0", "per_minute": "0.01",
+                "increment_seconds": 60, "minimum_seconds": 0, "enabled": True,
+            }],
         )["summary"]
         for key in wanted:
             self.assertIn(key, summary,
                           f"the console shows a tile for {key}, which no report carries")
+
+    def test_the_queue_tiles_and_breakdowns_agree_with_the_queue_report(self) -> None:
+        """The same guarantee for the panel drawn from the other file."""
+        produced = reports.build_queue_report([], reports.resolve_window("today"))
+
+        tiles = re.findall(
+            r"key:\s*'([^']+)'",
+            self.source.split("var QUEUE_TILES = [", 1)[1].split("\n    ];", 1)[0],
+        )
+        self.assertTrue(tiles)
+        for key in tiles:
+            self.assertIn(key, produced["summary"],
+                          f"the console shows a queue tile for {key}")
+
+        drawn = re.findall(
+            r"key:\s*'([^']+)'",
+            self.source.split("var QUEUE_BREAKDOWNS = [", 1)[1].split("\n    ];", 1)[0],
+        )
+        self.assertTrue(drawn)
+        for key in drawn:
+            self.assertIn(key, produced["breakdowns"],
+                          f"the console draws a queue breakdown for {key}")
 
 
 if __name__ == "__main__":

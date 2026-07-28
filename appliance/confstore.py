@@ -792,6 +792,12 @@ def render_queues(document: Mapping[str, Any]) -> str:
         lines.append(f"strategy = {strategy}\n")
         lines.append(f"timeout = {int(queue.get('ring_seconds', 20) or 20)}\n")
         lines.append(f"musicclass = {queue.get('music_class', 'default')}\n")
+        # The engine counts against this itself and writes it into the
+        # queue log, so the report and the engine agree about what "in
+        # time" means rather than each having its own opinion.
+        lines.append(
+            f"servicelevel = {int(queue.get('service_level_seconds', 20) or 20)}\n"
+        )
         lines.append("retry = 5\n")
         lines.append("wrapuptime = 5\n")
         lines.append("joinempty = yes\n")

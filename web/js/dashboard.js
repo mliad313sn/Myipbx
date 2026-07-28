@@ -820,13 +820,16 @@
         { key: 'calls', heading: 'calls', caption: 'answered' },
         { key: 'answer_ratio', heading: 'answered', caption: null },
         { key: 'missed', heading: 'missed', caption: null },
+        { key: 'voicemail', heading: 'left a message', caption: null },
         { key: 'conversation', heading: 'total conversation', caption: null },
         { key: 'average_conversation', heading: 'average conversation', caption: null },
         { key: 'longest_call', heading: 'longest call', caption: null },
         { key: 'average_ring', heading: 'average time to answer', caption: null },
         { key: 'inbound', heading: 'calls in', caption: null },
         { key: 'outbound', heading: 'calls out', caption: null },
-        { key: 'internal', heading: 'calls inside', caption: null }
+        { key: 'internal', heading: 'calls inside', caption: null },
+        { key: 'cost', heading: 'cost', caption: null },
+        { key: 'unrated', heading: 'unrated calls', caption: null }
     ];
 
     function buildReportWindows() {
@@ -869,25 +872,40 @@
         return request('/api/reports?' + reportQuery()).then(function (result) {
             var payload = result.payload || {};
 
+            /* The queues are drawn whatever happens to the calls above, which
+             * is the whole reason they are a separate request: a site with
+             * queues and no call record file still has a queue report, and
+             * hiding it because the other file is missing would be the same
+             * defect twice. */
             if (!result.ok) {
                 nodes.reportsExplanation.textContent = numerals.sanitize(
                     payload.error || 'the report could not be produced'
                 );
                 hideReportPanels();
-                return;
+                return loadQueueReport();
             }
             if (!payload.available) {
                 nodes.reportsExplanation.textContent = numerals.sanitize(
                     payload.explanation || 'there is nothing to report on yet'
                 );
                 hideReportPanels();
-                return;
+                return loadQueueReport();
             }
 
             var considered = (payload.considered || {}).text || 'zero';
-            nodes.reportsExplanation.textContent = numerals.sanitize(
-                'drawn from ' + considered + ' calls, ' + payload.window.label
-            );
+            var explanation = 'drawn from ' + considered + ' calls, ' + payload.window.label;
+            if (payload.currency_note) {
+                /* Two currencies cannot be added into one figure, so no cost is
+                 * reported at all rather than a total that is not an amount of
+                 * anything. Said out loud, because a missing column otherwise
+                 * reads as a system that does not cost calls. */
+                explanation += '. ' + payload.currency_note;
+            } else if (!payload.currency) {
+                explanation += '. no cost is shown because no tariff is ' +
+                    'configured; add one under tariffs and these figures gain ' +
+                    'a cost column';
+            }
+            nodes.reportsExplanation.textContent = numerals.sanitize(explanation);
 
             nodes.reportTruncated.hidden = !payload.truncated;
             if (payload.truncated) {
@@ -897,6 +915,7 @@
             renderReportTiles(payload.summary || {});
             renderReportChart(payload.breakdowns.by_hour || []);
             renderReportBreakdowns(payload);
+            loadQueueReport();
         });
     }
 
@@ -1017,56 +1036,168 @@
                 });
             }
 
-            var section = element('section', 'breakdown');
-            section.appendChild(element('h3', null, breakdown.heading));
-            section.appendChild(element('p', 'hint', breakdown.hint));
-
-            var table = element('table', 'grid');
-            var head = element('thead');
-            var headRow = element('tr');
-            headRow.appendChild(element('th', null, breakdown.first));
-            if (breakdown.second) {
-                headRow.appendChild(element('th', null, breakdown.second));
-            }
-            columns.forEach(function (column) {
-                headRow.appendChild(element('th', null, column.heading));
-            });
-            head.appendChild(headRow);
-            table.appendChild(head);
-
-            var body = element('tbody');
-            if (!rows.length) {
-                emptyRow(body, columns.length + (breakdown.second ? 2 : 1),
-                    'no call in this period falls under this heading');
-            }
-            rows.forEach(function (row) {
-                var line = element('tr');
-                cell(line, row.key);
-                if (breakdown.second) {
-                    cell(line, row.label);
-                }
-                columns.forEach(function (column) {
-                    var figure = row.figures[column.key];
-                    cell(line, figure ? figure.text : '');
-                });
-                body.appendChild(line);
-            });
-            table.appendChild(body);
-            section.appendChild(makeScrollable(table, breakdown.heading));
-
-            var actions = element('div', 'actions');
-            var download = element('button', null, 'download this as a file');
-            download.type = 'button';
-            download.addEventListener('click', function () {
-                downloadReport(breakdown.key);
-            });
-            actions.appendChild(download);
-            section.appendChild(actions);
-
-            holder.appendChild(section);
+            holder.appendChild(breakdownSection(
+                breakdown, rows, columns, breakdown.key
+            ));
         });
 
         holder.hidden = false;
+    }
+
+    /* The queue tiles, and the two breakdowns beneath them. */
+    var QUEUE_TILES = [
+        { key: 'offered', heading: 'offered' },
+        { key: 'answered', heading: 'answered' },
+        { key: 'abandoned', heading: 'gave up waiting' },
+        { key: 'service_level', heading: 'answered in time' },
+        { key: 'average_wait', heading: 'average wait' },
+        { key: 'longest_wait', heading: 'longest wait' }
+    ];
+
+    var QUEUE_BREAKDOWNS = [
+        {
+            key: 'by_queue', heading: 'by queue', columns: 'queue',
+            first: 'queue', second: 'description',
+            hint: 'offered is everybody who joined; abandoned is everybody who ' +
+                  'stopped waiting without being answered, however they stopped'
+        },
+        {
+            key: 'by_member', heading: 'by member', columns: 'member',
+            first: 'extension', second: '',
+            hint: 'rang out counts the times a member was offered a call and ' +
+                  'did not pick it up, which is not the same as a busy queue'
+        }
+    ];
+
+    function loadQueueReport() {
+        return request('/api/reports/queues?' + reportQuery()).then(function (result) {
+            var payload = result.payload || {};
+            var panel = nodes.reportQueues;
+
+            if (!result.ok || !payload.available) {
+                nodes.reportQueuesExplanation.textContent = numerals.sanitize(
+                    payload.explanation || payload.error ||
+                    'the queues cannot be reported on'
+                );
+                nodes.reportQueueTiles.hidden = true;
+                clear(nodes.reportQueueBreakdowns);
+                panel.hidden = false;
+                return;
+            }
+
+            nodes.reportQueuesExplanation.textContent = numerals.sanitize(
+                'drawn from the queue log: ' +
+                (payload.considered || {}).text + ' callers joined a queue, ' +
+                payload.window.label
+            );
+
+            var tiles = nodes.reportQueueTiles;
+            clear(tiles);
+            QUEUE_TILES.forEach(function (tile) {
+                var figure = payload.summary[tile.key];
+                if (!figure) { return; }
+                var article = element('article', 'tile');
+                article.appendChild(element('h3', null, tile.heading));
+                article.appendChild(element('p', 'figure', figure.text));
+                tiles.appendChild(article);
+            });
+            tiles.hidden = false;
+
+            var holder = nodes.reportQueueBreakdowns;
+            clear(holder);
+            QUEUE_BREAKDOWNS.forEach(function (breakdown) {
+                holder.appendChild(breakdownSection(
+                    breakdown,
+                    payload.breakdowns[breakdown.key] || [],
+                    payload.columns[breakdown.columns] || [],
+                    'queue:' + breakdown.key
+                ));
+            });
+
+            var reasons = payload.breakdowns.by_reason || [];
+            if (reasons.length) {
+                var section = element('section', 'breakdown');
+                section.appendChild(element('h3', null, 'why callers stopped waiting'));
+                section.appendChild(element('p', 'hint',
+                    'kept apart rather than summed: a queue nobody is staffing ' +
+                    'and a queue people give up on are different faults'));
+                var table = element('table', 'grid');
+                var head = element('thead');
+                var headRow = element('tr');
+                ['what happened', 'meaning', 'calls'].forEach(function (heading) {
+                    headRow.appendChild(element('th', null, heading));
+                });
+                head.appendChild(headRow);
+                table.appendChild(head);
+                var body = element('tbody');
+                reasons.forEach(function (row) {
+                    var line = element('tr');
+                    cell(line, row.key.toLowerCase());
+                    cell(line, row.label);
+                    cell(line, row.figures.calls.text);
+                    body.appendChild(line);
+                });
+                table.appendChild(body);
+                section.appendChild(makeScrollable(table, 'why callers stopped waiting'));
+                holder.appendChild(section);
+            }
+
+            panel.hidden = false;
+        });
+    }
+
+    /* One breakdown: heading, hint, table, and the button that downloads it.
+     *
+     * Shared by the call breakdowns and the queue breakdowns because they are
+     * the same thing drawn from two files, and two copies of this would be two
+     * places for a column to go missing. */
+    function breakdownSection(breakdown, rows, columns, exportKey) {
+        var section = element('section', 'breakdown');
+        section.appendChild(element('h3', null, breakdown.heading));
+        section.appendChild(element('p', 'hint', breakdown.hint));
+
+        var table = element('table', 'grid');
+        var head = element('thead');
+        var headRow = element('tr');
+        headRow.appendChild(element('th', null, breakdown.first));
+        if (breakdown.second) {
+            headRow.appendChild(element('th', null, breakdown.second));
+        }
+        columns.forEach(function (column) {
+            headRow.appendChild(element('th', null, column.heading));
+        });
+        head.appendChild(headRow);
+        table.appendChild(head);
+
+        var body = element('tbody');
+        if (!rows.length) {
+            emptyRow(body, columns.length + (breakdown.second ? 2 : 1),
+                'no call in this period falls under this heading');
+        }
+        rows.forEach(function (row) {
+            var line = element('tr');
+            cell(line, row.key);
+            if (breakdown.second) {
+                cell(line, row.label);
+            }
+            columns.forEach(function (column) {
+                var figure = row.figures[column.key];
+                cell(line, figure ? figure.text : '');
+            });
+            body.appendChild(line);
+        });
+        table.appendChild(body);
+        section.appendChild(makeScrollable(table, breakdown.heading));
+
+        var actions = element('div', 'actions');
+        var download = element('button', null, 'download this as a file');
+        download.type = 'button';
+        download.addEventListener('click', function () {
+            downloadReport(exportKey);
+        });
+        actions.appendChild(download);
+        section.appendChild(actions);
+        return section;
     }
 
     function downloadReport(breakdown) {
@@ -2194,6 +2325,7 @@
         queues: function () { renderEntityView('queues'); },
         conferences: function () { renderEntityView('conferences'); },
         time_conditions: function () { renderEntityView('time_conditions'); },
+        tariffs: function () { renderEntityView('tariffs'); },
         hardware: function () { loadHardware(); renderWizard(); },
         system: function () { loadSystem(); },
         firewall: function () { loadFirewall(); },
@@ -2358,6 +2490,9 @@
             ['reportSummaryPanel', 'report-summary-panel'], ['reportChartPanel', 'report-chart-panel'],
             ['reportChart', 'report-chart'], ['reportChartSummary', 'report-chart-summary'],
             ['reportBreakdowns', 'report-breakdowns'], ['reportTruncated', 'report-truncated'],
+            ['reportQueues', 'report-queues'], ['reportQueueTiles', 'report-queue-tiles'],
+            ['reportQueuesExplanation', 'report-queues-explanation'],
+            ['reportQueueBreakdowns', 'report-queue-breakdowns'],
             ['hardwareSummary', 'hardware-summary'], ['cardBody', 'card-body'],
             ['spanBody', 'span-body'], ['hardwareWizard', 'hardware-wizard'],
             ['systemReadings', 'system-readings'], ['interfaceBody', 'interface-body'],

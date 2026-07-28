@@ -130,6 +130,10 @@ def build_router(context: Any) -> Router:
     # -- reports ------------------------------------------------------------
     router.get("/api/reports", guard.read(lambda request: _report(context, request)))
     router.get(
+        "/api/reports/queues",
+        guard.read(lambda request: _queue_report(context, request)),
+    )
+    router.get(
         "/api/reports/export",
         guard.read(lambda request: _report_export(context, request)),
     )
@@ -1187,6 +1191,7 @@ def _report_inputs(context: Any, request: Request) -> tuple[Any, dict[str, Any],
     dialplan = document.get("dialplan") or {}
     settings = {
         "extensions": document.get("extensions") or [],
+        "tariffs": document.get("tariffs") or [],
         "inbound_context": str(dialplan.get("inbound_context", "")),
         "internal_context": str(dialplan.get("internal_context", "")),
     }
@@ -1210,9 +1215,40 @@ def _report(context: Any, request: Request) -> Response:
     return Response.json(reports.build_report(
         records, window,
         extensions=settings["extensions"],
+        tariffs=settings["tariffs"],
         inbound_context=settings["inbound_context"],
         internal_context=settings["internal_context"],
         truncated=truncated,
+    ))
+
+
+def _queue_report(context: Any, request: Request) -> Response:
+    """The queues, drawn from the engine's queue log rather than its records.
+
+    Separate from the report above because it is drawn from a separate file: a
+    queue can be reported on when the call records are absent, and the records
+    can be reported on when no queue has ever been configured.
+    """
+    try:
+        window = reports.resolve_window(
+            request.query.get("window", "last-seven-days"),
+            request.query.get("from", ""),
+            request.query.get("to", ""),
+        )
+    except reports.ReportRefused as error:
+        return Response.error(422, str(error))
+
+    if not context.queue_log.available():
+        return Response.json(reports.queue_unavailable(
+            "the telephony engine is not writing a queue log on this machine; "
+            "the call records above cannot answer how long anybody waited or "
+            "how many callers gave up, because they do not record it"
+        ))
+
+    events, truncated = context.queue_log.sweep()
+    document = context.store.load()
+    return Response.json(reports.build_queue_report(
+        events, window, queues=document.get("queues") or [], truncated=truncated
     ))
 
 
@@ -1223,21 +1259,42 @@ def _report_export(context: Any, request: Request) -> Response:
     except reports.ReportRefused as error:
         return Response.error(422, str(error))
 
-    if not calls.available():
-        return Response.error(
-            409, "there are no call records on this machine to export"
-        )
-
-    records, truncated = calls.sweep()
     breakdown = (request.query.get("breakdown", "") or "").strip()
 
+    # A queue export reads the queue log, not the call records, so it must not
+    # be refused because the records are absent. The two files are independent
+    # everywhere else and were independent here in every branch but this one.
+    if breakdown.startswith("queue:"):
+        if not context.queue_log.available():
+            return Response.error(
+                409, "there is no queue log on this machine to export"
+            )
+        records, truncated = [], False
+    else:
+        if not calls.available():
+            return Response.error(
+                409, "there are no call records on this machine to export"
+            )
+        records, truncated = calls.sweep()
+
     try:
-        if breakdown in ("", "calls"):
+        if breakdown.startswith("queue:"):
+            events, queue_truncated = context.queue_log.sweep()
+            document = context.store.load()
+            queue_report = reports.build_queue_report(
+                events, window, queues=document.get("queues") or [],
+                truncated=queue_truncated,
+            )
+            payload, name = reports.export_queue_csv(
+                queue_report, breakdown.split(":", 1)[1]
+            )
+        elif breakdown in ("", "calls"):
             payload, name = reports.export_records_csv(records, window)
         else:
             report = reports.build_report(
                 records, window,
                 extensions=settings["extensions"],
+                tariffs=settings["tariffs"],
                 inbound_context=settings["inbound_context"],
                 internal_context=settings["internal_context"],
                 truncated=truncated,

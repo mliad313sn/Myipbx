@@ -26,6 +26,7 @@ def call(
     duration: int = 60,
     talk: int = 45,
     context: str = "internal",
+    application: str = "Dial",
 ) -> dict:
     return {
         "account_code": "",
@@ -33,6 +34,7 @@ def call(
         "destination": destination,
         "context": context,
         "caller_identity": "",
+        "application": application,
         "channel": "",
         "destination_channel": "",
         "started_at": started.strftime("%Y-%m-%d %H:%M:%S"),
@@ -412,6 +414,62 @@ class WhatTheReaderHandsTheReportTests(unittest.TestCase):
     def test_an_absent_file_sweeps_to_nothing_rather_than_raising(self) -> None:
         reader = CallRecordReader(path="nowhere.csv", root=self.workspace.name)
         self.assertEqual(reader.sweep(), ([], False))
+
+
+class WhatEndedInAMailboxTests(unittest.TestCase):
+    """A call that rang out and a call that left a message are both unanswered.
+
+    They are not the same thing -- one reached somebody's attention and the
+    other did not -- and the only place the difference survives is the last
+    application the engine ran.
+    """
+
+    def setUp(self) -> None:
+        base = NOW - timedelta(days=1)
+        self.records = [
+            call(base, source="+441632960111", destination="201",
+                 context="from-trunk", disposition="NO ANSWER", talk=0,
+                 application="VoiceMail"),
+            call(base + timedelta(minutes=1), source="+441632960111",
+                 destination="201", context="from-trunk",
+                 disposition="NO ANSWER", talk=0, application="Dial"),
+        ]
+        self.report = report_over(self.records)
+
+    def test_only_the_call_that_reached_a_mailbox_is_counted(self) -> None:
+        self.assertEqual(self.report["summary"]["voicemail"]["count"], 1)
+        self.assertEqual(self.report["summary"]["missed"]["count"], 2)
+
+    def test_the_extension_carries_its_own_count(self) -> None:
+        rows = {row["key"]: row for row in self.report["breakdowns"]["by_extension"]}
+        self.assertEqual(rows["201"]["figures"]["voicemail"]["count"], 1)
+
+    def test_the_application_is_matched_however_the_engine_capitalised_it(self) -> None:
+        odd = call(NOW - timedelta(days=1), destination="201",
+                   context="from-trunk", disposition="NO ANSWER", talk=0,
+                   application="voicemail")
+        self.assertEqual(report_over([odd])["summary"]["voicemail"]["count"], 1)
+
+    def test_an_answered_call_is_never_counted_as_a_message(self) -> None:
+        answered = call(NOW - timedelta(days=1), destination="201",
+                        context="from-trunk", application="Dial")
+        self.assertEqual(report_over([answered])["summary"]["voicemail"]["count"], 0)
+
+    def test_the_reader_carries_the_application_through_from_the_file(self) -> None:
+        """Which is the field this whole count rests on."""
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as workspace:
+            path = Path(workspace) / "Master.csv"
+            path.write_text(
+                '"","+441632960111","201","from-trunk","+441632960111",'
+                '"PJSIP/carrier","PJSIP/201","VoiceMail","201@default,u",'
+                '"2026-07-27 09:00:00","","2026-07-27 09:00:30",'
+                '"30","0","NO ANSWER","3","1753600000.1",""\n',
+                encoding="utf-8",
+            )
+            reader = CallRecordReader(path="Master.csv", root=workspace)
+            self.assertEqual(reader.sweep()[0][0]["application"], "VoiceMail")
 
 
 if __name__ == "__main__":

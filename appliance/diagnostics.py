@@ -368,6 +368,10 @@ class CallRecordReader:
             "destination": record.get("destination", "").strip(),
             "context": record.get("context", "").strip(),
             "caller_identity": record.get("caller_identity", "").strip(),
+            # The last application the engine ran on this call, which is how a
+            # call that ended in a mailbox is told apart from one that simply
+            # rang out: both are recorded as unanswered.
+            "application": record.get("application", "").strip(),
             "channel": record.get("channel", "").strip(),
             "destination_channel": record.get("destination_channel", "").strip(),
             "started_at": record.get("started_at", "").strip(),
