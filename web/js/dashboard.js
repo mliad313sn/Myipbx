@@ -34,7 +34,11 @@
         /* Nothing until the first reading arrives, so that a console opened
          * after a dashboard was shed does not announce it as though it had
          * just happened. */
-        shedDashboards: null
+        shedDashboards: null,
+        /* The control the operator is on, so a redraw can put them back on it.
+         * Held from the moment they arrive rather than read off the document
+         * once something has already taken it away. */
+        focusKey: null
     };
 
     var nodes = {};
@@ -302,6 +306,10 @@
         if (!appliance) {
             return;
         }
+        preservingFocus(function () { renderStateTables(appliance); });
+    }
+
+    function renderStateTables(appliance) {
 
         /* Zero and unknown are not the same reading, and on this tile the
          * difference is the whole message.
@@ -364,14 +372,33 @@
      * a trunk that was deleted -- has no key to return to, and focus is left
      * where the browser put it rather than moved somewhere arbitrary. */
     function preservingFocus(redraw) {
-        var active = document.activeElement;
-        var key = active && active.getAttribute
-            ? active.getAttribute('data-focus-key')
-            : null;
-
+        /* The key is remembered when the operator focuses the control, not
+         * read off the document here.
+         *
+         * Reading it here was almost right and failed about one run in three.
+         * A single redraw that is not wrapped -- the channel table, the
+         * hardware panel, anything drawn before the alarms in the same tick --
+         * drops focus to the document body first, and by the time a wrapped
+         * redraw looks, there is no key left to remember. Holding the key from
+         * the moment it was focused means any wrapped redraw can put it back,
+         * whichever one broke it. */
         redraw();
+        restoreFocusKey();
+    }
 
+    function restoreFocusKey() {
+        var key = state.focusKey;
         if (!key) {
+            return;
+        }
+        var active = document.activeElement;
+        if (active && active.getAttribute &&
+            active.getAttribute('data-focus-key') === key) {
+            return;
+        }
+        /* Only repair a focus that fell to nowhere. If the operator has moved
+         * to something else, that is their doing and must not be undone. */
+        if (active && active !== document.body) {
             return;
         }
         var escaped = window.CSS && CSS.escape
@@ -381,6 +408,26 @@
         if (restored && typeof restored.focus === 'function') {
             restored.focus();
         }
+    }
+
+    /* What the operator is on, remembered as they arrive rather than looked up
+     * after something has already taken it away. */
+    function watchFocus() {
+        document.addEventListener('focusin', function (event) {
+            var target = event.target;
+            var key = target && target.getAttribute
+                ? target.getAttribute('data-focus-key')
+                : null;
+            /* A move to something unkeyed is a deliberate move away, and
+             * clears the memory so nothing drags them back. A move to the body
+             * is not deliberate -- it is what happens when the thing they were
+             * on stopped existing -- so the memory survives it. */
+            if (key) {
+                state.focusKey = key;
+            } else if (target && target !== document.body) {
+                state.focusKey = null;
+            }
+        });
     }
 
     /* A figure the appliance cannot currently read.
@@ -504,7 +551,7 @@
         preservingFocus(function () { renderAlarmList(alarms); });
     }
 
-    function renderAlarmList(alarms) {
+    function renderAlarmList(alarms) {  // eslint-disable-line no-unused-vars
         clear(nodes.alarmList);
         if (!alarms.length) {
             nodes.alarmPanel.hidden = true;
@@ -1914,6 +1961,7 @@
 
     function start() {
         bind();
+        watchFocus();
         wireSocket();
         wireControls();
 
