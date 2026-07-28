@@ -259,6 +259,28 @@ _emit() {
     fi
 }
 
+# A command line, logged as the thing a person would retype.
+#
+# Everything else this library prints is prose, and prose spells its
+# quantities. A command is not prose: it is a line a technician copies, and
+# spelling it produces "sgdisk --new=1:0:+one M --typecode=one:ef zero two",
+# which cannot be run and cannot even be checked by eye against what the
+# installer means to do. The whole line is an identifier, in exactly the sense
+# the shared rule already grants to a file mode or a port.
+#
+# The rehearsal exists so that a technician can read what is about to happen to
+# their disk before it happens. A rehearsal they cannot read is not a rehearsal.
+log_command() {
+    local stamp
+    stamp="$(spell_all "$(date -u '+%Y-%m-%d %H:%M:%S')")"
+    local line="${stamp} information $*"
+
+    printf '%s\n' "${line}"
+    if [[ -w "$(dirname "${APPLIANCE_INSTALL_LOG}")" ]] 2>/dev/null; then
+        printf '%s\n' "${line}" >>"${APPLIANCE_INSTALL_LOG}" 2>/dev/null || true
+    fi
+}
+
 log_info()  { _emit "information" "$@"; }
 log_warn()  { _emit "warning" "$@"; }
 log_error() { _emit "error" "$@" >&2; }
@@ -318,10 +340,10 @@ is_rehearsal() {
 
 run_command() {
     if is_rehearsal; then
-        log_info "rehearsal: would run: $*"
+        log_command "rehearsal: would run: $*"
         return 0
     fi
-    log_info "running: $*"
+    log_command "running: $*"
     "$@"
 }
 

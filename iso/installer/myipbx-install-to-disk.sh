@@ -122,6 +122,12 @@ usage: myipbx-install-to-disk.sh --disk DEVICE [options]
   --dry-run       report every step and write nothing at all
   --help          show this message
 
+environment:
+  MYIPBX_LIVE_DISK  the disk the live medium is on, for the rare medium whose
+                    device this script cannot identify by itself. it refuses to
+                    install rather than guess, because guessing wrong destroys
+                    the medium it is reading from partway through.
+
 this installs the appliance that is running from the live medium onto a fixed
 disk. everything on that disk is destroyed. the disk is partitioned so that the
 installed appliance starts on an older machine and on a modern one alike, and
@@ -194,7 +200,7 @@ assert_target_is_mounted() {
 # tools against the target's own tree, not by this machine's.
 in_target() {
     if is_rehearsal; then
-        log_info "rehearsal: would run inside the installed system: $*"
+        log_command "rehearsal: would run inside the installed system: $*"
         return 0
     fi
     chroot "${TARGET_MOUNT}" /usr/bin/env \
@@ -318,6 +324,21 @@ assert_running_from_live_image() {
         LIVE_MEDIUM_DISK="$(disk_of_device "${source}")"
         log_info "the live medium is the device ${source} on the disk ${LIVE_MEDIUM_DISK}"
     else
+        # Not a warning. This is the input to the check that stops this script
+        # repartitioning the disk it is itself running from, and without it
+        # that check does nothing at all -- it is written as "if the live disk
+        # is known and the target is it, refuse", so an unknown live disk
+        # silently disables it. A medium on an overlay, a loop device, or a
+        # network mount all reach this branch.
+        #
+        # The consequence of continuing is that the installer removes the
+        # running system from under itself and destroys the medium it is
+        # reading from, which is not something to risk on a warning nobody
+        # reads among thirty other lines. An operator who knows the target is a
+        # different disk can say so.
+        # Not a warning. This is the input to the check that stops this script
+        # repartitioning the disk it is itself running from, and the refusal
+        # that follows from it is raised where that check is made.
         log_warn "the disk the live medium sits on could not be identified by name"
     fi
 }
@@ -325,14 +346,16 @@ assert_running_from_live_image() {
 assert_disk_is_safe() {
     log_step "examining the disk the installation was pointed at"
 
+    # The fault and the action stay on one line. A refusal quoted on its own --
+    # into a ticket, a message, a photograph of a screen -- has to carry the
+    # way out with it, or the technician is left exactly where they were.
     if [[ -z "${TARGET_DISK}" ]]; then
-        log_error "no disk was named"
-        log_error "name the disk to install onto with the disk option, for example /dev/sda"
+        log_error "no disk was named; name the disk to install onto with the disk option, for example --disk /dev/sda, then run this again"
         exit 2
     fi
 
     if [[ "${TARGET_DISK}" != /dev/* ]]; then
-        fail "the disk must be named by its device path, and ${TARGET_DISK} is not one"
+        fail "the disk must be named by its device path, and ${TARGET_DISK} is not one; name it as it appears under /dev, for example /dev/sda, which the command lsblk will list for you"
     fi
 
     if [[ ! -b "${TARGET_DISK}" ]]; then
@@ -351,8 +374,28 @@ assert_disk_is_safe() {
     # The disk the appliance is running from cannot also be the disk it is
     # installed onto. Repartitioning it would remove the running system from
     # under the very script doing the removing.
-    if [[ -n "${LIVE_MEDIUM_DISK}" && "${TARGET_DISK}" == "${LIVE_MEDIUM_DISK}" ]]; then
-        guard "the disk ${TARGET_DISK} is the one the live medium is on, and it will not be touched"
+    # An operator who knows where the medium is can say so. The override sits
+    # here, beside the check it unblocks, rather than beside the detection --
+    # a detection that never ran, on a machine with no medium mounted at all,
+    # would otherwise skip past it.
+    if [[ -z "${LIVE_MEDIUM_DISK}" && -n "${MYIPBX_LIVE_DISK:-}" ]]; then
+        LIVE_MEDIUM_DISK="${MYIPBX_LIVE_DISK}"
+        log_warn "proceeding on your word that the live medium is on the disk ${LIVE_MEDIUM_DISK}"
+    fi
+
+    # Written so that an unknown live disk refuses rather than passes.
+    #
+    # The earlier form asked "is the live disk known and equal to the target",
+    # which reads as a safety check and is not one: a medium whose device could
+    # not be named -- an overlay, a loop device, a network mount -- made the
+    # first half false and turned the whole check off. The script logged a
+    # warning among thirty other lines and would have repartitioned the disk it
+    # was reading itself from, partway through reading it. Stated positively,
+    # an unknown live disk is a refusal.
+    if [[ -z "${LIVE_MEDIUM_DISK}" ]]; then
+        guard "the live medium's disk is not known, so the disk ${TARGET_DISK} cannot be shown to be a different disk from the one this script is running from, and installing onto that one would destroy the medium partway through; set the variable named MYIPBX_LIVE_DISK to the live medium's disk, for example /dev/sdb, then run this again"
+    elif [[ "${TARGET_DISK}" == "${LIVE_MEDIUM_DISK}" ]]; then
+        guard "the disk ${TARGET_DISK} is the one the live medium is on, and it will not be touched; name a different disk, which the command lsblk will list for you, then run this again"
     fi
 
     # Anything mounted from this disk is in use by something, and something in
