@@ -73,14 +73,49 @@
         }).slice(0, 6);
     }
 
-    function buildTable(spec, records, handlers) {
+    /* Options, all optional:
+     *   sortField, sortDirection  which column the caller has sorted by
+     *   onSort(fieldName)         called when a heading is chosen
+     *   emptyMessage              what to say when there are no rows, which is
+     *                             not the same sentence when a filter hid them
+     *                             as when none were ever configured
+     *
+     * The sorting itself is the caller's, not this function's. A table that
+     * sorted its own copy of the records would disagree with the file the
+     * caller exports from the same list, and the two are read side by side. */
+    function buildTable(spec, records, handlers, options) {
+        options = options || {};
         var table = element('table', 'grid');
         var head = element('thead');
         var headRow = element('tr');
         var columns = columnsFor(spec);
 
         columns.forEach(function (field) {
-            headRow.appendChild(element('th', null, field.label));
+            var heading = element('th');
+            if (options.onSort) {
+                /* A real button, so it is reached by Tab, pressed by Enter and
+                 * by Space, and announced as something that can be operated.
+                 * A heading with a click handler is none of those. */
+                var control = element('button', 'column-sort');
+                control.type = 'button';
+                control.appendChild(element('span', null, field.label));
+                var sorted = options.sortField === field.name;
+                heading.setAttribute('aria-sort', sorted ? options.sortDirection : 'none');
+                if (sorted) {
+                    control.classList.add('is-sorted');
+                    control.appendChild(element(
+                        'span', 'sort-mark',
+                        options.sortDirection === 'ascending' ? '\u25B2' : '\u25BC'
+                    ));
+                }
+                control.addEventListener('click', function () {
+                    options.onSort(field.name);
+                });
+                heading.appendChild(control);
+            } else {
+                heading.textContent = field.label;
+            }
+            headRow.appendChild(heading);
         });
         headRow.appendChild(element('th', null, 'actions'));
         head.appendChild(headRow);
@@ -89,7 +124,8 @@
         var body = element('tbody');
         if (!records.length) {
             var emptyRow = element('tr', 'empty');
-            var emptyCell = element('td', null, 'no ' + spec.plural + ' are configured yet');
+            var emptyCell = element('td', null,
+                options.emptyMessage || ('no ' + spec.plural + ' are configured yet'));
             emptyCell.setAttribute('colspan', String(columns.length + 1));
             emptyRow.appendChild(emptyCell);
             body.appendChild(emptyRow);

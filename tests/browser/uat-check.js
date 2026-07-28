@@ -412,7 +412,7 @@ const CONTRAST_HELPERS = `
         await page.waitForSelector('#view-extensions', { state: 'visible', timeout: 15000 });
         await page.waitForTimeout(400);
 
-        const addButton = await page.$('#view-extensions button:has-text("add extension")');
+        const addButton = await page.$('#view-extensions button[data-role="add"]');
         if (!addButton) {
             finding('high', 'No way to create an extension from the console',
                 'The extensions section offers no create control, so the claim that every ' +

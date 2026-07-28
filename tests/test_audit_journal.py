@@ -273,7 +273,9 @@ def _routes(router: object) -> list[tuple[str, str, object]]:
     found: list[tuple[str, str, object]] = []
     for (method, path), handler in getattr(router, "_routes", {}).items():
         found.append((str(method).upper(), str(path), handler))
-    for method, segments, handler in getattr(router, "_patterns", []):
+    # The leading value is how many segments the route names outright, which
+    # is what decides which of two matching routes wins.
+    for _, method, segments, handler in getattr(router, "_patterns", []):
         found.append((str(method).upper(), "/" + "/".join(segments), handler))
     return found
 

@@ -130,7 +130,7 @@ const VIEWS = [
         await page.click('.nav-item[data-view="extensions"]');
         await page.waitForSelector('#view-extensions', { state: 'visible' });
         await page.waitForTimeout(400);
-        await page.click('#view-extensions button:has-text("add extension")');
+        await page.click('#view-extensions button[data-role="add"]');
         await page.waitForSelector('#form-holder-extensions form', { state: 'visible', timeout: 10000 });
 
         // First submit a value the appliance must refuse, to prove the

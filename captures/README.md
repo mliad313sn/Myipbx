@@ -73,7 +73,7 @@ packages are from the original bootstrap.
 
 ## `console/` — setting up the IPBX through the interface
 
-Thirty-eight screenshots of a real browser driving a real appliance from an
+Forty-three screenshots of a real browser driving a real appliance from an
 empty configuration to a working telephone system: sign in, look at the
 hardware, add extensions, declare a trunk, route calls in and out, build a ring
 group, a menu, a queue, a conference and a time condition, then the firewall,
@@ -82,14 +82,23 @@ for itself and the constraint audit.
 
 `captures.json` carries a caption for each file.
 
+Four of them are the **reports** section, drawn from a real call record file the
+appliance under test was given — a week of calls with a working day's shape —
+and aggregated through the same reader the call history uses. The summary, the
+hour-of-day distribution, the per-extension breakdown, and the period control
+with its two date boxes.
+
 The last five are the same console under different conditions rather than
 different pages: the dark theme, the high contrast theme, both together as a
 low-vision operator would have them, the console at telephone width, and a
 confirmation dialogue holding focus.
 
-Two defects were found by taking these and fixed before the set was kept: every
-form said *"add a extension"*, and the action buttons in tables inherited a
-margin meant for form buttons, which doubled the height of every row.
+Three defects were found by taking these and fixed before the set was kept:
+every form said *"add a extension"*; the action buttons in tables inherited a
+margin meant for form buttons, which doubled the height of every row; and the
+capture script found the "add" button by the words on it, which after the
+sortable headings landed went and clicked the column headed *carrier address*
+instead. The buttons are named for what they do now.
 
 ## How to take them again
 
@@ -97,6 +106,6 @@ margin meant for form buttons, which doubled the height of every row.
     python3 tools/capture-boot.py           # boots the image in an emulator, writes captures/boot
 
 The boot capture wants an image; it looks in the build tree's output directory,
-or wherever `MYIPBX_IMAGE` points. Emulation without hardware assistance runs at
+or wherever `CROSSBAR_IMAGE` points. Emulation without hardware assistance runs at
 roughly a fifteenth of real speed, so a full boot takes about a quarter of an
 hour per firmware path.

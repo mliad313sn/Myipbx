@@ -60,6 +60,7 @@
       <button type="button" class="nav-item" data-view="overview">overview</button>
       <button type="button" class="nav-item" data-view="calls">live calls</button>
       <button type="button" class="nav-item" data-view="history">call history</button>
+      <button type="button" class="nav-item" data-view="reports">reports</button>
       <p class="nav-heading">telephony</p>
       <button type="button" class="nav-item" data-view="extensions">extensions</button>
       <button type="button" class="nav-item" data-view="trunks">trunks</button>
@@ -172,6 +173,49 @@
             <tbody id="history-body"></tbody>
           </table>
         </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <!-- Reports. The window control and the shape of the page are here;
+           every figure inside it is drawn by the script from one request, so
+           that the tiles, the chart and the tables can never disagree about
+           the period they describe. -->
+      <section class="view" id="view-reports" hidden>
+        <section class="panel">
+          <h2>reports</h2>
+          <p class="hint" id="reports-explanation">loading</p>
+
+          <div class="actions report-window">
+            <label for="report-window">period</label>
+            <select id="report-window"></select>
+            <span id="report-dates" class="report-dates" hidden>
+              <label for="report-from">from</label>
+              <input type="date" id="report-from">
+              <label for="report-to">to</label>
+              <input type="date" id="report-to">
+            </span>
+            <button type="button" id="report-refresh">show</button>
+            <button type="button" id="report-download-calls">download the calls</button>
+          </div>
+
+          <p class="failure" id="report-truncated" hidden></p>
+        </section>
+
+        <section class="panel" id="report-summary-panel" hidden>
+          <h3>the period at a glance</h3>
+          <div class="tiles" id="report-tiles"></div>
+        </section>
+
+        <section class="panel" id="report-chart-panel" hidden>
+          <h3>when the calls came</h3>
+          <p class="hint" id="report-chart-summary"></p>
+          <!-- Drawn from the same figures the table below carries, and
+               described in the paragraph above, so nothing in it is available
+               only to somebody who can see it. -->
+          <div class="chart-holder" id="report-chart"></div>
+        </section>
+
+        <section class="panel" id="report-breakdowns" hidden></section>
       </section>
 
       <!-- one view per kind of telephony object, built from the schema -->

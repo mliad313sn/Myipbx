@@ -871,3 +871,158 @@ button.caution {
 .confirm-box h3 { margin: 0 0 0.5rem; font-size: 1rem; }
 
 .confirm-box p { margin: 0; font-size: 0.89rem; color: var(--ink-soft); }
+
+/* -- reports ------------------------------------------------------------ */
+
+.report-window {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.report-window label {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.report-dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.breakdown {
+  margin-top: 1.75rem;
+}
+
+.breakdown:first-child {
+  margin-top: 0;
+}
+
+.breakdown h3 {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+}
+
+/* The distribution of calls across the day.
+ *
+ * Built from two nested boxes rather than a drawing: the outer bar is how many
+ * calls that hour carried against the busiest hour, and the filled part inside
+ * it is how many of those were answered. The gap between the two is the thing
+ * an operator is actually looking for, and it reads at a glance without
+ * anybody having to compare two separate charts.
+ *
+ * Both readings are also in the sentence above the chart and in the table
+ * below it, so nothing here is available only to somebody who can see it. */
+.chart-holder {
+  overflow-x: auto;
+  padding-top: 0.5rem;
+}
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+  min-width: 34rem;
+  height: 11rem;
+}
+
+.chart-column {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.chart-stack {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  width: 100%;
+  min-height: 0;
+}
+
+.chart-bar {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  /* An hour that carried nothing still draws a hairline, so the row of hours
+   * reads as a row of hours rather than as a gap in the chart. */
+  min-height: 2px;
+  background: var(--mx-background-surface-subtle);
+  border: 1px solid var(--mx-border-default);
+  border-radius: 2px 2px 0 0;
+}
+
+.chart-bar-answered {
+  width: 100%;
+  background: var(--mx-brand-primary);
+  border-radius: 1px 1px 0 0;
+}
+
+.chart-label {
+  padding-top: 0.3rem;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+/* The high contrast theme cannot rely on the fill being distinguishable from
+ * the box around it, so the two are separated by weight as well as colour. */
+[data-theme="high-contrast"] .chart-bar {
+  border-width: 2px;
+}
+
+[data-theme="high-contrast"] .chart-bar-answered {
+  background: var(--mx-brand-text);
+}
+
+/* -- list controls ------------------------------------------------------ */
+
+.list-controls {
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.list-controls .list-count {
+  margin: 0;
+}
+
+/* A column heading that sorts is a button, so it is reached by Tab and pressed
+ * by Enter. It is styled to still read as a heading: the affordance is the
+ * mark that appears when the column is the one in force, not a button shape
+ * repeated across every column of every table. */
+.column-sort {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.column-sort:hover {
+  color: var(--mx-brand-text);
+  text-decoration: underline;
+}
+
+.column-sort:focus-visible {
+  outline: var(--mx-focus-ring-width) solid var(--mx-border-focus);
+  outline-offset: var(--mx-focus-ring-offset);
+}
+
+.column-sort.is-sorted {
+  color: var(--mx-brand-text);
+}
+
+.sort-mark {
+  font-size: 0.7em;
+}

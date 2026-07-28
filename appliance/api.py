@@ -11,10 +11,12 @@ against a synthetic appliance.
 
 from __future__ import annotations
 
+import csv
+import io
 import time
 from typing import Any, Callable
 
-from . import backup, entities, firewall, httpd, numerals, supportbundle, sysops
+from . import backup, entities, firewall, httpd, numerals, reports, supportbundle, sysops
 from . import PRODUCT_FULL_NAME
 from .confstore import DocumentRefused, DriftDetected
 from .httpd import Request, Response, Router
@@ -124,6 +126,17 @@ def build_router(context: Any) -> Router:
     router.get("/api/logs", guard.read(lambda request: _log_catalogue(context)))
     router.get("/api/logs/{key}", guard.read(lambda request: _log_read(context, request)))
     router.get("/api/calls", guard.read(lambda request: _call_records(context, request)))
+
+    # -- reports ------------------------------------------------------------
+    router.get("/api/reports", guard.read(lambda request: _report(context, request)))
+    router.get(
+        "/api/reports/export",
+        guard.read(lambda request: _report_export(context, request)),
+    )
+    router.get(
+        "/api/entities/{kind}/export",
+        guard.read(lambda request: _entities_export(context, request)),
+    )
 
     # -- backup and restore -------------------------------------------------
     router.get("/api/backup", guard.read(lambda request: _backup(context, request)))
@@ -1150,6 +1163,141 @@ def _call_records(context: Any, request: Request) -> Response:
         limit = 100
     return Response.json(
         context.calls.read(limit=limit, search=request.query.get("search", ""))
+    )
+
+
+# -- reports ---------------------------------------------------------------
+
+
+def _report_inputs(context: Any, request: Request) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    """Everything a report needs: the records, the window, and the routing.
+
+    The dialplan contexts come out of the appliance's own configuration rather
+    than being guessed from the records, because the appliance is what wrote
+    them into the engine. A report that decided direction by inspecting numbers
+    would disagree with the routing the moment somebody changed a context, and
+    would go on disagreeing silently.
+    """
+    window = reports.resolve_window(
+        request.query.get("window", "last-seven-days"),
+        request.query.get("from", ""),
+        request.query.get("to", ""),
+    )
+    document = context.store.load()
+    dialplan = document.get("dialplan") or {}
+    settings = {
+        "extensions": document.get("extensions") or [],
+        "inbound_context": str(dialplan.get("inbound_context", "")),
+        "internal_context": str(dialplan.get("internal_context", "")),
+    }
+    return context.calls, window, settings
+
+
+def _report(context: Any, request: Request) -> Response:
+    try:
+        calls, window, settings = _report_inputs(context, request)
+    except reports.ReportRefused as error:
+        return Response.error(422, str(error))
+
+    if not calls.available():
+        return Response.json(reports.unavailable(
+            "the telephony engine is not writing call detail records to a "
+            "comma separated file on this machine; enable that module in the "
+            "engine and reports will fill in from the calls that follow"
+        ))
+
+    records, truncated = calls.sweep()
+    return Response.json(reports.build_report(
+        records, window,
+        extensions=settings["extensions"],
+        inbound_context=settings["inbound_context"],
+        internal_context=settings["internal_context"],
+        truncated=truncated,
+    ))
+
+
+def _report_export(context: Any, request: Request) -> Response:
+    """A report, or the calls behind it, as a file a spreadsheet can open."""
+    try:
+        calls, window, settings = _report_inputs(context, request)
+    except reports.ReportRefused as error:
+        return Response.error(422, str(error))
+
+    if not calls.available():
+        return Response.error(
+            409, "there are no call records on this machine to export"
+        )
+
+    records, truncated = calls.sweep()
+    breakdown = (request.query.get("breakdown", "") or "").strip()
+
+    try:
+        if breakdown in ("", "calls"):
+            payload, name = reports.export_records_csv(records, window)
+        else:
+            report = reports.build_report(
+                records, window,
+                extensions=settings["extensions"],
+                inbound_context=settings["inbound_context"],
+                internal_context=settings["internal_context"],
+                truncated=truncated,
+            )
+            payload, name = reports.export_csv(report, breakdown)
+    except reports.ReportRefused as error:
+        return Response.error(422, str(error))
+
+    _record_export(context, request, "/api/reports/export", f"produced: {name}")
+    return _attachment(payload, name)
+
+
+def _entities_export(context: Any, request: Request) -> Response:
+    """One entity list as a file.
+
+    An administrator asked for "the extension list" was previously expected to
+    read it off the screen. This is the same records the table shows, in the
+    same order, with the schema's own headings.
+    """
+    kind = request.parameter("kind")
+    try:
+        _, store = _entity_context(context)
+        records = store.list(kind)
+    except KeyError as error:
+        return Response.error(404, str(error))
+
+    spec = entities.ENTITY_SPECS[kind]
+    fields = [field for field in spec.fields if field.name != "password"]
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow([field.label for field in fields])
+    for record in records:
+        writer.writerow([_flatten(record.get(field.name, "")) for field in fields])
+
+    name = f"crossbar-{kind.replace('_', '-')}.csv"
+    _record_export(context, request, f"/api/entities/{kind}/export", f"produced: {name}")
+    return _attachment(buffer.getvalue(), name)
+
+
+def _flatten(value: Any) -> str:
+    """One cell. A list becomes a semicolon separated cell rather than a repr."""
+    if isinstance(value, (list, tuple)):
+        return "; ".join(str(item) for item in value)
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, dict):
+        return "; ".join(f"{key}={value[key]}" for key in sorted(value))
+    return "" if value is None else str(value)
+
+
+def _attachment(payload: str, name: str) -> Response:
+    return Response(
+        status=200,
+        body=payload.encode("utf-8"),
+        content_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
     )
 
 

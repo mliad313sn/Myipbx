@@ -50,12 +50,71 @@ DOCUMENT = {
 }
 
 
+#: Calls to report on.
+#:
+#: The reports view is the one screen that says nothing useful about an
+#: appliance which has never carried a call, and a photograph of an empty
+#: report says nothing useful about the reports view. These are written into a
+#: real record file in the engine's own format and read back through the same
+#: reader the console uses, so what is photographed is genuinely aggregated
+#: rather than staged.
+def _call_records() -> str:
+    from datetime import datetime, timedelta
+    import random
+
+    start = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    start -= timedelta(days=6)
+    # Fixed seed, so re-running the capture produces the same report rather
+    # than a differently shaped one every time.
+    chance = random.Random(20260728)
+
+    rows = []
+    for day in range(7):
+        for hour in range(8, 19):
+            # Busier late morning and mid afternoon, quiet over lunch, which is
+            # the shape a real working day has and the shape the chart exists
+            # to show.
+            volume = {8: 2, 9: 5, 10: 7, 11: 6, 12: 2, 13: 2,
+                      14: 6, 15: 7, 16: 5, 17: 3, 18: 1}[hour]
+            for index in range(volume):
+                moment = start + timedelta(days=day, hours=hour - 8,
+                                           minutes=index * 7)
+                inbound = chance.random() < 0.62
+                extension = chance.choice(["201", "202", "203"])
+                outside = "+4416329601" + str(chance.randint(10, 99))
+                answered = chance.random() < 0.78
+                talk = chance.randint(25, 480) if answered else 0
+                ring = chance.randint(4, 22)
+                rows.append(",".join(f'"{value}"' for value in (
+                    "",
+                    outside if inbound else extension,
+                    extension if inbound else outside,
+                    "from-trunk" if inbound else "outbound",
+                    outside if inbound else extension,
+                    "PJSIP/carrier", f"PJSIP/{extension}", "Dial", "",
+                    moment.strftime("%Y-%m-%d %H:%M:%S"),
+                    moment.strftime("%Y-%m-%d %H:%M:%S"),
+                    moment.strftime("%Y-%m-%d %H:%M:%S"),
+                    str(talk + ring), str(talk),
+                    "ANSWERED" if answered else chance.choice(
+                        ["NO ANSWER", "NO ANSWER", "BUSY"]
+                    ),
+                    "3", f"{moment.timestamp():.6f}", "",
+                )))
+    return "\n".join(rows) + "\n"
+
+
 async def main() -> int:
     destination = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "captures" / "console"
     destination.mkdir(parents=True, exist_ok=True)
 
     harness = ApplianceHarness()
     harness.write_document(DOCUMENT)
+
+    records = Path(harness.root) / "Master.csv"
+    records.write_text(_call_records(), encoding="utf-8")
+    harness.config.call_record_file = str(records)
+
     await harness.start()
     try:
         environment = dict(os.environ)

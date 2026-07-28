@@ -353,19 +353,34 @@ class Router:
 
     A path segment written as ``{name}`` matches any single segment and binds
     it as a path parameter on the request.  Exact routes are always preferred
-    over parameterised ones, so a specific path can never be shadowed by a
-    general one registered earlier.
+    over parameterised ones, and among parameterised routes the one naming the
+    most segments outright wins, so a specific path can never be shadowed by a
+    general one however the two were registered.
+
+    That last part was not true when it was first written, and the difference
+    matters: ``/api/entities/{kind}/{key}`` registered first would swallow
+    ``/api/entities/{kind}/export`` registered second, and the export would
+    arrive at the reader for a single record as a request for the record named
+    "export", which does not exist.  Specificity is now decided by the route
+    rather than by the order somebody happened to declare it in.
     """
 
     def __init__(self) -> None:
         self._routes: dict[tuple[str, str], Handler] = {}
-        self._patterns: list[tuple[str, tuple[str, ...], Handler]] = []
+        self._patterns: list[tuple[int, str, tuple[str, ...], Handler]] = []
         self._static_root: Path | None = None
 
     def add(self, method: str, path: str, handler: Handler) -> None:
         if "{" in path:
             segments = tuple(path.strip("/").split("/"))
-            self._patterns.append((method.upper(), segments, handler))
+            literals = sum(
+                0 if segment.startswith("{") and segment.endswith("}") else 1
+                for segment in segments
+            )
+            self._patterns.append((literals, method.upper(), segments, handler))
+            # Most literal first, so resolution asks the most specific route
+            # whether it matches before it asks any more general one.
+            self._patterns.sort(key=lambda entry: -entry[0])
         else:
             self._routes[(method.upper(), path)] = handler
 
@@ -392,7 +407,7 @@ class Router:
             return handler, {}
 
         wanted = tuple(segment for segment in path.strip("/").split("/") if segment != "")
-        for route_method, segments, candidate in self._patterns:
+        for _, route_method, segments, candidate in self._patterns:
             if route_method != method.upper() or len(segments) != len(wanted):
                 continue
             parameters: dict[str, str] = {}
@@ -415,7 +430,7 @@ class Router:
             return True
 
         wanted = tuple(segment for segment in path.strip("/").split("/") if segment != "")
-        for _, segments, _ in self._patterns:
+        for _, _, segments, _ in self._patterns:
             if len(segments) != len(wanted):
                 continue
             for declared, actual in zip(segments, wanted):

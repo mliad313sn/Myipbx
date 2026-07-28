@@ -59,7 +59,7 @@ async function fill(page, kind, values) {
 }
 
 async function createEntity(page, kind, values) {
-    const add = await page.$('#view-' + kind + ' button:has-text("add ")');
+    const add = await page.$('#view-' + kind + ' button[data-role="add"]');
     if (!add) { return false; }
     await add.click();
     await page.waitForSelector('#form-holder-' + kind + ' form', { state: 'visible', timeout: 10000 });
@@ -273,12 +273,55 @@ async function submit(page, kind) {
         await shot(page, 'constraints',
             'The exclusion this product is built around, audited on the running machine rather than asserted.');
     }
+    if (await view(page, 'extensions')) {
+        const filter = await page.$('#filter-extensions');
+        if (filter) {
+            await filter.fill('2');
+            await page.waitForTimeout(300);
+            await shot(page, 'extensions-filtered',
+                'Every list can be searched, sorted by any column, and downloaded. The count says what is being shown against what exists, so a filtered table is never read as the whole list.');
+            await page.locator('#filter-extensions').fill('');
+            await page.waitForTimeout(300);
+        }
+    }
     if (await view(page, 'calls')) {
         await shot(page, 'live-calls',
             'Live call activity. The engine is not connected here, and the section distinguishes that from a quiet system rather than reporting zero.');
     }
     if (await view(page, 'logs')) {
         await shot(page, 'logs', 'The logs, read from the appliance itself, spelled before they reach the page.');
+    }
+
+    // -- reports ---------------------------------------------------------
+    //
+    // The appliance under test has been given a real call record file, so
+    // these are figures aggregated from real records rather than a drawing of
+    // what a report would look like.
+    if (await view(page, 'reports')) {
+        await page.selectOption('#report-window', 'everything');
+        await page.click('#report-refresh');
+        await page.waitForSelector('#report-summary-panel', { state: 'visible', timeout: 15000 });
+        await page.waitForTimeout(600);
+        await shot(page, 'reports-summary',
+            'A period at a glance. Answer rate and average conversation are the two figures the field judges a telephone system on, and the average counts only the calls that were answered.');
+
+        await page.locator('#report-chart').scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        await shot(page, 'reports-distribution',
+            'When the calls came. The outer bar is the hour\'s volume against the busiest hour and the filled part is what was answered, so the gap is the thing being looked for. The same reading is in the sentence above it and in the table below.');
+
+        await page.locator('#report-breakdowns').scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        await shot(page, 'reports-by-extension',
+            'Every extension that took part in a call, whichever end it was on: calls in and out, answered each way, and its own answer rate. Each breakdown downloads as a file.');
+
+        const between = await page.$('#report-window');
+        if (between) {
+            await page.selectOption('#report-window', 'between');
+            await page.waitForTimeout(300);
+            await shot(page, 'reports-between-dates',
+                'The two date boxes appear only for the period that needs them; every other period is named rather than typed, because a typed date is a place to make a mistake a report then presents as a fact.');
+        }
     }
 
     // -- the same console, other ways -----------------------------------

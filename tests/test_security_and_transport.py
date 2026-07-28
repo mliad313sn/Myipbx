@@ -569,5 +569,56 @@ class TaskSchedulerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([task["name"] for task in snapshot["tasks"]], ["one", "two"])
 
 
+class WhichRouteWinsTests(unittest.TestCase):
+    """Specificity has to come from the route, not from the declaration order.
+
+    ``/api/entities/{kind}/{key}`` was declared before
+    ``/api/entities/{kind}/export`` and swallowed it, so an export arrived at
+    the reader for a single record as a request for the record named "export".
+    The route table now asks the most literal pattern first.
+    """
+
+    def _router(self, declare_general_first: bool = True) -> Router:
+        router = Router()
+        general = ("/api/things/{kind}/{key}", lambda request: Response.text("general"))
+        specific = ("/api/things/{kind}/export", lambda request: Response.text("specific"))
+        order = (general, specific) if declare_general_first else (specific, general)
+        for path, handler in order:
+            router.get(path, handler)
+        return router
+
+    def _resolve(self, router: Router, path: str) -> str:
+        found = router.resolve("GET", path)
+        self.assertIsNotNone(found, path)
+        handler, _ = found
+        return asyncio.run(_maybe(handler(None))).body.decode("utf-8")
+
+    def test_the_literal_route_wins_however_it_was_declared(self) -> None:
+        for general_first in (True, False):
+            with self.subTest(general_first=general_first):
+                router = self._router(general_first)
+                self.assertEqual(
+                    self._resolve(router, "/api/things/extensions/export"), "specific"
+                )
+
+    def test_the_general_route_still_serves_everything_else(self) -> None:
+        router = self._router()
+        self.assertEqual(
+            self._resolve(router, "/api/things/extensions/201"), "general"
+        )
+
+    def test_the_parameters_of_the_winning_route_are_bound(self) -> None:
+        router = self._router()
+        handler, parameters = router.resolve("GET", "/api/things/extensions/export")
+        self.assertEqual(parameters, {"kind": "extensions"})
+
+
+async def _maybe(value):
+    """Await a handler's result if it produced one, otherwise pass it back."""
+    if asyncio.iscoroutine(value):
+        return await value
+    return value
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -78,7 +78,19 @@
             var kind = response.headers.get('Content-Type') || '';
             if (kind.indexOf('application/json') === -1) {
                 return response.blob().then(function (blob) {
-                    return { ok: response.ok, status: response.status, blob: blob, payload: {} };
+                    return {
+                        ok: response.ok,
+                        status: response.status,
+                        blob: blob,
+                        /* The appliance already named the file it is sending.
+                         * Reading that name here rather than restating it means
+                         * the two cannot disagree, which they did: a name
+                         * carrying the period a report covers cannot be written
+                         * into the browser at all, because the browser is not
+                         * the thing that decided the period. */
+                        filename: filenameFrom(response.headers.get('Content-Disposition')),
+                        payload: {}
+                    };
                 });
             }
             return response.json().then(function (payload) {
@@ -89,6 +101,42 @@
         });
     }
 
+
+    /* A table wide enough to overflow scrolls inside its own box rather than
+     * taking the whole page sideways with it. The box is focusable and named,
+     * because a region that scrolls but cannot be reached from a keyboard is a
+     * region somebody cannot read the right hand end of. */
+    function makeScrollable(table, label) {
+        var scroller = element('div', 'table-scroll');
+        scroller.setAttribute('tabindex', '0');
+        scroller.setAttribute('role', 'region');
+        scroller.setAttribute('aria-label', label || 'a table');
+        scroller.appendChild(table);
+        return scroller;
+    }
+
+    /* The name the appliance gave the file it is sending, if it gave one. */
+    function filenameFrom(disposition) {
+        var match = /filename="([^"]+)"/.exec(String(disposition || ''));
+        return match ? match[1] : '';
+    }
+
+    /* Put a downloaded file in front of the operator.
+     *
+     * One place, because there are now five things this console downloads and
+     * five copies of this were five chances for one of them to leak an object
+     * address by never revoking it. */
+    function saveBlob(result, fallbackName) {
+        var url = URL.createObjectURL(result.blob);
+        var anchor = element('a');
+        anchor.href = url;
+        anchor.download = result.filename || fallbackName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+        return anchor.download;
+    }
 
     /* The most useful line of a multi line explanation, for somewhere that can
      * only hold one. A toast is six seconds and one line; the full text goes to
@@ -711,6 +759,336 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* reports                                                             */
+    /* ------------------------------------------------------------------ */
+
+    /* The windows the appliance offers, and what to call them here. Held as a
+     * list rather than read from the appliance because the order is a matter
+     * of what an operator reaches for first, which is a question about people
+     * and not about the data. The names themselves are checked against the
+     * appliance by a test, so the two cannot drift apart silently. */
+    var REPORT_WINDOWS = [
+        { name: 'today', label: 'today' },
+        { name: 'yesterday', label: 'yesterday' },
+        { name: 'last-seven-days', label: 'the last seven days' },
+        { name: 'this-month', label: 'this month' },
+        { name: 'last-month', label: 'last month' },
+        { name: 'last-thirty-days', label: 'the last thirty days' },
+        { name: 'everything', label: 'everything on record' },
+        { name: 'between', label: 'between two dates' }
+    ];
+
+    /* Which breakdowns to draw, in the order somebody reads them: the people
+     * first, then where the calls went, then how they went, then time. */
+    var REPORT_BREAKDOWNS = [
+        {
+            key: 'by_extension', heading: 'by extension', columns: 'extension',
+            first: 'extension', second: 'name',
+            hint: 'every extension that took part in a call, whichever end it was on'
+        },
+        {
+            key: 'by_destination', heading: 'most called destinations', columns: 'standard',
+            first: 'number', second: '',
+            hint: 'the numbers dialled most often that are not extensions here'
+        },
+        {
+            key: 'by_trunk', heading: 'by trunk', columns: 'standard',
+            first: 'trunk', second: '',
+            hint: 'the dialplan context each call arrived in or left by'
+        },
+        {
+            key: 'by_disposition', heading: 'by outcome', columns: 'standard',
+            first: 'outcome', second: '',
+            hint: 'what the engine recorded as the end of each call'
+        },
+        {
+            key: 'by_hour', heading: 'by hour of the day', columns: 'standard',
+            first: 'hour', second: '', dropEmpty: true,
+            hint: 'the hours that carried a call, summed across the whole ' +
+                  'period. the chart above shows all twenty-four, including ' +
+                  'the ones that carried nothing'
+        },
+        {
+            key: 'by_day', heading: 'by day', columns: 'standard',
+            first: 'day', second: '',
+            hint: 'one row per day that carried a call'
+        }
+    ];
+
+    /* The tiles, and the order they are read in. */
+    var REPORT_TILES = [
+        { key: 'calls', heading: 'calls', caption: 'answered' },
+        { key: 'answer_ratio', heading: 'answered', caption: null },
+        { key: 'missed', heading: 'missed', caption: null },
+        { key: 'conversation', heading: 'total conversation', caption: null },
+        { key: 'average_conversation', heading: 'average conversation', caption: null },
+        { key: 'longest_call', heading: 'longest call', caption: null },
+        { key: 'average_ring', heading: 'average time to answer', caption: null },
+        { key: 'inbound', heading: 'calls in', caption: null },
+        { key: 'outbound', heading: 'calls out', caption: null },
+        { key: 'internal', heading: 'calls inside', caption: null }
+    ];
+
+    function buildReportWindows() {
+        var select = nodes.reportWindow;
+        if (!select || select.options.length) {
+            return;
+        }
+        REPORT_WINDOWS.forEach(function (window_) {
+            var option = element('option', null, window_.label);
+            option.value = window_.name;
+            select.appendChild(option);
+        });
+        select.value = 'last-seven-days';
+        select.addEventListener('change', reportWindowChanged);
+        reportWindowChanged();
+    }
+
+    /* The two date boxes exist only for the window that needs them. Left on
+     * screen for every window they read as though they narrowed "last month",
+     * which they do not. */
+    function reportWindowChanged() {
+        var chosen = nodes.reportWindow ? nodes.reportWindow.value : '';
+        if (nodes.reportDates) {
+            nodes.reportDates.hidden = chosen !== 'between';
+        }
+    }
+
+    function reportQuery() {
+        var chosen = nodes.reportWindow ? nodes.reportWindow.value : 'last-seven-days';
+        var query = 'window=' + encodeURIComponent(chosen);
+        if (chosen === 'between') {
+            query += '&from=' + encodeURIComponent(nodes.reportFrom.value || '');
+            query += '&to=' + encodeURIComponent(nodes.reportTo.value || '');
+        }
+        return query;
+    }
+
+    function loadReport() {
+        buildReportWindows();
+        return request('/api/reports?' + reportQuery()).then(function (result) {
+            var payload = result.payload || {};
+
+            if (!result.ok) {
+                nodes.reportsExplanation.textContent = numerals.sanitize(
+                    payload.error || 'the report could not be produced'
+                );
+                hideReportPanels();
+                return;
+            }
+            if (!payload.available) {
+                nodes.reportsExplanation.textContent = numerals.sanitize(
+                    payload.explanation || 'there is nothing to report on yet'
+                );
+                hideReportPanels();
+                return;
+            }
+
+            var considered = (payload.considered || {}).text || 'zero';
+            nodes.reportsExplanation.textContent = numerals.sanitize(
+                'drawn from ' + considered + ' calls, ' + payload.window.label
+            );
+
+            nodes.reportTruncated.hidden = !payload.truncated;
+            if (payload.truncated) {
+                nodes.reportTruncated.textContent = numerals.sanitize(payload.truncation_note);
+            }
+
+            renderReportTiles(payload.summary || {});
+            renderReportChart(payload.breakdowns.by_hour || []);
+            renderReportBreakdowns(payload);
+        });
+    }
+
+    function hideReportPanels() {
+        [nodes.reportSummaryPanel, nodes.reportChartPanel, nodes.reportBreakdowns]
+            .forEach(function (panel) {
+                if (panel) { panel.hidden = true; }
+            });
+        if (nodes.reportTruncated) { nodes.reportTruncated.hidden = true; }
+    }
+
+    function renderReportTiles(summary) {
+        var holder = nodes.reportTiles;
+        clear(holder);
+        REPORT_TILES.forEach(function (tile) {
+            var figure = summary[tile.key];
+            if (!figure) { return; }
+            var article = element('article', 'tile');
+            article.appendChild(element('h3', null, tile.heading));
+            article.appendChild(element('p', 'figure', figure.text));
+            if (tile.caption && summary[tile.caption]) {
+                article.appendChild(element(
+                    'p', 'caption', summary[tile.caption].text + ' answered'
+                ));
+            }
+            holder.appendChild(article);
+        });
+        nodes.reportSummaryPanel.hidden = false;
+    }
+
+    /* The distribution of calls across the day, drawn from the same figures the
+     * table below carries.
+     *
+     * Hand built rather than fetched: this appliance loads nothing from
+     * anywhere, so a charting library is not an option, and a chart of
+     * twenty-four bars does not need one. Every bar carries its own reading as
+     * a title and the whole shape is described in the sentence above it, so an
+     * operator who cannot see it is not being given less. */
+    function renderReportChart(hours) {
+        var holder = nodes.reportChart;
+        clear(holder);
+
+        var busiest = null;
+        var total = 0;
+        var tallest = 0;
+        hours.forEach(function (hour) {
+            var calls = hour.figures.calls.count;
+            total += calls;
+            if (calls > tallest) {
+                tallest = calls;
+                busiest = hour;
+            }
+        });
+
+        if (!total) {
+            nodes.reportChartSummary.textContent =
+                'no call was recorded in this period, so there is nothing to draw';
+            nodes.reportChartPanel.hidden = false;
+            return;
+        }
+
+        nodes.reportChartSummary.textContent = numerals.sanitize(
+            'the busiest hour was ' + busiest.label + ', carrying ' +
+            busiest.figures.calls.text + ' calls of ' + count(total) +
+            '. each bar below is one hour of the day, summed across the period.'
+        );
+
+        var chart = element('div', 'chart');
+        chart.setAttribute('role', 'img');
+        chart.setAttribute('aria-label', numerals.sanitize(
+            'calls by hour of the day. the busiest hour was ' + busiest.label +
+            ' with ' + busiest.figures.calls.text + ' calls.'
+        ));
+
+        hours.forEach(function (hour) {
+            var calls = hour.figures.calls.count;
+            var answered = hour.figures.answered.count;
+            var column = element('div', 'chart-column');
+            column.title = numerals.sanitize(
+                hour.label + ': ' + hour.figures.calls.text + ' calls, ' +
+                hour.figures.answered.text + ' answered'
+            );
+
+            var stack = element('div', 'chart-stack');
+            /* Two bars, not one: the height is the calls that came and the
+             * filled part is the calls that were answered, so the gap between
+             * them is the thing an operator is looking for. */
+            var bar = element('div', 'chart-bar');
+            bar.style.height = (tallest ? Math.round((calls / tallest) * 100) : 0) + '%';
+            var filled = element('div', 'chart-bar-answered');
+            filled.style.height = (calls ? Math.round((answered / calls) * 100) : 0) + '%';
+            bar.appendChild(filled);
+            stack.appendChild(bar);
+
+            column.appendChild(stack);
+            column.appendChild(element('span', 'chart-label', hour.key));
+            chart.appendChild(column);
+        });
+
+        holder.appendChild(chart);
+        nodes.reportChartPanel.hidden = false;
+    }
+
+    function renderReportBreakdowns(payload) {
+        var holder = nodes.reportBreakdowns;
+        clear(holder);
+
+        REPORT_BREAKDOWNS.forEach(function (breakdown) {
+            var rows = payload.breakdowns[breakdown.key] || [];
+            var columns = payload.columns[breakdown.columns] || [];
+
+            /* Every hour of the day exists so the chart can draw a row of
+             * hours rather than a row of gaps. In a table, seventeen lines
+             * reading "zero" are noise between the lines that are not. */
+            if (breakdown.dropEmpty) {
+                rows = rows.filter(function (row) {
+                    return row.figures.calls.count > 0;
+                });
+            }
+
+            var section = element('section', 'breakdown');
+            section.appendChild(element('h3', null, breakdown.heading));
+            section.appendChild(element('p', 'hint', breakdown.hint));
+
+            var table = element('table', 'grid');
+            var head = element('thead');
+            var headRow = element('tr');
+            headRow.appendChild(element('th', null, breakdown.first));
+            if (breakdown.second) {
+                headRow.appendChild(element('th', null, breakdown.second));
+            }
+            columns.forEach(function (column) {
+                headRow.appendChild(element('th', null, column.heading));
+            });
+            head.appendChild(headRow);
+            table.appendChild(head);
+
+            var body = element('tbody');
+            if (!rows.length) {
+                emptyRow(body, columns.length + (breakdown.second ? 2 : 1),
+                    'no call in this period falls under this heading');
+            }
+            rows.forEach(function (row) {
+                var line = element('tr');
+                cell(line, row.key);
+                if (breakdown.second) {
+                    cell(line, row.label);
+                }
+                columns.forEach(function (column) {
+                    var figure = row.figures[column.key];
+                    cell(line, figure ? figure.text : '');
+                });
+                body.appendChild(line);
+            });
+            table.appendChild(body);
+            section.appendChild(makeScrollable(table, breakdown.heading));
+
+            var actions = element('div', 'actions');
+            var download = element('button', null, 'download this as a file');
+            download.type = 'button';
+            download.addEventListener('click', function () {
+                downloadReport(breakdown.key);
+            });
+            actions.appendChild(download);
+            section.appendChild(actions);
+
+            holder.appendChild(section);
+        });
+
+        holder.hidden = false;
+    }
+
+    function downloadReport(breakdown) {
+        var query = reportQuery();
+        if (breakdown) {
+            query += '&breakdown=' + encodeURIComponent(breakdown);
+        }
+        return request('/api/reports/export?' + query).then(function (result) {
+            if (!result.ok || !result.blob) {
+                toast(result.payload.error || 'the report could not be exported', 'bad');
+                return;
+            }
+            var name = saveBlob(result, 'crossbar-report.csv');
+            /* Said out loud, because it is a genuine departure from everything
+             * else this console does and somebody opening the file will
+             * otherwise wonder which of the two is wrong. */
+            toast('the file ' + name + ' was downloaded; it carries figures as ' +
+                  'digits rather than words, because a spreadsheet cannot add up a word');
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
     /* who changed what                                                    */
     /* ------------------------------------------------------------------ */
 
@@ -753,12 +1131,7 @@
             });
             table.appendChild(body);
 
-            var scroller = element('div', 'table-scroll');
-            scroller.setAttribute('tabindex', '0');
-            scroller.setAttribute('role', 'region');
-            scroller.setAttribute('aria-label', 'the record of changes');
-            scroller.appendChild(table);
-            holder.appendChild(scroller);
+            holder.appendChild(makeScrollable(table, 'the record of changes'));
         });
     }
 
@@ -802,6 +1175,71 @@
         return renderEntityViewInto(kind, byId('view-' + kind));
     }
 
+    /* How each list is currently being looked at: what has been typed into its
+     * filter box and which column it is sorted by. Held per kind and outside
+     * the render, so that saving an extension redraws the list the operator was
+     * looking at rather than resetting them to the top of an unsorted table
+     * they then have to find their place in again. */
+    var listViews = {};
+
+    function listView(kind) {
+        if (!listViews[kind]) {
+            listViews[kind] = { filter: '', sortField: null, sortDirection: 'ascending' };
+        }
+        return listViews[kind];
+    }
+
+    /* One record against one filter. Every column the table shows is searched,
+     * because an operator typing "reception" does not know or care which field
+     * the word is in. */
+    function recordMatches(spec, record, needle) {
+        if (!needle) {
+            return true;
+        }
+        return spec.fields.some(function (field) {
+            var value = record[field.name];
+            if (value === undefined || value === null || field.kind === 'secret') {
+                return false;
+            }
+            if (Array.isArray(value)) {
+                value = value.join(' ');
+            }
+            return String(value).toLowerCase().indexOf(needle) !== -1;
+        });
+    }
+
+    /* Sorting that puts a number where a person expects it.
+     *
+     * Compared as text, extension two hundred one sorts between twenty and
+     * twenty-one, so a site numbered from one hundred upwards comes out in an
+     * order nobody recognises. Where both values read as numbers they are
+     * compared as numbers; anything else falls back to text, case folded. */
+    function compareValues(left, right) {
+        var leftNumber = Number(left);
+        var rightNumber = Number(right);
+        var bothNumeric = left !== '' && right !== ''
+            && !isNaN(leftNumber) && !isNaN(rightNumber);
+        if (bothNumeric) {
+            return leftNumber - rightNumber;
+        }
+        return String(left).toLowerCase().localeCompare(String(right).toLowerCase());
+    }
+
+    function sortRecords(records, field, direction) {
+        if (!field) {
+            return records;
+        }
+        var sorted = records.slice();
+        sorted.sort(function (left, right) {
+            var value = compareValues(
+                left[field] === undefined || left[field] === null ? '' : left[field],
+                right[field] === undefined || right[field] === null ? '' : right[field]
+            );
+            return direction === 'descending' ? -value : value;
+        });
+        return sorted;
+    }
+
     function renderEntityViewInto(kind, view) {
         var spec = specFor(kind);
         if (!spec || !view) {
@@ -811,31 +1249,116 @@
         return loadReferences().then(function () {
             return request('/api/entities/' + kind);
         }).then(function (result) {
-            clear(view);
-
-            var panel = element('section', 'panel');
-            panel.appendChild(element('h2', null, spec.plural));
-            panel.appendChild(element('p', 'hint', spec.description));
-
             var records = (result.payload && result.payload.records) || [];
-            panel.appendChild(forms.buildTable(spec, records, {
-                edit: function (record) { openEntityForm(kind, record); },
-                remove: function (record) { removeEntity(kind, record); }
-            }));
+            drawEntityView(kind, spec, view, records);
+        });
+    }
 
-            var actions = element('div', 'actions');
-            var add = element('button', null, 'add ' + spec.singular);
-            add.type = 'button';
-            add.addEventListener('click', function () { openEntityForm(kind, null); });
-            actions.appendChild(add);
-            panel.appendChild(actions);
+    function drawEntityView(kind, spec, view, records) {
+        var settings = listView(kind);
+        clear(view);
 
-            view.appendChild(panel);
+        var panel = element('section', 'panel');
+        panel.appendChild(element('h2', null, spec.plural));
+        panel.appendChild(element('p', 'hint', spec.description));
 
-            var holder = element('section', 'panel form-holder');
-            holder.id = 'form-holder-' + kind;
-            holder.hidden = true;
-            view.appendChild(holder);
+        var needle = settings.filter.trim().toLowerCase();
+        var shown = sortRecords(
+            records.filter(function (record) {
+                return recordMatches(spec, record, needle);
+            }),
+            settings.sortField, settings.sortDirection
+        );
+
+        /* The filter, and what it is currently hiding. A table that quietly
+         * shows six of two hundred rows is a table somebody reads as the whole
+         * list and then reports a fault against. */
+        var controls = element('div', 'actions list-controls');
+        var filterLabel = element('label', 'mx-visually-hidden', 'search the ' + spec.plural);
+        filterLabel.setAttribute('for', 'filter-' + kind);
+        var filter = element('input');
+        filter.type = 'search';
+        filter.id = 'filter-' + kind;
+        filter.placeholder = 'search the ' + spec.plural;
+        filter.value = settings.filter;
+        filter.addEventListener('input', function () {
+            settings.filter = filter.value;
+            drawEntityView(kind, spec, view, records);
+            var redrawn = byId('filter-' + kind);
+            if (redrawn) {
+                redrawn.focus();
+                /* Back where they were in what they were typing, not at the
+                 * start of it. */
+                redrawn.setSelectionRange(redrawn.value.length, redrawn.value.length);
+            }
+        });
+        controls.appendChild(filterLabel);
+        controls.appendChild(filter);
+
+        var tally = element('p', 'hint list-count');
+        tally.textContent = numerals.sanitize(
+            shown.length === records.length
+                ? count(records.length) + ' ' + (records.length === 1 ? spec.singular : spec.plural)
+                : 'showing ' + count(shown.length) + ' of ' + count(records.length)
+        );
+        controls.appendChild(tally);
+        panel.appendChild(controls);
+
+        panel.appendChild(forms.buildTable(spec, shown, {
+            edit: function (record) { openEntityForm(kind, record); },
+            remove: function (record) { removeEntity(kind, record); }
+        }, {
+            sortField: settings.sortField,
+            sortDirection: settings.sortDirection,
+            emptyMessage: needle
+                ? 'nothing here matches what was typed'
+                : 'no ' + spec.plural + ' are configured yet',
+            onSort: function (fieldName) {
+                if (settings.sortField === fieldName) {
+                    settings.sortDirection =
+                        settings.sortDirection === 'ascending' ? 'descending' : 'ascending';
+                } else {
+                    settings.sortField = fieldName;
+                    settings.sortDirection = 'ascending';
+                }
+                drawEntityView(kind, spec, view, records);
+            }
+        }));
+
+        var actions = element('div', 'actions');
+        /* Named for what they do rather than found by the words on them.
+         * A test looking for the button whose label contains "add" found the
+         * sortable heading "carrier address" instead, and clicked that. */
+        var add = element('button', null, 'add ' + spec.singular);
+        add.type = 'button';
+        add.dataset.role = 'add';
+        add.addEventListener('click', function () { openEntityForm(kind, null); });
+        actions.appendChild(add);
+
+        var download = element('button', 'secondary', 'download the list');
+        download.type = 'button';
+        download.dataset.role = 'export';
+        download.addEventListener('click', function () { downloadEntities(kind, spec); });
+        actions.appendChild(download);
+
+        panel.appendChild(actions);
+        view.appendChild(panel);
+
+        var holder = element('section', 'panel form-holder');
+        holder.id = 'form-holder-' + kind;
+        holder.hidden = true;
+        view.appendChild(holder);
+    }
+
+    function downloadEntities(kind, spec) {
+        return request('/api/entities/' + kind + '/export').then(function (result) {
+            if (!result.ok || !result.blob) {
+                toast(result.payload.error || 'the list could not be exported', 'bad');
+                return;
+            }
+            var name = saveBlob(result, 'crossbar-' + kind + '.csv');
+            toast('the file ' + name + ' was downloaded; it carries every ' +
+                  spec.singular + ' but no password');
         });
     }
 
@@ -1523,19 +2046,13 @@
                     toast('the backup could not be produced', 'bad');
                     return;
                 }
-                var url = URL.createObjectURL(result.blob);
-                var anchor = element('a');
-                anchor.href = url;
                 /* The file names itself after what is in it, because the
                  * difference matters months later when somebody finds it on a
-                 * share and has to decide what it is. */
-                anchor.download = includeSecrets
+                 * share and has to decide what it is. The appliance chose that
+                 * name; this only offers what arrived. */
+                saveBlob(result, includeSecrets
                     ? 'crossbar-backup-with-secrets.tar.gz'
-                    : 'crossbar-backup.tar.gz';
-                document.body.appendChild(anchor);
-                anchor.click();
-                document.body.removeChild(anchor);
-                URL.revokeObjectURL(url);
+                    : 'crossbar-backup.tar.gz');
                 toast(includeSecrets
                     ? 'the backup was downloaded, and it carries every password in the clear; keep it as you keep a password'
                     : 'the backup was downloaded; it carries no password, so it can be stored wherever is convenient');
@@ -1555,14 +2072,7 @@
                 toast('the support bundle could not be produced', 'bad');
                 return;
             }
-            var url = URL.createObjectURL(result.blob);
-            var anchor = element('a');
-            anchor.href = url;
-            anchor.download = 'crossbar-support.tar.gz';
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-            URL.revokeObjectURL(url);
+            saveBlob(result, 'crossbar-support.tar.gz');
             toast('the support bundle was downloaded; it carries no password, but it does describe this site');
         });
     }
@@ -1674,6 +2184,7 @@
         overview: function () { loadState(); loadTrunks(); },
         calls: function () { loadState(); },
         history: function () { loadHistory(); },
+        reports: function () { loadReport(); },
         extensions: function () { renderEntityView('extensions'); },
         trunks: function () { renderEntityView('trunks'); },
         ring_groups: function () { renderEntityView('ring_groups'); },
@@ -1840,6 +2351,13 @@
             ['channelBody', 'channel-body'], ['trunkBody', 'trunk-body'],
             ['historyBody', 'history-body'], ['historySearch', 'history-search'],
             ['historyExplanation', 'history-explanation'], ['historyRefresh', 'history-refresh'],
+            ['reportsExplanation', 'reports-explanation'], ['reportWindow', 'report-window'],
+            ['reportDates', 'report-dates'], ['reportFrom', 'report-from'],
+            ['reportTo', 'report-to'], ['reportRefresh', 'report-refresh'],
+            ['reportDownloadCalls', 'report-download-calls'], ['reportTiles', 'report-tiles'],
+            ['reportSummaryPanel', 'report-summary-panel'], ['reportChartPanel', 'report-chart-panel'],
+            ['reportChart', 'report-chart'], ['reportChartSummary', 'report-chart-summary'],
+            ['reportBreakdowns', 'report-breakdowns'], ['reportTruncated', 'report-truncated'],
             ['hardwareSummary', 'hardware-summary'], ['cardBody', 'card-body'],
             ['spanBody', 'span-body'], ['hardwareWizard', 'hardware-wizard'],
             ['systemReadings', 'system-readings'], ['interfaceBody', 'interface-body'],
@@ -1886,6 +2404,10 @@
         });
 
         nodes.historyRefresh.addEventListener('click', loadHistory);
+        nodes.reportRefresh.addEventListener('click', loadReport);
+        nodes.reportDownloadCalls.addEventListener('click', function () {
+            downloadReport('');
+        });
         nodes.renderButton.addEventListener('click', function () { renderConfiguration(false); });
         nodes.renderForceButton.addEventListener('click', function () {
             confirmAction('regenerate over local edits',

@@ -330,6 +330,86 @@ class CallRecordReader:
             "explanation": "",
         }
 
+    #: The most records a single sweep of the file will parse.
+    #:
+    #: A report reads the whole file rather than its tail, and a machine that
+    #: has been carrying calls for years has a large one. This is the ceiling,
+    #: and a sweep that reaches it says so in what it returns rather than
+    #: quietly reporting on part of the period and calling it the period.
+    SWEEP_LIMIT = 500_000
+
+    def parse_raw(self, row: str) -> dict[str, Any] | None:
+        """One record with its values left as the engine wrote them.
+
+        Nothing here is spelled. This is what a report aggregates over and what
+        an exported file carries; the spelling happens on the way to a screen,
+        which is the only place it belongs.
+        """
+        try:
+            values = next(csv.reader(io.StringIO(row)))
+        except (csv.Error, StopIteration):
+            return None
+        if len(values) < 15:
+            return None
+
+        record = dict(zip(self.COLUMNS, values))
+        try:
+            duration = int(record.get("duration") or 0)
+        except ValueError:
+            duration = 0
+        try:
+            billable = int(record.get("billable_seconds") or 0)
+        except ValueError:
+            billable = 0
+
+        return {
+            "account_code": record.get("accountcode", "").strip(),
+            "source": record.get("source", "").strip(),
+            "destination": record.get("destination", "").strip(),
+            "context": record.get("context", "").strip(),
+            "caller_identity": record.get("caller_identity", "").strip(),
+            "channel": record.get("channel", "").strip(),
+            "destination_channel": record.get("destination_channel", "").strip(),
+            "started_at": record.get("started_at", "").strip(),
+            "answered_at": record.get("answered_at", "").strip(),
+            "ended_at": record.get("ended_at", "").strip(),
+            "duration": max(0, duration),
+            "billable_seconds": max(0, billable),
+            "disposition": record.get("disposition", "").strip().upper(),
+            "unique_identifier": record.get("unique_identifier", "").strip(),
+        }
+
+    def sweep(self) -> tuple[list[dict[str, Any]], bool]:
+        """Every record in the file, oldest first, and whether any were left.
+
+        Reports need the whole period, not the tail, so this reads forward
+        through the file rather than backward from its end. The second value is
+        true when the ceiling was reached, which the caller must surface: a
+        report drawn from part of a period and presented as the period is worse
+        than no report.
+        """
+        if not self.available():
+            return [], False
+
+        records: list[dict[str, Any]] = []
+        truncated = False
+        try:
+            with open(self.path, "r", encoding="utf-8", errors="replace") as handle:
+                for row in handle:
+                    if not row.strip():
+                        continue
+                    record = self.parse_raw(row)
+                    if record is None:
+                        continue
+                    records.append(record)
+                    if len(records) >= self.SWEEP_LIMIT:
+                        truncated = True
+                        break
+        except OSError as error:
+            _LOG.error("the call records could not be swept: %s", error)
+            return [], False
+        return records, truncated
+
     def _parse(self, row: str) -> dict[str, Any] | None:
         try:
             values = next(csv.reader(io.StringIO(row)))
