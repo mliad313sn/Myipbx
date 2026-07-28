@@ -125,16 +125,27 @@ run_stage() {
 }
 
 # The staging library spells integers; a duration reads better in units.
+#
+# The unit agrees with the number in front of it. Sidestepping that with
+# "minute or minutes" made every build report read "one minute or minutes and
+# thirty-five seconds", which is not a sentence anybody would say out loud, and
+# these lines are read aloud down a telephone by technicians on site.
 spell_duration_seconds() {
     local total="$1"
     local minutes=$(( total / 60 ))
     local seconds=$(( total % 60 ))
 
+    local minute_unit="minutes"
+    local second_unit="seconds"
+    (( minutes == 1 )) && minute_unit="minute"
+    (( seconds == 1 )) && second_unit="second"
+
     if (( minutes > 0 )); then
-        printf '%s minute or minutes and %s seconds' \
-            "$(spell_integer "${minutes}")" "$(spell_integer "${seconds}")"
+        printf '%s %s and %s %s' \
+            "$(spell_integer "${minutes}")" "${minute_unit}" \
+            "$(spell_integer "${seconds}")" "${second_unit}"
     else
-        printf '%s seconds' "$(spell_integer "${seconds}")"
+        printf '%s %s' "$(spell_integer "${seconds}")" "${second_unit}"
     fi
 }
 

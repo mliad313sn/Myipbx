@@ -345,18 +345,25 @@ configure_boot_message() {
         return 0
     fi
 
-    # Deliberately spelled, because Constraint Two applies to the appliance's
-    # own console as much as to its logs.
-    local spelled_address spelled_port
-    spelled_address="$(spell_all "${APPLIANCE_DEFAULT_ADDRESS}")"
-    spelled_port="$(spell_all "${APPLIANCE_CONSOLE_PORT}")"
+    # Spelled by the sentence, not by the value.
+    #
+    # Constraint Two applies to this screen as much as to the logs, and the
+    # split it is held to says quantities are spelled and identifiers keep
+    # their digits. Spelling each value on its own strips it of the context
+    # that makes it an identifier: the port came out as "eight thousand
+    # eighty-eight", which is precisely the thing the person reading this
+    # screen has to type into a browser and cannot type from that. Spelled as
+    # part of the line, "port number 8088" is recognised for what it is.
+    local address_line port_line
+    address_line="$(spell_all "the address ${APPLIANCE_DEFAULT_ADDRESS}")"
+    port_line="$(spell_all "port number ${APPLIANCE_CONSOLE_PORT}")"
 
     write_into_chroot /etc/issue 0644 <<EOF
 
   ${APPLIANCE_NAME}
 
-  Open a browser at the address ${spelled_address}
-  on port number ${spelled_port}, over a secured connection.
+  Open a browser at ${address_line}
+  on ${port_line}, over a secured connection.
 
   This appliance assigns no addresses. It arrived with the address above
   written into it. Change it from the console once you can reach it.

@@ -81,6 +81,28 @@ APPLIANCE_IMAGE_MARKER="${APPLIANCE_IMAGE_MARKER:-/.disk/appliance-image}"
 # nothing.
 APPLIANCE_KERNEL_ARGUMENTS="${APPLIANCE_KERNEL_ARGUMENTS:-boot=casper hostname=${APPLIANCE_HOST_NAME} console=tty0 console=ttyS0,115200n8}"
 
+# The geometry of the legacy boot menu, which is the first thing anybody sees.
+#
+# The menu is drawn inside a box whose width is the menu width less twice the
+# margin; an entry is four characters narrower again, and an entry inside a
+# nested menu two narrower than that. Anything longer is cut off at the end,
+# and the end of a line is where the useful part tends to be -- at the shipped
+# defaults, eighty wide with a margin of ten, an entry got fifty-six characters
+# and "no power management" arrived as "no power manageme", while the note
+# naming the console lost its port number entirely.
+ISOLINUX_MENU_WIDTH="${ISOLINUX_MENU_WIDTH:-80}"
+ISOLINUX_MENU_MARGIN="${ISOLINUX_MENU_MARGIN:-2}"
+
+# What a line of each kind actually gets, derived rather than restated, so that
+# the test that measures the menu and the stage that writes it cannot disagree.
+isolinux_entry_width() {
+    printf '%s' "$(( ISOLINUX_MENU_WIDTH - 2 * ISOLINUX_MENU_MARGIN - 4 ))"
+}
+
+isolinux_nested_title_width() {
+    printf '%s' "$(( ISOLINUX_MENU_WIDTH - 2 * ISOLINUX_MENU_MARGIN - 6 ))"
+}
+
 # ---------------------------------------------------------------------------
 # Build receipts, so a failed build resumes rather than restarts
 # ---------------------------------------------------------------------------

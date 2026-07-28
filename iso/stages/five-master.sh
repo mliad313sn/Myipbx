@@ -42,16 +42,34 @@ install_legacy_bootloader() {
 
     # The boot menu is written here rather than kept as a template, because it
     # has to carry the address this particular image was built with.
-    local spelled_address spelled_port
-    spelled_address="$(spell_all "${APPLIANCE_DEFAULT_ADDRESS}")"
-    spelled_port="$(spell_all "${APPLIANCE_CONSOLE_PORT}")"
+    # The sentence is spelled, not the values inside it.
+    #
+    # Spelling each value on its own strips it of the context that makes it an
+    # identifier: the port came out as "eight thousand eighty-eight", which is
+    # the one thing on this screen a technician has to type into a browser and
+    # cannot type from that. In the sentence, "port number 8088" is recognised
+    # for what it is and keeps its digits, exactly as it does everywhere else
+    # in the appliance. It is also forty characters shorter, which matters
+    # because the bootloader truncates this line to the width of its box and
+    # was cutting it off at "at port numbe".
+    local boot_note
+    boot_note="$(spell_all "answers on ${APPLIANCE_DEFAULT_ADDRESS} at port number ${APPLIANCE_CONSOLE_PORT}")"
 
+    # The menu is drawn inside a box, and the box is narrower than the screen.
+    # Its width is the menu width less twice the margin, and an entry is four
+    # narrower still; at the shipped defaults -- eighty wide, ten of margin --
+    # an entry gets fifty-six characters and a nested title fifty-four, which
+    # was cutting "no power management" off at "manageme" and taking the port
+    # off the end of the note. A margin of two gives an entry seventy-two and a
+    # nested title seventy, which every line here fits inside with room left.
     cat >"${STAGING_DIR}/isolinux/isolinux.cfg" <<EOF
 UI menu.c32
 PROMPT 0
 TIMEOUT 100
 DEFAULT appliance
 
+MENU WIDTH ${ISOLINUX_MENU_WIDTH}
+MENU MARGIN ${ISOLINUX_MENU_MARGIN}
 MENU TITLE ${APPLIANCE_NAME}
 
 LABEL appliance
@@ -78,7 +96,7 @@ LABEL memtest
 MENU SEPARATOR
 
 MENU BEGIN
-MENU TITLE This appliance answers on ${spelled_address} at port number ${spelled_port}
+MENU TITLE The console ${boot_note}
 MENU END
 EOF
 
@@ -98,9 +116,12 @@ install_firmware_bootloader() {
         return 0
     fi
 
-    # The firmware bootloader carries its own configuration inside itself, so
-    # that it can find the image before anything else is mounted.
-    cat >"${STAGING_DIR}/boot/grub/grub.cfg" <<EOF
+    # The menu, written once and used twice: it is embedded inside the
+    # bootloader itself, which is what actually runs, and left on the image
+    # beside it so that a technician can read what the machine will do.
+    local menu
+    menu="$(
+        cat <<EOF
 set default=0
 set timeout=10
 
@@ -119,22 +140,55 @@ menuentry "Start the appliance, showing every boot message" {
     initrd /casper/initrd
 }
 EOF
+    )"
+    printf '%s\n' "${menu}" >"${STAGING_DIR}/boot/grub/grub.cfg"
 
+    # What the firmware bootloader carries inside itself.
+    #
+    # It finds the image by the marker file and then reads the menu it is
+    # already holding. Two things it must not do, both learned by photographing
+    # a machine that would not start:
+    #
+    # It must not set its own prefix to a directory on the image. A standalone
+    # bootloader keeps its modules in a memory disk inside itself, and the
+    # prefix is how it finds them; pointing the prefix at the image sends it
+    # looking for those modules in a directory that has never contained any,
+    # and the first one it needs -- configfile -- is reported missing and it
+    # stops at a bare prompt. Nothing on the screen says what went wrong.
+    #
+    # And it must not reach for the menu on the image with configfile. The menu
+    # is embedded here, so it is read from memory and cannot be missing, cannot
+    # be unreadable, and does not depend on the filesystem driver for the image
+    # having loaded first.
     local embedded="${BUILD_ROOT}/grub-embedded.cfg"
-    cat >"${embedded}" <<EOF
-search --set=root --file ${APPLIANCE_IMAGE_MARKER}
-set prefix=(\$root)/boot/grub
-configfile /boot/grub/grub.cfg
-EOF
+    {
+        printf 'search --no-floppy --set=root --file %s\n\n' "${APPLIANCE_IMAGE_MARKER}"
+        printf '%s\n' "${menu}"
+    } >"${embedded}"
 
-    grub-mkstandalone \
+    # Named rather than left to the default, so that a change in the builder's
+    # idea of a sensible default cannot quietly remove something the boot needs.
+    local modules="search search_fs_file search_label part_gpt part_msdos"
+    modules="${modules} fat iso9660 udf ext2 normal linux echo test configfile"
+    modules="${modules} all_video video gfxterm gfxterm_background loadenv"
+    modules="${modules} minicmd reboot halt sleep"
+
+    local builder_output="${BUILD_ROOT}/grub-mkstandalone.log"
+    if ! grub-mkstandalone \
         --format=x86_64-efi \
         --output="${STAGING_DIR}/EFI/boot/bootx64.efi" \
         --locales="" \
         --fonts="" \
+        --modules="${modules}" \
         "boot/grub/grub.cfg=${embedded}" \
-        >/dev/null 2>&1 \
-        || { log_warn "the firmware bootloader could not be built"; return 0; }
+        >"${builder_output}" 2>&1
+    then
+        log_error "the firmware bootloader could not be built, and an image without one does not start on a machine that boots by firmware, which is every machine sold for years; the builder reported:"
+        while IFS= read -r builder_line; do
+            log_error "  ${builder_line}"
+        done <"${builder_output}"
+        fail "the firmware boot path could not be installed"
+    fi
 
     # The firmware looks for its bootloader inside a small filesystem image.
     local efi_image="${STAGING_DIR}/boot/grub/efi.img"
@@ -142,11 +196,11 @@ EOF
 
     dd if=/dev/zero of="${efi_image}" bs=1024 count="${blocks}" status=none
     mkfs.vfat -n MYIPBXEFI "${efi_image}" >/dev/null 2>&1 \
-        || { log_warn "the firmware boot image could not be formatted"; rm -f "${efi_image}"; return 0; }
+        || fail "the firmware boot image could not be formatted, and without it the image starts only on a machine old enough to boot by the legacy path"
 
     mmd -i "${efi_image}" ::EFI ::EFI/BOOT >/dev/null 2>&1 || true
     mcopy -i "${efi_image}" "${STAGING_DIR}/EFI/boot/bootx64.efi" ::EFI/BOOT/BOOTX64.EFI \
-        || { log_warn "the firmware bootloader could not be placed"; rm -f "${efi_image}"; return 0; }
+        || fail "the firmware bootloader could not be placed inside the firmware boot image"
 
     log_info "the firmware boot path is installed"
 }
