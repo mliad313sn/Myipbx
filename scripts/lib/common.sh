@@ -343,12 +343,39 @@ is_rehearsal() {
     [[ "${REHEARSAL}" == "yes" || "${REHEARSAL}" == "true" || "${REHEARSAL}" == "1" ]]
 }
 
+# One command line, written so that it can be pasted back into a shell.
+#
+# Joining the arguments with a space loses where each one ended. The disk
+# installer's rehearsal printed
+#
+#   sgdisk --new=1:0:+1M --change-name=1:crossbar legacy boot /dev/vda
+#
+# for a command that was actually given "crossbar legacy boot" as a single
+# argument. Pasted back, that names two extra disks and does something quite
+# different to the one it was pointed at. The rehearsal exists so that somebody
+# can read what is about to happen to their disk before it happens, and a
+# rehearsal whose commands do not mean what they did is not one.
+quote_arguments() {
+    local rendered="" argument
+    for argument in "$@"; do
+        if [[ "${argument}" =~ ^[A-Za-z0-9_@%+=:,./-]+$ ]]; then
+            rendered+="${argument} "
+        else
+            # Single quotes, with any single quote inside them closed, escaped
+            # and reopened -- the only form that survives every other character
+            # a shell would otherwise act on.
+            rendered+="'${argument//\'/\'\\\'\'}' "
+        fi
+    done
+    printf '%s' "${rendered% }"
+}
+
 run_command() {
     if is_rehearsal; then
-        log_command "rehearsal: would run: $*"
+        log_command "rehearsal: would run: $(quote_arguments "$@")"
         return 0
     fi
-    log_command "running: $*"
+    log_command "running: $(quote_arguments "$@")"
     "$@"
 }
 
