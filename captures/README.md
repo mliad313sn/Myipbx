@@ -62,7 +62,9 @@ because they are the reason the captures exist.
   note naming the console lost its port entirely.
 
 `tests/test_first_screens.py` pins all four, and the frames here were taken off
-the image rebuilt with them.
+the image rebuilt with them. They also carry the name: the bootloader menu, the
+login screen and the host name are all Crossbar, and the appliance's own
+services start under that name with nothing failing on the way up.
 
 One thing to be plain about: this machine has no route to a package mirror, so
 the image these frames came from was re-mastered from the existing build tree
