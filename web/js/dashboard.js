@@ -2474,7 +2474,8 @@
         logs: function () { loadLogCatalogue(); },
         journal: function () { loadJournal(); },
         backup: function () {},
-        constraints: function () { loadConstraints(); }
+        constraints: function () { loadConstraints(); },
+        accounts: function () { loadAccounts(); }
     };
 
     /* ------------------------------------------------------------------ */
@@ -2502,14 +2503,205 @@
                 return;
             }
             nodes.password.value = '';
-            enterConsole();
+            /* Where somebody lands is decided by what the appliance said their
+             * account is, not by anything the browser chose. */
+            if ((result.payload || {}).role === 'extension') {
+                enterPortal();
+            } else {
+                enterConsole();
+            }
         });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* the portal, and the accounts that reach it                          */
+    /* ------------------------------------------------------------------ */
+
+    function enterPortal() {
+        nodes.signInPanel.hidden = true;
+        nodes.console.hidden = true;
+        nodes.portal.hidden = false;
+        nodes.signOutButton.hidden = false;
+        /* No socket. The live channel carries the state of the whole
+         * appliance, and an account scoped to one extension has no business
+         * holding one open.
+         *
+         * And so no link indicator either: a lamp reporting a connection this
+         * page deliberately never opens reads as a fault, and the first thing
+         * it would produce is somebody ringing to report one. */
+        nodes.linkState.hidden = true;
+        loadPortal();
+    }
+
+    function loadPortal() {
+        request('/api/portal').then(function (result) {
+            var payload = result.payload || {};
+            nodes.portalHeading.textContent = numerals.sanitize(
+                payload.extension
+                    ? 'extension ' + payload.extension +
+                      (payload.name ? ', ' + payload.name : '')
+                    : 'your extension'
+            );
+            nodes.portalExplanation.textContent = numerals.sanitize(
+                payload.explanation || ''
+            );
+        });
+
+        request('/api/portal/calls').then(function (result) {
+            var payload = result.payload || {};
+            var holder = nodes.portalCalls;
+            clear(holder);
+            nodes.portalCallsExplanation.textContent = numerals.sanitize(
+                payload.available
+                    ? 'showing ' + payload.record_count + ' calls, newest first'
+                    : (payload.explanation || 'there is nothing to show yet')
+            );
+            if (!payload.available) { return; }
+
+            var table = element('table', 'grid');
+            var head = element('thead');
+            var headRow = element('tr');
+            ['when', 'from', 'to', 'duration', 'talk time', 'outcome']
+                .forEach(function (heading) {
+                    headRow.appendChild(element('th', null, heading));
+                });
+            head.appendChild(headRow);
+            table.appendChild(head);
+
+            var body = element('tbody');
+            var records = payload.records || [];
+            if (!records.length) {
+                emptyRow(body, 6, 'no call has been recorded against this extension');
+            }
+            records.forEach(function (record) {
+                var row = element('tr');
+                cell(row, record.started_at);
+                cell(row, record.source);
+                cell(row, record.destination);
+                cell(row, record.duration);
+                cell(row, record.talk_time);
+                cell(row, (record.disposition || '').toLowerCase(),
+                    record.answered ? 'registered' : 'failed');
+                body.appendChild(row);
+            });
+            table.appendChild(body);
+            holder.appendChild(makeScrollable(table, 'your calls'));
+        });
+
+        request('/api/portal/recordings').then(function (result) {
+            var payload = result.payload || {};
+            var holder = nodes.portalRecordings;
+            clear(holder);
+            nodes.portalRecordingsExplanation.textContent = numerals.sanitize(
+                payload.available
+                    ? 'showing ' + payload.record_count + ' recordings, newest first'
+                    : (payload.explanation || 'there is no recording to show')
+            );
+            if (!payload.available || !(payload.records || []).length) { return; }
+
+            var list = element('ul', 'recording-list');
+            payload.records.forEach(function (record) {
+                var item = element('li');
+                item.appendChild(element('span', null,
+                    numerals.sanitize(record.at + ', ') + record.source +
+                    ' to ' + record.destination + ' '));
+                var player = element('audio');
+                player.controls = true;
+                player.preload = 'none';
+                player.src = '/api/portal/recordings/' + encodeURIComponent(record.name);
+                item.appendChild(player);
+                list.appendChild(item);
+            });
+            holder.appendChild(list);
+        });
+    }
+
+    function loadAccounts() {
+        return request('/api/accounts').then(function (result) {
+            var payload = result.payload || {};
+            nodes.accountsExplanation.textContent = numerals.sanitize(
+                payload.explanation || ''
+            );
+
+            var holder = nodes.accountsTable;
+            clear(holder);
+            var table = element('table', 'grid');
+            var head = element('thead');
+            var headRow = element('tr');
+            ['account', 'may read', 'actions'].forEach(function (heading) {
+                headRow.appendChild(element('th', null, heading));
+            });
+            head.appendChild(headRow);
+            table.appendChild(head);
+
+            var body = element('tbody');
+            (payload.accounts || []).forEach(function (account) {
+                var row = element('tr');
+                cell(row, account.username);
+                cell(row, account.role === 'administrator'
+                    ? 'the whole appliance'
+                    : 'the extension numbered ' + account.scope);
+                var actions = element('td', 'actions-cell');
+                if (account.role !== 'administrator') {
+                    var remove = element('button', 'caution', 'delete');
+                    remove.type = 'button';
+                    remove.addEventListener('click', function () {
+                        removeAccount(account.username);
+                    });
+                    actions.appendChild(remove);
+                }
+                row.appendChild(actions);
+                body.appendChild(row);
+            });
+            table.appendChild(body);
+            holder.appendChild(makeScrollable(table, 'accounts'));
+        });
+    }
+
+    function saveAccount(event) {
+        event.preventDefault();
+        request('/api/accounts', {
+            method: 'POST',
+            body: JSON.stringify({
+                username: nodes.accountUsername.value,
+                scope: nodes.accountScope.value,
+                password: nodes.accountPassword.value
+            })
+        }).then(function (result) {
+            if (!result.ok) {
+                toast(result.payload.error || 'the account could not be saved', 'bad');
+                return;
+            }
+            nodes.accountPassword.value = '';
+            toast('the account was saved');
+            loadAccounts();
+        });
+    }
+
+    function removeAccount(username) {
+        confirmAction('delete the account named ' + username,
+            'that person will no longer be able to sign in.')
+            .then(function (answer) {
+                if (!answer) { return; }
+                request('/api/accounts/' + encodeURIComponent(username), {
+                    method: 'DELETE'
+                }).then(function (result) {
+                    if (!result.ok) {
+                        toast(result.payload.error || 'the account could not be deleted', 'bad');
+                        return;
+                    }
+                    toast('the account was deleted');
+                    loadAccounts();
+                });
+            });
     }
 
     function signOut() {
         request('/api/session/end', { method: 'POST' }).then(function () {
             socket.close();
             nodes.console.hidden = true;
+            nodes.portal.hidden = true;
+            nodes.linkState.hidden = false;
             nodes.signOutButton.hidden = true;
             nodes.signInPanel.hidden = false;
             renderLink({ state: 'reconnecting', reason: 'signed out' });
@@ -2518,6 +2710,7 @@
 
     function enterConsole() {
         nodes.signInPanel.hidden = true;
+        nodes.linkState.hidden = false;
         nodes.console.hidden = false;
         nodes.signOutButton.hidden = false;
 
@@ -2638,6 +2831,16 @@
             ['recordingsTable', 'recordings-table'], ['recordingsNote', 'recordings-note'],
             ['snapshotsExplanation', 'snapshots-explanation'],
             ['snapshotsTable', 'snapshots-table'],
+            ['linkState', 'link-state'], ['portal', 'portal'], ['portalHeading', 'portal-heading'],
+            ['portalExplanation', 'portal-explanation'],
+            ['portalCalls', 'portal-calls'],
+            ['portalCallsExplanation', 'portal-calls-explanation'],
+            ['portalRecordings', 'portal-recordings'],
+            ['portalRecordingsExplanation', 'portal-recordings-explanation'],
+            ['accountsExplanation', 'accounts-explanation'],
+            ['accountsTable', 'accounts-table'], ['accountForm', 'account-form'],
+            ['accountUsername', 'account-username'], ['accountScope', 'account-scope'],
+            ['accountPassword', 'account-password'],
             ['hardwareSummary', 'hardware-summary'], ['cardBody', 'card-body'],
             ['spanBody', 'span-body'], ['hardwareWizard', 'hardware-wizard'],
             ['systemReadings', 'system-readings'], ['interfaceBody', 'interface-body'],
@@ -2686,6 +2889,7 @@
         nodes.historyRefresh.addEventListener('click', loadHistory);
         nodes.reportRefresh.addEventListener('click', loadReport);
         nodes.recordingsRefresh.addEventListener('click', loadRecordings);
+        nodes.accountForm.addEventListener('submit', saveAccount);
         nodes.reportDownloadCalls.addEventListener('click', function () {
             downloadReport('');
         });
@@ -2777,7 +2981,15 @@
         }, 1000);
 
         request('/api/session').then(function (result) {
-            if (result.ok && result.payload && result.payload.authenticated) {
+            var payload = (result.ok && result.payload) || {};
+            if (!payload.authenticated) {
+                return;
+            }
+            /* A reload lands where the account belongs, for the same reason a
+             * sign in does: the appliance says which, not the browser. */
+            if (payload.role === 'extension') {
+                enterPortal();
+            } else {
                 enterConsole();
             }
         });

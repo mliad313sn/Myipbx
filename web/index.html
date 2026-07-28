@@ -13,7 +13,7 @@
 </head>
 <body>
 
-<!-- The console offers twenty-seven sections in one column, so a keyboard
+<!-- The console offers twenty-eight sections in one column, so a keyboard
      reaching the page lands in front of all of them. This is the way past. -->
 <a class="mx-skip-link" href="#main-content">skip to the console</a>
 
@@ -54,6 +54,29 @@
     <p class="failure" id="sign-in-failure" hidden></p>
   </section>
 
+  <!-- What an extension's owner gets. A sibling of the console rather than a
+       view inside it: the console's navigation, its live socket and every one
+       of its sections belong to the administrator, and an account that cannot
+       use them should not be given a page that shows them greyed out. -->
+  <div id="portal" class="portal" hidden>
+    <section class="panel">
+      <h2 id="portal-heading">your extension</h2>
+      <p class="hint" id="portal-explanation">loading</p>
+    </section>
+
+    <section class="panel">
+      <h3>your calls</h3>
+      <p class="hint" id="portal-calls-explanation">loading</p>
+      <div id="portal-calls"></div>
+    </section>
+
+    <section class="panel" id="portal-recordings-panel">
+      <h3>your recorded calls</h3>
+      <p class="hint" id="portal-recordings-explanation">loading</p>
+      <div id="portal-recordings"></div>
+    </section>
+  </div>
+
   <div id="console" class="console" hidden>
 
     <nav class="navigation" id="navigation" aria-label="sections">
@@ -85,6 +108,7 @@
       <button type="button" class="nav-item" data-view="logs">logs</button>
       <button type="button" class="nav-item" data-view="journal">who changed what</button>
       <button type="button" class="nav-item" data-view="backup">backup</button>
+      <button type="button" class="nav-item" data-view="accounts">accounts</button>
       <button type="button" class="nav-item" data-view="constraints">constraints</button>
     </nav>
 
@@ -238,6 +262,41 @@
           <p class="hint" id="report-queues-explanation">loading</p>
           <div class="tiles" id="report-queue-tiles" hidden></div>
           <div id="report-queue-breakdowns"></div>
+        </section>
+      </section>
+
+      <!-- ---------------------------------------------------------- -->
+      <!-- Accounts. Credentials are not configuration: they are not in the
+           document, not in a backup, and not in a support bundle. -->
+      <section class="view" id="view-accounts" hidden>
+        <section class="panel">
+          <h2>accounts</h2>
+          <p class="hint" id="accounts-explanation">loading</p>
+          <div id="accounts-table"></div>
+        </section>
+
+        <section class="panel">
+          <h3>give an extension its own sign in</h3>
+          <p class="hint">
+            an extension account reads its own calls and its own recordings and
+            nothing else. it cannot change anything, and it cannot see another
+            extension.
+          </p>
+          <form id="account-form" autocomplete="off">
+            <label for="account-username">account name</label>
+            <input type="text" id="account-username" required autocomplete="off">
+            <label for="account-scope">for the extension numbered</label>
+            <input type="text" id="account-scope" required autocomplete="off"
+                   inputmode="numeric">
+            <label for="account-password">password</label>
+            <input type="password" id="account-password" required
+                   autocomplete="new-password" minlength="12">
+            <p class="hint">
+              at least twelve characters, because this one is reachable from
+              every telephone on the site.
+            </p>
+            <button type="submit">save the account</button>
+          </form>
         </section>
       </section>
 

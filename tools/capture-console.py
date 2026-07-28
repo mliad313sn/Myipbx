@@ -37,6 +37,27 @@ DOCUMENT = {
     "ivr_menus": [],
     "queues": [],
     "conferences": [],
+    # A rate table, so the cost figures in the reports are figures rather than
+    # an absence with an explanation beside it.
+    "tariffs": [
+        {"name": "international", "prefix": "00", "currency": "pounds",
+         "connection_fee": "0.05", "per_minute": "0.18",
+         "increment_seconds": 60, "minimum_seconds": 60, "enabled": True},
+        {"name": "national", "prefix": "0", "currency": "pounds",
+         "connection_fee": "0.02", "per_minute": "0.012",
+         "increment_seconds": 60, "minimum_seconds": 0, "enabled": True},
+        {"name": "everything else", "prefix": "", "currency": "pounds",
+         "connection_fee": "0", "per_minute": "0.09",
+         "increment_seconds": 1, "minimum_seconds": 0, "enabled": True},
+    ],
+    "scheduled_reports": [
+        {"name": "every-morning", "report": "by_extension",
+         "period": "yesterday", "frequency": "daily",
+         "destination": "", "enabled": True},
+        {"name": "the-switchboard-weekly", "report": "queue:by_queue",
+         "period": "last-seven-days", "frequency": "weekly",
+         "destination": "", "enabled": True},
+    ],
     "firewall_rules": [
         {
             "name": "session-protocol",
@@ -104,6 +125,40 @@ def _call_records() -> str:
     return "\n".join(rows) + "\n"
 
 
+def _queue_events() -> str:
+    """A week of a switchboard, in the engine's own queue log format."""
+    from datetime import datetime, timedelta
+    import random
+
+    start = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
+    start -= timedelta(days=6)
+    chance = random.Random(20260729)
+
+    rows = []
+    call = 0
+    for day in range(7):
+        for index in range(28):
+            call += 1
+            moment = start + timedelta(days=day, minutes=index * 17)
+            identifier = f"{moment.timestamp():.6f}"
+            rows.append(f"{int(moment.timestamp())}|{identifier}|700|NONE|"
+                        f"ENTERQUEUE||441632960{chance.randint(100, 199)}|1")
+            if chance.random() < 0.82:
+                waited = chance.randint(2, 55)
+                member = chance.choice(["201", "202", "203"])
+                talked = chance.randint(40, 400)
+                rows.append(f"{int(moment.timestamp()) + waited}|{identifier}|700|"
+                            f"PJSIP/{member}|CONNECT|{waited}|{identifier}|3")
+                rows.append(f"{int(moment.timestamp()) + waited + talked}|{identifier}|"
+                            f"700|PJSIP/{member}|COMPLETEAGENT|{waited}|{talked}|1")
+            else:
+                waited = chance.randint(30, 180)
+                event = chance.choice(["ABANDON", "ABANDON", "EXITWITHTIMEOUT"])
+                rows.append(f"{int(moment.timestamp()) + waited}|{identifier}|700|NONE|"
+                            f"{event}|1|1|{waited}")
+    return "\n".join(rows) + "\n"
+
+
 async def main() -> int:
     destination = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "captures" / "console"
     destination.mkdir(parents=True, exist_ok=True)
@@ -115,7 +170,23 @@ async def main() -> int:
     records.write_text(_call_records(), encoding="utf-8")
     harness.config.call_record_file = str(records)
 
-    await harness.start()
+    # A queue log, so the queue panel shows what a queue report is for rather
+    # than what one looks like with nothing in it.
+    queue_log = Path(harness.root) / "queue_log"
+    queue_log.write_text(_queue_events(), encoding="utf-8")
+    harness.config.queue_log_file = str(queue_log)
+
+    # An extension account, so the portal can be photographed being used by
+    # somebody who is not the administrator.
+    harness_started = await harness.start()
+
+    from appliance.security import CredentialStore, PasswordHasher
+    from tests.support import TEST_ITERATIONS
+
+    CredentialStore(
+        harness.config.credentials_path, PasswordHasher(TEST_ITERATIONS)
+    ).put_account("reception", "a-long-enough-portal-password", "extension", "201")
+    del harness_started
     try:
         environment = dict(os.environ)
         environment.setdefault("NODE_PATH", GLOBAL_MODULES)
@@ -123,6 +194,7 @@ async def main() -> int:
             "node", str(SCRIPT),
             f"http://127.0.0.1:{harness.port}/",
             TEST_USERNAME, TEST_PASSWORD, str(destination),
+            "reception", "a-long-enough-portal-password",
             stdout=None, stderr=None, env=environment, cwd=str(ROOT),
         )
         await asyncio.wait_for(process.wait(), timeout=600)

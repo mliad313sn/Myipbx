@@ -128,47 +128,71 @@
     "caption": "Every list can be searched, sorted by any column, and downloaded. The count says what is being shown against what exists, so a filtered table is never read as the whole list."
   },
   {
-    "file": "33-live-calls.png",
+    "file": "33-tariffs.png",
+    "caption": "The rate table the cost figures come from: a prefix, a currency written as it is said, a connection charge, a rate a minute, and the billing increment. Longest prefix wins; a call no rate covers is reported as unrated, never as free."
+  },
+  {
+    "file": "34-accounts.png",
+    "caption": "Accounts. An extension account reads its own calls and its own recordings and nothing else — an authorisation boundary in the guard every route passes through, not a hidden menu. Credentials are not configuration and are not in the document, a backup, or a support bundle."
+  },
+  {
+    "file": "35-scheduled-reports.png",
+    "caption": "Reports the appliance draws for itself on an interval. Drawing and keeping come first and sending second, so a mail server that is down costs a delivery rather than the report."
+  },
+  {
+    "file": "36-recordings.png",
+    "caption": "Recorded calls, listed from the names of the files themselves so a row and a file cannot come to disagree. Recording is off on every extension until it is turned on, and the console says that in most places a caller has to be told."
+  },
+  {
+    "file": "37-live-calls.png",
     "caption": "Live call activity. The engine is not connected here, and the section distinguishes that from a quiet system rather than reporting zero."
   },
   {
-    "file": "34-logs.png",
+    "file": "38-logs.png",
     "caption": "The logs, read from the appliance itself, spelled before they reach the page."
   },
   {
-    "file": "35-reports-summary.png",
+    "file": "39-reports-summary.png",
     "caption": "A period at a glance. Answer rate and average conversation are the two figures the field judges a telephone system on, and the average counts only the calls that were answered."
   },
   {
-    "file": "36-reports-distribution.png",
+    "file": "40-reports-distribution.png",
     "caption": "When the calls came. The outer bar is the hour's volume against the busiest hour and the filled part is what was answered, so the gap is the thing being looked for. The same reading is in the sentence above it and in the table below."
   },
   {
-    "file": "37-reports-by-extension.png",
+    "file": "41-reports-by-extension.png",
     "caption": "Every extension that took part in a call, whichever end it was on: calls in and out, answered each way, and its own answer rate. Each breakdown downloads as a file."
   },
   {
-    "file": "38-reports-between-dates.png",
+    "file": "42-reports-queues.png",
+    "caption": "Queues, drawn from the engine's queue log rather than its call records: a call that waited four minutes and gave up appears in the records as one unanswered call and nowhere says it waited. Offered, abandoned, the service level against the queue's own promise, and the reasons callers stopped waiting kept apart rather than summed."
+  },
+  {
+    "file": "43-reports-between-dates.png",
     "caption": "The two date boxes appear only for the period that needs them; every other period is named rather than typed, because a typed date is a place to make a mistake a report then presents as a fact."
   },
   {
-    "file": "39-overview-dark.png",
+    "file": "44-portal.png",
+    "caption": "The same appliance signed in to by an extension's owner. Its own calls and its own recordings, and nothing else: the console, its navigation and its live socket all belong to the administrator, and an account that cannot use them is not given a page that shows them greyed out."
+  },
+  {
+    "file": "45-overview-dark.png",
     "caption": "The same overview in the dark theme. Every colour comes from one token layer, and every reading was measured against the ratio it has to meet."
   },
   {
-    "file": "40-overview-high-contrast.png",
+    "file": "46-overview-high-contrast.png",
     "caption": "The same overview in the high contrast theme. Every colour comes from one token layer, and every reading was measured against the ratio it has to meet."
   },
   {
-    "file": "41-overview-system-dark-high-contrast.png",
+    "file": "47-overview-system-dark-high-contrast.png",
     "caption": "What an operator gets when their system asks for dark mode and more contrast together, which is the pairing a low vision operator is most likely to be running."
   },
   {
-    "file": "42-telephone-width.png",
+    "file": "48-telephone-width.png",
     "caption": "The console on a telephone. The page does not scroll sideways; only the table does, inside a box that can be reached from the keyboard."
   },
   {
-    "file": "43-confirmation.png",
+    "file": "49-confirmation.png",
     "caption": "Nothing disruptive happens without being asked. The dialogue takes focus, keeps it, closes on Escape, and gives it back to whatever opened it."
   }
 ]

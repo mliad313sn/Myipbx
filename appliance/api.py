@@ -152,6 +152,31 @@ def build_router(context: Any) -> Router:
         guard.read(lambda request: _scheduled_report(context, request)),
     )
 
+    # -- the portal, which is every account's own corner of the appliance ----
+    #
+    # These are the only routes an extension account may reach, and each of
+    # them reads its scope from the session rather than from the request.
+    router.get("/api/portal", guard.scoped(lambda request: _portal(context, request)))
+    router.get(
+        "/api/portal/calls", guard.scoped(lambda request: _portal_calls(context, request))
+    )
+    router.get(
+        "/api/portal/recordings",
+        guard.scoped(lambda request: _portal_recordings(context, request)),
+    )
+    router.get(
+        "/api/portal/recordings/{name}",
+        guard.scoped(lambda request: _portal_recording(context, request)),
+    )
+
+    # -- accounts, which only the administrator may manage ------------------
+    router.get("/api/accounts", guard.read(lambda request: _accounts(context)))
+    router.post("/api/accounts", guard.write(lambda request: _put_account(context, request)))
+    router.delete(
+        "/api/accounts/{username}",
+        guard.write(lambda request: _remove_account(context, request)),
+    )
+
     # -- recorded calls -----------------------------------------------------
     router.get("/api/recordings", guard.read(lambda request: _recordings(context, request)))
     router.get(
@@ -178,6 +203,34 @@ class _Guard:
         self._context = context
 
     def read(self, handler: Callable[[Request], Any]) -> Callable[[Request], Any]:
+        """A read of the appliance, which only an administrator may make.
+
+        Every route in this console except the handful under the portal shows
+        something about the site as a whole -- other people's extensions, other
+        people's calls, the machine itself -- so the authorisation check is
+        here, in the one place every one of them passes through, rather than
+        being something each handler has to remember. A route that forgets is a
+        route that leaks, and forgetting is the normal way this goes wrong.
+        """
+
+        def wrapped(request: Request) -> Any:
+            refusal = self._authenticate(request)
+            if refusal is not None:
+                return refusal
+            refusal = self._require_administrator(request)
+            return refusal if refusal is not None else handler(request)
+
+        return wrapped
+
+    def scoped(self, handler: Callable[[Request], Any]) -> Callable[[Request], Any]:
+        """A read any signed in account may make, over its own scope only.
+
+        The scope is on the session, put there when the account signed in, and
+        the handler reads it from there. It is never taken from the request:
+        a portal that asked which extension to show would be a portal that
+        showed any of them.
+        """
+
         def wrapped(request: Request) -> Any:
             refusal = self._authenticate(request)
             return refusal if refusal is not None else handler(request)
@@ -198,6 +251,10 @@ class _Guard:
             refusal = self._authenticate(request)
             if refusal is not None:
                 self._record(request, refusal, "refused: no valid session")
+                return refusal
+            refusal = self._require_administrator(request)
+            if refusal is not None:
+                self._record(request, refusal, "refused: this account is scoped")
                 return refusal
             refusal = self._check_origin(request)
             if refusal is not None:
@@ -274,6 +331,17 @@ class _Guard:
         # Attach for handlers that need to know who is acting.
         setattr(request, "session", session)
         return None
+
+    def _require_administrator(self, request: Request) -> Response | None:
+        session = getattr(request, "session", None)
+        if session is not None and getattr(session, "is_administrator", True):
+            return None
+        return Response.error(
+            403,
+            "this account is scoped to one extension and may read only its own "
+            "calls and recordings; sign in as the administrator to change or "
+            "read anything else",
+        )
 
     def _check_origin(self, request: Request) -> Response | None:
         origin = request.header("origin")
@@ -373,6 +441,8 @@ def _session_status(context: Any, request: Request) -> Response:
         {
             "authenticated": session is not None,
             "username": session.username if session else None,
+            "role": session.role if session else None,
+            "scope": session.scope if session else None,
         }
     )
 
@@ -575,7 +645,8 @@ def _sign_in(context: Any, request: Request) -> Response:
     username = str(payload.get("username", ""))
     password = str(payload.get("password", ""))
 
-    if not context.credentials.verify(username, password):
+    account = context.credentials.authenticate(username, password)
+    if account is None:
         locked = context.throttle.record_failure(source)
         _LOG.warning("a sign in attempt from %s was refused", source)
         # A refused attempt is the entry an operator investigating an intrusion
@@ -600,14 +671,19 @@ def _sign_in(context: Any, request: Request) -> Response:
         )
 
     context.throttle.record_success(source)
-    token = context.sessions.create(username, source)
-    _LOG.info("the administrator named %s signed in from %s", username, source)
+    token = context.sessions.create(
+        username, source, role=account["role"], scope=account["scope"]
+    )
+    _LOG.info(
+        "the account named %s signed in from %s with the role %s",
+        username, source, account["role"],
+    )
     _journal(context).record(
         actor=username,
         source=source,
         action="POST",
         target="/api/session",
-        outcome="accepted",
+        outcome=f"accepted, with the role {account['role']}",
     )
 
     attributes = [
@@ -621,7 +697,12 @@ def _sign_in(context: Any, request: Request) -> Response:
         attributes.append("Secure")
 
     return Response.json(
-        {"signed_in": True, "username": username},
+        {
+            "signed_in": True,
+            "username": username,
+            "role": account["role"],
+            "scope": account["scope"],
+        },
         headers={"Set-Cookie": "; ".join(attributes)},
     )
 
@@ -1361,6 +1442,198 @@ def _flatten(value: Any) -> str:
     if isinstance(value, dict):
         return "; ".join(f"{key}={value[key]}" for key in sorted(value))
     return "" if value is None else str(value)
+
+
+# -- the portal ------------------------------------------------------------
+#
+# Every handler below reads its scope from the session. None of them takes an
+# extension from the request, because a portal that asked which extension to
+# show would be a portal that showed any of them.
+
+
+def _scope_of(request: Request) -> str:
+    session = getattr(request, "session", None)
+    if session is None:
+        return ""
+    if getattr(session, "is_administrator", False):
+        # An administrator reaching a portal route sees their own portal, which
+        # is empty, rather than everybody's. The whole appliance is theirs
+        # through every other route; this one is not a second way in.
+        return ""
+    return str(getattr(session, "scope", "") or "")
+
+
+def _portal(context: Any, request: Request) -> Response:
+    """Who this account is, and what it is allowed to see."""
+    session = getattr(request, "session", None)
+    scope = _scope_of(request)
+    document = context.store.load()
+    mine = next(
+        (
+            record for record in document.get("extensions") or []
+            if str(record.get("number", "")).strip() == scope
+        ),
+        None,
+    )
+    return Response.json({
+        "username": getattr(session, "username", ""),
+        "role": getattr(session, "role", ""),
+        "extension": scope,
+        "name": str(mine.get("name", "")) if mine else "",
+        "explanation": (
+            "this account is scoped to one extension: its own calls and its own "
+            "recordings, and nothing else on this appliance"
+        ) if scope else (
+            "this account is not scoped to an extension, so this page has "
+            "nothing of its own to show"
+        ),
+    })
+
+
+def _mine(record: dict[str, Any], scope: str) -> bool:
+    return scope != "" and scope in (
+        str(record.get("source", "")), str(record.get("destination", ""))
+    )
+
+
+def _portal_calls(context: Any, request: Request) -> Response:
+    """This account's own calls, filtered before anything is presented."""
+    scope = _scope_of(request)
+    if not scope or not context.calls.available():
+        return Response.json({
+            "available": False, "records": [], "record_count": "zero",
+            "explanation": "there is nothing recorded against this extension yet",
+        })
+
+    records, _ = context.calls.sweep()
+    mine = [record for record in records if _mine(record, scope)]
+    mine.reverse()
+    mine = mine[:200]
+
+    return Response.json({
+        "available": True,
+        "records": [
+            {
+                "started_at": record.get("started_at", ""),
+                "source": record.get("source", ""),
+                "destination": record.get("destination", ""),
+                "duration": numerals.spell_duration(record.get("duration", 0)),
+                "talk_time": numerals.spell_duration(record.get("billable_seconds", 0)),
+                "disposition": record.get("disposition", ""),
+                "answered": record.get("disposition", "") == "ANSWERED",
+            }
+            for record in mine
+        ],
+        "record_count": numerals.spell_integer(len(mine)),
+        "explanation": "",
+    })
+
+
+def _portal_recordings(context: Any, request: Request) -> Response:
+    scope = _scope_of(request)
+    listing = context.recordings.list()
+    if not scope or not listing.get("available"):
+        return Response.json({
+            "available": False, "records": [], "record_count": "zero",
+            "explanation": "there is no recording of a call to or from this extension",
+        })
+
+    mine = [
+        record for record in listing["records"]
+        if scope in (record.get("source", ""), record.get("destination", ""))
+    ]
+    return Response.json({
+        "available": True,
+        "records": mine,
+        "record_count": numerals.spell_integer(len(mine)),
+        "explanation": "",
+    })
+
+
+def _portal_recording(context: Any, request: Request) -> Response:
+    """One recording, and only if this account was on the call.
+
+    Checked against the recording's own name rather than against a list built
+    a moment earlier, so there is no window between deciding and serving.
+    """
+    scope = _scope_of(request)
+    name = request.parameter("name")
+    described = context.recordings.describe(name, 0)
+
+    if not scope or described is None or scope not in (
+        described["source"], described["destination"]
+    ):
+        # The same refusal whether the recording does not exist or belongs to
+        # somebody else, so the portal cannot be used to learn who spoke to
+        # whom.
+        return Response.error(404, "there is no such recording on this appliance")
+
+    found = context.recordings.read(name)
+    if found is None:
+        return Response.error(404, "there is no such recording on this appliance")
+
+    payload, media_type = found
+    _record_export(context, request, "/api/portal/recordings", f"played: {name}")
+    return Response(
+        status=200,
+        body=payload,
+        content_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{name}"',
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        },
+    )
+
+
+# -- accounts --------------------------------------------------------------
+
+
+def _accounts(context: Any) -> Response:
+    accounts = context.credentials.accounts()
+    return Response.json({
+        "accounts": accounts,
+        "count": numerals.spell_integer(len(accounts)),
+        "explanation": (
+            "an extension account can read its own calls and its own "
+            "recordings and nothing else; the administrator is listed here and "
+            "cannot be changed from this interface"
+        ),
+    })
+
+
+def _put_account(context: Any, request: Request) -> Response:
+    payload = request.json() or {}
+    if not isinstance(payload, dict):
+        return Response.error(400, "the request body must be a mapping")
+
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+    scope = str(payload.get("scope", "")).strip()
+
+    document = context.store.load()
+    numbers = {
+        str(record.get("number", "")).strip()
+        for record in document.get("extensions") or []
+    }
+    if scope not in numbers:
+        return Response.error(
+            422,
+            f"there is no extension numbered {scope} on this appliance; an "
+            "account can only be scoped to an extension that exists",
+        )
+
+    try:
+        context.credentials.put_account(username, password, "extension", scope)
+    except ValueError as error:
+        return Response.error(422, str(error))
+    return Response.json({"username": username, "role": "extension", "scope": scope})
+
+
+def _remove_account(context: Any, request: Request) -> Response:
+    username = request.parameter("username")
+    if not context.credentials.remove_account(username):
+        return Response.error(404, f"there is no account named {username}")
+    return Response.json({"removed": username})
 
 
 # -- scheduled reports -----------------------------------------------------

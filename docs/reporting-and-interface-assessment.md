@@ -170,24 +170,129 @@ typeable keeps a report's figures summable. The screen keeps the words.
 Every entity table now has a filter box, sortable columns and a count of what
 is shown against what exists.
 
-## Part five — where this product remains behind, stated plainly
+## Part five — the six gaps, and what was done about them
 
-- **No call recording, and therefore no recording playback.** FreePBX plays and
-  downloads recordings from the report row **[S1]**. This appliance records
-  nothing, so there is nothing to play. That is a deliberate posture, not an
-  oversight, but it is a real difference and an owner comparing the two will
-  notice it.
-- **No queue or agent reporting.** Calls offered, answered, abandoned, service
-  level, agent talk and pause time. The queue entity exists; the report does
-  not.
-- **No scheduled or emailed reports.** Every report here is pulled by a person
-  looking at a screen.
-- **No voicemail, and so no voicemail column** where FusionPBX has one **[S3]**.
-- **No cost or rating.** No tariff table, no per-call cost.
-- **No per-user portal.** Every account that can see a report can see every
-  report; there is no view scoped to one extension's owner.
+The first version of this document ended with six things this product did not
+have. All six were built. What each one turned out to require is worth
+recording, because in four of the six the interesting part was a refusal rather
+than a feature.
 
-## Part six — one place this diverges on purpose
+### Queue and agent reporting — built
+
+Offered, answered, abandoned, average and longest wait, service level, and a
+per-member breakdown separating *answered* from *rang out*.
+
+Drawn from the engine's **queue log**, which is a different file in a different
+format from the call records, and had to be: a call that waited four minutes and
+gave up appears in the call records as one unanswered call, and nothing in that
+record says it waited. Because it is a different file it is a different request
+and a different availability — a site with queues and no call records still has
+a queue report.
+
+The service level is measured against the queue's **own** agreed number of
+seconds, which is a field on the queue and is written into the engine's
+configuration, so the engine and the report cannot come to disagree about what
+"in time" means. And the reasons callers stopped waiting are kept apart rather
+than summed: a queue nobody is staffing and a queue people give up on are
+different faults with different answers.
+
+### Voicemail in reports — built
+
+A call that rang out and a call that left a message are both recorded as
+unanswered, and they are not the same thing: one reached somebody's attention.
+The only place the difference survives is the last application the engine ran.
+
+### Cost and rating — built
+
+A rate table an operator edits: prefix, currency, connection charge, rate a
+minute, billing increment, minimum. Longest prefix wins; an empty prefix is the
+floor.
+
+Three decisions worth naming:
+
+- **Time is billed in whole increments.** A carrier selling by the minute
+  charges a minute for a call of four seconds; dividing four by sixty would be
+  out by a factor of fifteen on the calls a site makes most of.
+- **Money is `Decimal`, never a floating point number.** A tenth of a penny
+  cannot be represented in binary, and a quarter of a million calls a year is
+  enough for that to show.
+- **A call no rate covers is unrated, never free.** A row whose calls were all
+  unrated reads "not rated" rather than showing a zero, and a rate table naming
+  two currencies produces no cost at all with the reason on screen, because
+  adding two currencies gives a number that is not an amount of anything.
+
+### Call recording and playback — built
+
+Per-extension, off until turned on, and the setting says — where the decision
+is made rather than in a manual — that in most places a caller has to be told.
+The appliance announces nothing itself.
+
+Listing comes from the file names, with no database beside them, so a row in a
+table and a file on disk cannot come to disagree. Serving one is the only route
+in this appliance that hands a file off the disk to a browser, so two
+independent rules both have to hold: the name must match the shape the
+appliance itself writes, and the resolved path, after every symbolic link has
+been followed, must still sit inside the recordings directory. Neither is
+trusted alone, and each is tested against the other's blind spot.
+
+Playing one is written to the audit journal. Retention runs as a task, because
+recording fills a disk faster than anything else here and a telephone system
+that stops taking calls because its disk is full is worse than a recording
+nobody kept.
+
+### Scheduled reports — built
+
+Drawn on a daily, weekly or monthly schedule, kept on the appliance, and sent by
+electronic mail where a destination is named. Two things kept deliberately
+apart:
+
+- **Drawing and keeping come first, sending second**, so a mail server that is
+  down costs a delivery rather than the report.
+- **Due-ness is decided against the calendar, not an elapsed interval.** A
+  weekly report set for a Monday runs on the Monday, once, however many times
+  the appliance restarted over the weekend.
+
+Sending uses the standard library alone, will not send a password over an
+unprotected connection unless that was chosen explicitly, and will not fail the
+task because a server was unreachable.
+
+### Per-user portal — built
+
+An account scoped to one extension: its own calls, its own recordings, and
+nothing else.
+
+This is an authorisation boundary in the guard every route already passes
+through, not a hidden menu — a portal that merely does not draw a link to the
+rest of the appliance is a suggestion. Every administrator route refuses a
+scoped account with a reason. The scope is on the session, put there when the
+account signed in, and is never taken from the request: a portal that asked
+which extension to show would be a portal that showed any of them.
+
+A recording belonging to somebody else is refused exactly as one that does not
+exist is, so the portal cannot be used to learn who spoke to whom. Credentials
+are not configuration: they are hashed, they are not in the document, and they
+are not in a backup or a support bundle.
+
+## Part six — what is still not here
+
+Stated as plainly as the six above were.
+
+- **No pause or wrap-up reporting for members.** Answered and rang out are
+  counted; time spent paused is not, because the appliance does not configure
+  pausing.
+- **No live wallboard.** The queue figures are drawn when the page is asked
+  for; there is no display that updates itself on a wall.
+- **No voicemail retrieval from the console.** Mailboxes are configured and
+  calls that reached one are counted, but the messages themselves are collected
+  from a telephone.
+- **No stereo recording, and no on-demand start and stop.** Recording is a
+  property of an extension, decided before the call.
+- **No currency conversion.** One currency per appliance, enforced by refusing
+  to total two.
+- **The portal is read-only.** Its owner cannot change their own password from
+  it; an administrator sets it.
+
+## Part seven — one place this diverges on purpose
 
 Constraint Two spells quantities in words. A report is almost entirely
 quantities, so a Crossbar report reads "one thousand two hundred forty-three

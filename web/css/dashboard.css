@@ -1039,3 +1039,32 @@ button.caution {
   margin-left: 0.6rem;
   font-size: 0.85rem;
 }
+
+/* -- the portal --------------------------------------------------------- */
+
+/* Deliberately the same panels and the same type as the console. An account
+   scoped to one extension is not being given a lesser product; it is being
+   given the part of it that is theirs. */
+.portal {
+  max-width: 60rem;
+}
+
+.recording-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recording-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.recording-list audio {
+  height: 2.2rem;
+  max-width: 18rem;
+}

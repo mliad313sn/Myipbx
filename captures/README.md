@@ -75,7 +75,7 @@ packages are from the original bootstrap.
 
 ## `console/` — setting up the IPBX through the interface
 
-Forty-three screenshots of a real browser driving a real appliance from an
+Forty-nine screenshots of a real browser driving a real appliance from an
 empty configuration to a working telephone system: sign in, look at the
 hardware, add extensions, declare a trunk, route calls in and out, build a ring
 group, a menu, a queue, a conference and a time condition, then the firewall,
@@ -84,11 +84,17 @@ for itself and the constraint audit.
 
 `captures.json` carries a caption for each file.
 
-Four of them are the **reports** section, drawn from a real call record file the
-appliance under test was given — a week of calls with a working day's shape —
-and aggregated through the same reader the call history uses. The summary, the
-hour-of-day distribution, the per-extension breakdown, and the period control
-with its two date boxes.
+Five of them are the **reports** section, drawn from a real call record file and
+a real queue log the appliance under test was given — a week of calls with a
+working day's shape, and a week of a switchboard — and aggregated through the
+same readers the console uses. The summary, the hour-of-day distribution, the
+per-extension breakdown, the queues, and the period control with its two date
+boxes.
+
+One is the **portal**: the same appliance signed in to by an extension's owner
+rather than the administrator, showing its own calls and nothing else. That is a
+real sign in as a real scoped account, so what is photographed is the
+authorisation boundary working rather than a page with its links hidden.
 
 The last five are the same console under different conditions rather than
 different pages: the dark theme, the high contrast theme, both together as a

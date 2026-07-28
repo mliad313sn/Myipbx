@@ -17,7 +17,8 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-const [, , baseUrl, username, password, outputDirectory] = process.argv;
+const [, , baseUrl, username, password, outputDirectory,
+       portalUsername, portalPassword] = process.argv;
 
 const shots = [];
 let sequence = 0;
@@ -284,6 +285,22 @@ async function submit(page, kind) {
             await page.waitForTimeout(300);
         }
     }
+    if (await view(page, 'tariffs')) {
+        await shot(page, 'tariffs',
+            'The rate table the cost figures come from: a prefix, a currency written as it is said, a connection charge, a rate a minute, and the billing increment. Longest prefix wins; a call no rate covers is reported as unrated, never as free.');
+    }
+    if (await view(page, 'accounts')) {
+        await shot(page, 'accounts',
+            'Accounts. An extension account reads its own calls and its own recordings and nothing else — an authorisation boundary in the guard every route passes through, not a hidden menu. Credentials are not configuration and are not in the document, a backup, or a support bundle.');
+    }
+    if (await view(page, 'scheduled_reports')) {
+        await shot(page, 'scheduled-reports',
+            'Reports the appliance draws for itself on an interval. Drawing and keeping come first and sending second, so a mail server that is down costs a delivery rather than the report.');
+    }
+    if (await view(page, 'recordings')) {
+        await shot(page, 'recordings',
+            'Recorded calls, listed from the names of the files themselves so a row and a file cannot come to disagree. Recording is off on every extension until it is turned on, and the console says that in most places a caller has to be told.');
+    }
     if (await view(page, 'calls')) {
         await shot(page, 'live-calls',
             'Live call activity. The engine is not connected here, and the section distinguishes that from a quiet system rather than reporting zero.');
@@ -315,6 +332,11 @@ async function submit(page, kind) {
         await shot(page, 'reports-by-extension',
             'Every extension that took part in a call, whichever end it was on: calls in and out, answered each way, and its own answer rate. Each breakdown downloads as a file.');
 
+        await page.locator('#report-queues').scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        await shot(page, 'reports-queues',
+            'Queues, drawn from the engine\'s queue log rather than its call records: a call that waited four minutes and gave up appears in the records as one unanswered call and nowhere says it waited. Offered, abandoned, the service level against the queue\'s own promise, and the reasons callers stopped waiting kept apart rather than summed.');
+
         const between = await page.$('#report-window');
         if (between) {
             await page.selectOption('#report-window', 'between');
@@ -322,6 +344,30 @@ async function submit(page, kind) {
             await shot(page, 'reports-between-dates',
                 'The two date boxes appear only for the period that needs them; every other period is named rather than typed, because a typed date is a place to make a mistake a report then presents as a fact.');
         }
+    }
+
+    // -- what somebody who is not the administrator gets ------------------
+    //
+    // A real sign in as a real scoped account, so what is photographed is the
+    // authorisation boundary working rather than a page with its links hidden.
+    if (portalUsername) {
+        await page.click('#sign-out-button');
+        await page.waitForSelector('#sign-in-panel', { state: 'visible', timeout: 15000 });
+        await page.fill('#username', portalUsername);
+        await page.fill('#password', portalPassword);
+        await page.click('#sign-in-button');
+        await page.waitForSelector('#portal', { state: 'visible', timeout: 15000 });
+        await page.waitForTimeout(900);
+        await shot(page, 'portal',
+            'The same appliance signed in to by an extension\'s owner. Its own calls and its own recordings, and nothing else: the console, its navigation and its live socket all belong to the administrator, and an account that cannot use them is not given a page that shows them greyed out.');
+
+        await page.click('#sign-out-button');
+        await page.waitForSelector('#sign-in-panel', { state: 'visible', timeout: 15000 });
+        await page.fill('#username', username);
+        await page.fill('#password', password);
+        await page.click('#sign-in-button');
+        await page.waitForSelector('#console', { state: 'visible', timeout: 15000 });
+        await page.waitForTimeout(600);
     }
 
     // -- the same console, other ways -----------------------------------

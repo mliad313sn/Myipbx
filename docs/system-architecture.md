@@ -146,6 +146,29 @@ spelled form because Constraint Two governs what an operator reads; the chart
 geometry and the exported file read the integer, because a bar cannot be drawn
 from a word and a spreadsheet cannot sum one.
 
+Queue reporting is a second reader over a second file, the engine's queue log,
+and is deliberately a separate request with a separate availability: a call that
+waited and gave up is not in the call records as anything but one unanswered
+call.
+
+Costing applies a rate table to answered outbound calls only, in `Decimal`
+throughout. A call no rate covers is unrated rather than free, and a table
+naming two currencies produces no cost at all.
+
+### Authorisation
+
+Two roles. An administrator has the appliance. An extension account has one
+extension: its own calls and its own recordings.
+
+The check is in the guard every route already passes through, not in the
+handlers, for the same reason the audit record is: a route that forgets is a
+route that leaks, and forgetting is the normal way this goes wrong. The scope
+lives on the session, put there at sign in, and is never read from a request.
+
+Credentials are not configuration. They are hashed, they live beside the
+document rather than in it, and they are absent from a backup unless secrets
+were explicitly asked for and from a support bundle always.
+
 ### Automated task execution
 
 A scheduler owning a registry of named tasks — configuration render, engine

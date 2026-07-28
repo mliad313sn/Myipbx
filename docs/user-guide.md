@@ -18,13 +18,13 @@ to a machine.
 
 **Telephony** — [extensions](#extensions) · [trunks](#trunks) · [ring groups](#ring-groups) · [menus](#menus) · [queues](#queues) · [conference rooms](#conference-rooms) · [inbound routes](#inbound-routes) · [outbound routes](#outbound-routes) · [time conditions](#time-conditions) · [voicemail](#voicemail)
 
-**Watching the system** — [live calls](#live-calls) · [call history](#call-history) · [reports](#reports) · [alarms](#alarms) · [logs](#logs)
+**Watching the system** — [live calls](#live-calls) · [call history](#call-history) · [reports](#reports) · [queue reports](#queue-reports) · [recorded calls](#recorded-calls) · [alarms](#alarms) · [logs](#logs)
 
 **Legacy hardware** — [what is fitted](#what-is-fitted) · [guided bring up](#guided-bring-up) · [spans and channels](#spans-and-channels) · [when a card will not appear](#when-a-card-will-not-appear)
 
 **The machine** — [readings](#machine-readings) · [network addressing](#network-addressing) · [identity and time](#identity-and-time) · [firewall](#firewall) · [services](#services) · [restart and shutdown](#restart-and-shutdown)
 
-**Keeping it running** — [applying configuration](#applying-configuration) · [reconciliation](#reconciliation) · [automated tasks](#automated-tasks) · [backup](#backup) · [restore](#restore)
+**Keeping it running** — [applying configuration](#applying-configuration) · [reconciliation](#reconciliation) · [automated tasks](#automated-tasks) · [scheduled reports](#scheduled-reports) · [accounts](#accounts) · [backup](#backup) · [restore](#restore)
 
 **Reference** — [what needs a restart](#what-needs-a-restart) · [privileged operations](#privileged-operations) · [the two constraints](#the-two-constraints) · [what this appliance will not do](#what-this-appliance-will-not-do)
 
@@ -82,6 +82,7 @@ bottom.
 | live calls | every channel on the system, as it happens |
 | call history | completed calls, newest first |
 | reports | totals and breakdowns over a period, and files to download |
+| recordings | recorded calls, played and downloaded |
 | extensions | the telephones |
 | trunks | connections to carriers |
 | ring groups | sets of telephones that ring together |
@@ -91,12 +92,16 @@ bottom.
 | inbound routes | where an arriving call is sent |
 | outbound routes | which trunk carries a dialled number |
 | time conditions | different destinations inside and outside business hours |
+| tariffs | what a call to a range of numbers costs |
+| scheduled reports | reports the appliance draws for itself on an interval |
+| mail destinations | where a scheduled report is sent |
 | hardware | interface cards, spans, and guided bring up |
 | system | the machine: addressing, identity, services, power |
 | firewall | which services are reachable, and from where |
 | configuration | rendering the engine configuration, and reconciliation |
 | tasks | automated jobs, and running one now |
 | logs | the appliance's and the engine's logs |
+| accounts | who may sign in, and how much of the appliance they see |
 | backup | download a backup, restore from one |
 | constraints | proof that both product constraints hold |
 
@@ -348,6 +353,8 @@ system on:
 | average conversation | the mean talk time of the calls that *were* answered. Deliberately not the mean of every call: a thousand unanswered calls of six seconds each would drag that toward zero and tell you nothing |
 | average time to answer | how long a call rings before somebody picks it up |
 | calls in, out, inside | decided by the dialplan context the appliance itself wrote, not guessed from the numbers |
+| cost | shown only once a [tariff](#tariffs) exists. Only answered outbound calls are charged |
+| unrated calls | outbound calls no tariff covers. They are **not** counted as free, and a row with nothing rated says "not rated" rather than showing a zero |
 
 **When the calls came** draws every hour of the day. Each bar is the hour's
 volume against the busiest hour, and the filled part inside it is what was
@@ -367,6 +374,46 @@ exception to the spelling rule, and the console says so when you download one.
 
 If the section reports that there is nothing to report on, the engine is not
 writing call detail records; see [call history](#call-history).
+
+### Queue reports
+
+At the foot of **reports**, drawn from a different file: the engine's queue log.
+It has to be a different file, because a call that waited four minutes and then
+gave up appears in the call records as one unanswered call and nothing in that
+record says it waited.
+
+| Reading | What it means |
+| --- | --- |
+| offered | everybody who joined the queue |
+| abandoned | everybody who stopped waiting without being answered, however they stopped |
+| answered in time | of the calls that were answered, the share picked up inside the queue's own **answer within** setting. Set that on the queue; the appliance writes it into the engine too, so the two cannot disagree |
+| average wait | counted across the people who gave up as well as the people who were answered — they waited longest, and leaving them out flatters the queue |
+
+**By member** counts *answered* and *rang out* separately: a member who was
+offered calls and did not pick them up is a different fact from a busy queue.
+
+**Why callers stopped waiting** keeps the reasons apart rather than summing
+them, because a queue nobody is staffing and a queue people give up on need
+different answers.
+
+### Recorded calls
+
+Recording is off on every extension until you turn it on, under that extension.
+**In most places a caller must be told they are being recorded, and this
+appliance announces nothing** — that is yours to arrange.
+
+Recordings are listed newest first, searchable by number or date, and played in
+the browser without downloading. Playing one is written to [who changed
+what](#who-changed-what): somebody listened to a conversation, and that is worth
+an entry.
+
+Files in the recordings directory that this appliance did not write are not
+listed, not served and never deleted, and the page says how many it passed over.
+
+Recordings older than the retention are removed by an automated task. Recording
+fills a disk faster than anything else here, and a telephone system that stops
+taking calls because its disk is full is a worse outcome than a recording nobody
+kept.
 
 ### Alarms
 
@@ -592,6 +639,59 @@ product exists to remove.
 Each can be run now from the **tasks** section. A task already running will not
 be started a second time — the request is refused rather than stacked. Each
 carries a timeout, and one that exceeds it is reported as abandoned.
+
+### Tariffs
+
+What a call costs, so the reports can total it. Each tariff covers the numbers
+beginning with one prefix; the **longest matching prefix wins**, and a tariff
+with an empty prefix is the floor that covers everything the others do not.
+
+- **billed in blocks of** — a carrier selling by the minute charges a whole
+  minute for a call of four seconds. Set this to one to bill by the second.
+- **shortest charged call** — a call shorter than this is charged as though it
+  lasted this long.
+- **currency** — written as it is said rather than as a symbol, because every
+  figure on these screens is read out in words. Every tariff must name the
+  same one: the appliance will not add two currencies into one figure, and says
+  so instead.
+
+### Scheduled reports
+
+A report the appliance draws for itself, keeps, and sends if you tell it where.
+
+Choose what to report, over what period, and how often. A weekly report runs on
+a Monday and a monthly one on the first — decided against the calendar, not
+against an elapsed interval, so restarting the appliance neither skips a report
+nor produces two.
+
+The report is **written to the appliance before any attempt is made to send
+it**, so a mail server that is down costs you a delivery rather than the report.
+Everything drawn is listed at the foot of **reports** and can be downloaded
+there.
+
+**Mail destinations** hold the server to send through. This appliance accepts no
+mail and runs no mail server; it reaches out, hands over one message and
+disconnects. Leave the security setting at *upgraded* unless the server is on
+the same rack — *none* sends the report and any password across the network in
+the clear.
+
+### Accounts
+
+Who may sign in.
+
+The **administrator** is the account the installer created and is not editable
+here; it has its own reset procedure.
+
+An **extension account** is scoped to one extension. Signed in, it gets its own
+page — its own calls and its own recordings — and nothing else. It cannot change
+anything, cannot see another extension, and every other part of this console
+refuses it with a reason. That is enforced where every request already passes
+through rather than by hiding links.
+
+Passwords are at least twelve characters, because this one is reachable from
+every telephone on the site. Credentials are not configuration: they are stored
+hashed, and they are not in the configuration document, a backup, or a support
+bundle.
 
 ### Backup
 

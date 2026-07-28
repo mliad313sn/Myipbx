@@ -16,7 +16,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Any, Callable, Mapping, Iterable
 
 from .logging_setup import get_logger
 
@@ -110,6 +110,18 @@ class Session:
     created_at: float
     last_seen_at: float
     source_address: str
+    #: What this session is permitted to do, and over what.
+    #:
+    #: An administrator session has the whole appliance and no scope. An
+    #: extension session has one extension and nothing else, and the scope is
+    #: the extension number rather than something derived from the account
+    #: name, so that renaming an account can never widen what it can see.
+    role: str = "administrator"
+    scope: str = ""
+
+    @property
+    def is_administrator(self) -> bool:
+        return self.role == "administrator"
 
     def age_seconds(self, now: float) -> int:
         return int(now - self.created_at)
@@ -159,7 +171,13 @@ class SessionStore:
     def _index(token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-    def create(self, username: str, source_address: str = "unknown") -> str:
+    def create(
+        self,
+        username: str,
+        source_address: str = "unknown",
+        role: str = "administrator",
+        scope: str = "",
+    ) -> str:
         now = self._clock()
         self.purge_expired()
 
@@ -179,6 +197,8 @@ class SessionStore:
             created_at=now,
             last_seen_at=now,
             source_address=source_address,
+            role=role,
+            scope=scope,
         )
         return token
 
@@ -314,12 +334,16 @@ class CredentialStore:
         return data if isinstance(data, dict) else {}
 
     def save(self, username: str, password: str) -> None:
-        """Write the credential atomically with owner only permissions."""
+        """Write the administrator credential, keeping any other accounts."""
+        record = self.load()
+        record["username"] = username
+        record["credential"] = self.hasher.hash(password)
+        self._write(record)
+
+    def _write(self, record: Mapping[str, Any]) -> None:
+        """Write the whole store atomically with owner only permissions."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(
-            {"username": username, "credential": self.hasher.hash(password)},
-            indent=2,
-        )
+        payload = json.dumps(dict(record), indent=2)
         temporary = self.path.with_name(self.path.name + ".partial")
         descriptor = os.open(
             temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600
@@ -336,16 +360,127 @@ class CredentialStore:
         os.chmod(self.path, 0o600)
 
     def verify(self, username: str, password: str) -> bool:
-        record = self.load()
-        stored_user = record.get("username")
-        stored_credential = record.get("credential")
-        if not stored_user or not stored_credential:
-            # No credential configured: reject, but still spend the time a
-            # real verification would, so that the absence is not detectable
-            # by timing.
-            self.hasher.verify(password, self.hasher.hash("placeholder"))
-            return False
+        """Whether these are the administrator's credentials."""
+        return self.authenticate(username, password) is not None
 
-        user_matches = hmac.compare_digest(stored_user, username or "")
-        credential_matches = self.hasher.verify(password, stored_credential)
-        return user_matches and credential_matches
+    # -- accounts ----------------------------------------------------------
+    #
+    # Credentials are not configuration. They live here, hashed, and they are
+    # deliberately not in the document, not in a backup, and not in a support
+    # bundle: an archive of the site's telephone numbers is one thing to lose
+    # and a file that lets somebody sign in is another.
+
+    def accounts(self) -> list[dict[str, str]]:
+        """Every account, without any credential material.
+
+        The administrator is the record at the top level, kept in the shape it
+        has always had so that an appliance upgraded in place still signs its
+        administrator in. Everything else lives under a list beside it.
+        """
+        record = self.load()
+        found: list[dict[str, str]] = []
+        if record.get("username"):
+            found.append({
+                "username": str(record["username"]),
+                "role": "administrator",
+                "scope": "",
+            })
+        for entry in record.get("accounts") or []:
+            if not isinstance(entry, dict) or not entry.get("username"):
+                continue
+            found.append({
+                "username": str(entry["username"]),
+                "role": str(entry.get("role", "extension")),
+                "scope": str(entry.get("scope", "")),
+            })
+        return found
+
+    def authenticate(self, username: str, password: str) -> dict[str, str] | None:
+        """The account these credentials belong to, or nothing.
+
+        Every account is checked rather than the first match returned early,
+        and a request naming no account still costs one verification, so that
+        which names exist cannot be learned from how long a refusal takes.
+        """
+        record = self.load()
+        wanted = username or ""
+        matched: dict[str, str] | None = None
+        credential = ""
+
+        if record.get("username") and record.get("credential"):
+            if hmac.compare_digest(str(record["username"]), wanted):
+                matched = {"username": wanted, "role": "administrator", "scope": ""}
+                credential = str(record["credential"])
+
+        if matched is None:
+            for entry in record.get("accounts") or []:
+                if not isinstance(entry, dict):
+                    continue
+                name = str(entry.get("username", ""))
+                if name and hmac.compare_digest(name, wanted):
+                    matched = {
+                        "username": name,
+                        "role": str(entry.get("role", "extension")),
+                        "scope": str(entry.get("scope", "")),
+                    }
+                    credential = str(entry.get("credential", ""))
+                    break
+
+        if matched is None or not credential:
+            self.hasher.verify(password, self.hasher.hash("placeholder"))
+            return None
+        return matched if self.hasher.verify(password, credential) else None
+
+    def put_account(
+        self, username: str, password: str, role: str, scope: str = ""
+    ) -> None:
+        """Add an account, or change the password on one that exists.
+
+        The administrator is not addressable here: it has its own record and
+        its own reset procedure, and an interface that could create a second
+        administrator would be a way to keep access after being removed.
+        """
+        if role not in ("extension",):
+            raise ValueError(
+                f"an account may not be created with the role {role}; this "
+                "interface creates extension accounts only"
+            )
+        if not username.strip():
+            raise ValueError("an account must have a name")
+        if len(password) < 12:
+            raise ValueError(
+                "a password must be at least twelve characters, because this "
+                "one is reachable from every telephone on the site"
+            )
+
+        record = self.load()
+        if str(record.get("username", "")) == username:
+            raise ValueError(
+                "that name belongs to the administrator and cannot be reused"
+            )
+
+        accounts = [
+            entry for entry in record.get("accounts") or []
+            if isinstance(entry, dict) and str(entry.get("username", "")) != username
+        ]
+        accounts.append({
+            "username": username,
+            "credential": self.hasher.hash(password),
+            "role": role,
+            "scope": scope,
+        })
+        record["accounts"] = accounts
+        self._write(record)
+
+    def remove_account(self, username: str) -> bool:
+        record = self.load()
+        accounts = record.get("accounts") or []
+        remaining = [
+            entry for entry in accounts
+            if isinstance(entry, dict) and str(entry.get("username", "")) != username
+        ]
+        if len(remaining) == len(accounts):
+            return False
+        record["accounts"] = remaining
+        self._write(record)
+        return True

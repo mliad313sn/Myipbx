@@ -49,9 +49,13 @@ terminal — not for telephony, and not for the operating system underneath it.
 From the console: extensions, trunks, ring groups, interactive menus, call
 queues, conference rooms, inbound and outbound routes, time conditions and
 voicemail; live call monitoring, call history and **reports** — answer rate,
-average conversation, and breakdowns by extension, destination, trunk, outcome,
-hour of the day and day, over any period, downloadable as a file; the
-machine's static addressing, host name, time zone and clock; starting and
+average conversation, cost against a rate table, and breakdowns by extension,
+destination, trunk, outcome, hour of the day and day, over any period,
+downloadable as a file, and drawn on a schedule and sent by electronic mail if
+asked; **queue reporting** from the engine's queue log, with abandonment and
+service level; **call recording**, listed and played from the browser;
+**accounts scoped to one extension**, which see their own calls and their own
+recordings and nothing else; the machine's static addressing, host name, time zone and clock; starting and
 restarting services; a deny by default **firewall** generated from declared
 rules; **compiling the legacy interface card drivers against the running
 kernel**; generating span configuration; reading logs; backup and restore; and
