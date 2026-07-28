@@ -142,6 +142,16 @@ def build_router(context: Any) -> Router:
         guard.read(lambda request: _entities_export(context, request)),
     )
 
+    # -- scheduled reports --------------------------------------------------
+    router.get(
+        "/api/reports/scheduled",
+        guard.read(lambda request: _scheduled_reports(context)),
+    )
+    router.get(
+        "/api/reports/scheduled/{name}",
+        guard.read(lambda request: _scheduled_report(context, request)),
+    )
+
     # -- recorded calls -----------------------------------------------------
     router.get("/api/recordings", guard.read(lambda request: _recordings(context, request)))
     router.get(
@@ -1351,6 +1361,30 @@ def _flatten(value: Any) -> str:
     if isinstance(value, dict):
         return "; ".join(f"{key}={value[key]}" for key in sorted(value))
     return "" if value is None else str(value)
+
+
+# -- scheduled reports -----------------------------------------------------
+
+
+def _scheduled_reports(context: Any) -> Response:
+    """Every snapshot the appliance has drawn for itself and kept."""
+    snapshots = context.schedules.list()
+    return Response.json({
+        "snapshots": snapshots,
+        "snapshot_count": numerals.spell_integer(len(snapshots)),
+        "last_runs": context.schedules.last_runs(),
+        "explanation": (
+            "nothing has been drawn yet; a scheduled report is drawn on the "
+            "day it is due and kept here whether or not it could be sent"
+        ) if not snapshots else "",
+    })
+
+
+def _scheduled_report(context: Any, request: Request) -> Response:
+    payload = context.schedules.read(request.parameter("name"))
+    if payload is None:
+        return Response.error(404, "there is no such report on this appliance")
+    return _attachment(payload, request.parameter("name"))
 
 
 # -- recorded calls --------------------------------------------------------

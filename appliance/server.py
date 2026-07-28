@@ -13,15 +13,18 @@ import json
 import secrets
 import signal
 import time
-from typing import Any
+from datetime import date, datetime
+from typing import Any, Mapping
 
-from . import api, hardware as hardware_module, httpd, numerals, wsproto
-from . import PRODUCT_FULL_NAME
+from . import api, hardware as hardware_module, httpd, numerals, reports as reports_module, wsproto
+from . import PRODUCT_FULL_NAME, PRODUCT_NAME
 from .ami import ManagerClient, ManagerMessage
 from .config import ApplianceConfig
 from .confstore import ConfigurationStore, DriftDetected
 from .diagnostics import CallRecordReader, LogReader
+from .mailer import MailRefused, build_message, destination_from, send as send_mail
 from .queuelog import QueueLogReader
+from .scheduled import ScheduleStore, due_reports
 from .recordings import RecordingStore
 from .entities import SecretStore
 from . import firewall as firewall_module
@@ -93,6 +96,7 @@ class Appliance:
         self.calls = CallRecordReader(self.config.call_record_file)
         self.queue_log = QueueLogReader(self.config.queue_log_file)
         self.recordings = RecordingStore(self.config.recording_directory)
+        self.schedules = ScheduleStore(self.config.state_path / "reports")
 
         # -- transport -----------------------------------------------------
         self.hub = SocketHub(
@@ -382,6 +386,13 @@ class Appliance:
             blocking=True,
         )
         self.tasks.register(
+            "scheduled-reports",
+            self._task_scheduled_reports,
+            "draw, keep, and send the reports somebody asked for on an interval",
+            interval_seconds=self.config.scheduled_report_interval_seconds,
+            blocking=True,
+        )
+        self.tasks.register(
             "recording-retention",
             self._task_recording_retention,
             "remove recorded calls older than the retention that was chosen",
@@ -390,6 +401,139 @@ class Appliance:
         )
 
     # -- tasks --------------------------------------------------------------
+
+    def _task_scheduled_reports(self) -> dict[str, Any]:
+        """Draw every report that is due, keep it, and send it if told where.
+
+        Blocking by design, and dispatched to the worker pool: it reads whole
+        record files and may wait on a mail server, neither of which belongs on
+        the event loop that is also carrying the console's socket.
+
+        Drawing and keeping come first and sending second, so a mail server
+        that is down costs the site a delivery rather than the report.
+        """
+        document = self.store.load()
+        schedules = document.get("scheduled_reports") or []
+        today = datetime.now().date()
+        due = due_reports(schedules, self.schedules.last_runs(), today)
+
+        if not due:
+            return {
+                "drawn": numerals.spell_integer(0),
+                "explanation": "no scheduled report is due today",
+            }
+
+        destinations = {
+            str(record.get("name", "")).strip(): record
+            for record in document.get("mail_destinations") or []
+            if record.get("enabled", True)
+        }
+
+        drawn = sent = 0
+        failures: list[str] = []
+
+        for schedule in due:
+            name = str(schedule.get("name", "")).strip()
+            try:
+                filename, payload = self._draw_scheduled_report(document, schedule)
+            except Exception as error:  # noqa: BLE001 -- one report must not stop the rest
+                _LOG.error("the scheduled report named %s could not be drawn: %s",
+                           name, error)
+                failures.append(f"{name}: {error}")
+                continue
+
+            self.schedules.write(filename, payload)
+            self.schedules.record_run(name, datetime.now())
+            drawn += 1
+
+            wanted = str(schedule.get("destination", "") or "").strip()
+            if not wanted:
+                continue
+            record = destinations.get(wanted)
+            if record is None:
+                failures.append(
+                    f"{name}: there is no enabled mail destination named {wanted}"
+                )
+                continue
+            try:
+                self._send_scheduled_report(record, schedule, filename, payload)
+                sent += 1
+            except MailRefused as error:
+                # The report is already on the appliance. This is a delivery
+                # that failed, not a report that was lost.
+                _LOG.error("%s", error)
+                failures.append(f"{name}: {error}")
+
+        self.schedules.prune()
+        return {
+            "drawn": numerals.spell_integer(drawn),
+            "sent": numerals.spell_integer(sent),
+            "explanation": "; ".join(failures),
+        }
+
+    def _draw_scheduled_report(
+        self, document: dict[str, Any], schedule: Mapping[str, Any]
+    ) -> tuple[str, str]:
+        """One scheduled report, as the file it will be kept as."""
+        window = reports_module.resolve_window(str(schedule.get("period", "yesterday")))
+        wanted = str(schedule.get("report", "by_extension")).strip()
+        dialplan = document.get("dialplan") or {}
+
+        if wanted.startswith("queue:"):
+            events, truncated = self.queue_log.sweep()
+            report = reports_module.build_queue_report(
+                events, window, queues=document.get("queues") or [],
+                truncated=truncated,
+            )
+            payload, _ = reports_module.export_queue_csv(report, wanted.split(":", 1)[1])
+        else:
+            records, truncated = self.calls.sweep()
+            if wanted == "the calls themselves":
+                payload, _ = reports_module.export_records_csv(records, window)
+            else:
+                report = reports_module.build_report(
+                    records, window,
+                    extensions=document.get("extensions") or [],
+                    tariffs=document.get("tariffs") or [],
+                    inbound_context=str(dialplan.get("inbound_context", "")),
+                    internal_context=str(dialplan.get("internal_context", "")),
+                    truncated=truncated,
+                )
+                payload, _ = reports_module.export_csv(report, wanted)
+
+        from .scheduled import snapshot_name
+
+        return snapshot_name(str(schedule.get("name", "report")), {
+            "from": "" if window["from"] == date.min else window["from"].isoformat(),
+            "to": "" if window["to"] == date.max else window["to"].isoformat(),
+        }), payload
+
+    def _send_scheduled_report(
+        self,
+        record: Mapping[str, Any],
+        schedule: Mapping[str, Any],
+        filename: str,
+        payload: str,
+    ) -> None:
+        secret = self.secrets.get("mail_destinations", str(record.get("name", "")), "secret") or ""
+        destination = destination_from(record, secret)
+        name = str(schedule.get("name", "a report"))
+        window = str(schedule.get("period", ""))
+        message = build_message(
+            destination,
+            subject=f"{PRODUCT_NAME}: the report named {name}",
+            body=(
+                f"The scheduled report named {name}, covering {window}, is "
+                "attached.\n\n"
+                "The attached file carries its figures as digits rather than "
+                "words, because it is meant to be opened in a spreadsheet.\n\n"
+                f"Sent by {PRODUCT_FULL_NAME}. This appliance accepts no mail "
+                "and cannot be replied to.\n"
+            ),
+            attachment=(filename, payload),
+        )
+        send_mail(destination, message)
+
 
     async def _task_recording_retention(self) -> dict[str, Any]:
         """Delete recordings past their retention.

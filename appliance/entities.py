@@ -523,6 +523,92 @@ _register(
 
 _register(
     EntitySpec(
+        kind="mail_destinations",
+        singular="mail destination",
+        plural="mail destinations",
+        key="name",
+        description=(
+            "where a scheduled report is sent, and the server it is sent through"
+        ),
+        fields=(
+            Field("name", "destination name", required=True, pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="a destination name uses letters, digits, and the marks period, underscore, and hyphen",
+                  help="how this destination is chosen on a scheduled report"),
+            Field("recipient", "send to", required=True, pattern=_ELECTRONIC_MAIL_PATTERN,
+                  pattern_help="an electronic mail address must contain one at sign and a domain",
+                  help="the address the report arrives at"),
+            Field("sender", "send from", required=True, pattern=_ELECTRONIC_MAIL_PATTERN,
+                  pattern_help="an electronic mail address must contain one at sign and a domain",
+                  help="the address the report is sent from; most servers refuse "
+                       "a sender they do not recognise"),
+            Field("host", "mail server", required=True, pattern=_HOST_PATTERN,
+                  pattern_help="a mail server is a host name or an address",
+                  help="this appliance reaches out to this server; it accepts no "
+                       "mail itself and runs no mail server"),
+            Field("port", "port number", "number", default=587, minimum=1, maximum=65535,
+                  identifier=True,
+                  help="five hundred eighty-seven for a server that upgrades the "
+                       "connection, four hundred sixty-five for one that is "
+                       "secured from the start"),
+            Field("security", "how the connection is protected", "choice",
+                  default="upgraded", choices=("upgraded", "secured", "none"),
+                  help="upgraded starts in the clear and turns on protection; "
+                       "none sends the report and any password across the "
+                       "network in the clear and is offered only for a server "
+                       "on the same rack"),
+            Field("username", "account name",
+                  help="left empty if the server accepts mail from this "
+                       "appliance without one"),
+            Field("secret", "account password", "secret", secret=True,
+                  help="stored as a secret and never shown again"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+        referenced_by=(("scheduled_reports", "destination"),),
+    )
+)
+
+
+_register(
+    EntitySpec(
+        kind="scheduled_reports",
+        singular="scheduled report",
+        plural="scheduled reports",
+        key="name",
+        description=(
+            "a report the appliance draws for itself on an interval, keeps, and "
+            "sends if it is told where"
+        ),
+        fields=(
+            Field("name", "report name", required=True, pattern=_IDENTIFIER_PATTERN,
+                  pattern_help="a report name uses letters, digits, and the marks period, underscore, and hyphen",
+                  help="names the file this report is kept under"),
+            Field("report", "what to report", "choice", required=True,
+                  default="by_extension",
+                  choices=("the calls themselves", "by_extension", "by_destination",
+                           "by_trunk", "by_disposition", "by_hour", "by_day",
+                           "queue:by_queue", "queue:by_member"),
+                  help="the same breakdowns the reports section draws"),
+            Field("period", "over what period", "choice", required=True,
+                  default="yesterday",
+                  choices=("today", "yesterday", "last-seven-days", "this-month",
+                           "last-month", "last-thirty-days"),
+                  help="worked out afresh each time this runs, so a report of "
+                       "yesterday is always of the day before it ran"),
+            Field("frequency", "how often", "choice", required=True, default="daily",
+                  choices=("daily", "weekly", "monthly"),
+                  help="a weekly report runs on a Monday and a monthly one on "
+                       "the first of the month"),
+            Field("destination", "send it to", references="mail_destinations",
+                  help="left empty the report is kept on the appliance and not "
+                       "sent anywhere"),
+            Field("enabled", "enabled", "boolean", default=True),
+        ),
+    )
+)
+
+
+_register(
+    EntitySpec(
         kind="firewall_rules",
         singular="firewall rule",
         plural="firewall rules",

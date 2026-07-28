@@ -95,6 +95,11 @@ class ApplianceConfig:
     recording_directory: str = "/var/spool/asterisk/monitor"
     recording_keep_days: int = 30
     recording_retention_interval_seconds: float = 86400.0
+    #: How often the appliance looks for a scheduled report that is due.
+    #: Due-ness is decided against the calendar rather than against this
+    #: interval, so a shorter one only means a report arrives earlier in
+    #: the day and never means it arrives twice.
+    scheduled_report_interval_seconds: float = 3600.0
     log_level: str = "INFO"
 
     # --- Telephony engine manager interface ------------------------------

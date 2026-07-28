@@ -449,5 +449,106 @@ class RecordingRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/api/recordings", targets)
 
 
+class ScheduledReportTaskTests(unittest.IsolatedAsyncioTestCase):
+    """The task that draws a report for itself, keeps it, and would send it."""
+
+    async def asyncSetUp(self) -> None:
+        self.harness = ApplianceHarness()
+        document = json.loads(json.dumps(DOCUMENT))
+        document["scheduled_reports"] = [{
+            "name": "every-morning", "report": "by_extension",
+            "period": "last-thirty-days", "frequency": "daily",
+            "destination": "", "enabled": True,
+        }, {
+            "name": "goes-nowhere", "report": "by_day",
+            "period": "last-thirty-days", "frequency": "daily",
+            "destination": "a-destination-that-does-not-exist", "enabled": True,
+        }, {
+            "name": "paused", "report": "by_trunk",
+            "period": "today", "frequency": "daily",
+            "destination": "", "enabled": False,
+        }]
+        self.harness.write_document(document)
+
+        self.records_path = Path(self.harness.root) / "Master.csv"
+        self.records_path.write_text("\n".join([
+            record("2026-07-20 09:15:00"),
+            record("2026-07-20 09:40:00", destination="202"),
+        ]) + "\n", encoding="utf-8")
+        self.harness.config.call_record_file = str(self.records_path)
+
+        await self.harness.start()
+        await self.harness.sign_in()
+
+    async def asyncTearDown(self) -> None:
+        await self.harness.stop()
+
+    async def run_task(self):
+        status, _, payload = await self.harness.request(
+            "POST", "/api/tasks/run", body=json.dumps({"name": "scheduled-reports"}),
+            extra_headers={"Origin": f"http://127.0.0.1:{self.harness.port}"},
+        )
+        self.assertEqual(status, 200, payload)
+        return payload
+
+    async def test_a_due_report_is_drawn_and_kept(self) -> None:
+        await self.run_task()
+        _, _, payload = await self.harness.request("GET", "/api/reports/scheduled")
+        names = [snapshot["name"] for snapshot in payload["snapshots"]]
+        self.assertTrue(any(name.startswith("every-morning_") for name in names), names)
+
+    async def test_a_report_is_kept_even_though_it_could_not_be_sent(self) -> None:
+        """A mail server that is down costs a delivery, not the report."""
+        await self.run_task()
+        _, _, payload = await self.harness.request("GET", "/api/reports/scheduled")
+        names = [snapshot["name"] for snapshot in payload["snapshots"]]
+        self.assertTrue(any(name.startswith("goes-nowhere_") for name in names), names)
+
+    async def test_a_disabled_report_is_not_drawn(self) -> None:
+        await self.run_task()
+        _, _, payload = await self.harness.request("GET", "/api/reports/scheduled")
+        names = [snapshot["name"] for snapshot in payload["snapshots"]]
+        self.assertFalse(any(name.startswith("paused_") for name in names), names)
+
+    async def test_running_it_twice_in_a_day_draws_nothing_the_second_time(self) -> None:
+        """Restarting the appliance must not produce a second copy."""
+        await self.run_task()
+        _, _, first = await self.harness.request("GET", "/api/reports/scheduled")
+        await self.run_task()
+        _, _, second = await self.harness.request("GET", "/api/reports/scheduled")
+        self.assertEqual(
+            [snapshot["name"] for snapshot in first["snapshots"]],
+            [snapshot["name"] for snapshot in second["snapshots"]],
+        )
+
+    async def test_the_kept_report_carries_the_figures_in_digits(self) -> None:
+        await self.run_task()
+        _, _, listing = await self.harness.request("GET", "/api/reports/scheduled")
+        name = next(snapshot["name"] for snapshot in listing["snapshots"]
+                    if snapshot["name"].startswith("every-morning_"))
+        status, headers, payload = await self.harness.request(
+            "GET", f"/api/reports/scheduled/{name}"
+        )
+        self.assertEqual(status, 200)
+        self.assertIn("text/csv", headers["content-type"])
+        body = payload.decode("utf-8")
+        self.assertIn("201", body)
+        self.assertIn("reception", body)
+
+    async def test_a_snapshot_name_that_escapes_the_directory_is_refused(self) -> None:
+        for name in ("..%2F..%2Fetc%2Fpasswd", "nothing-here.csv", "secrets.json"):
+            with self.subTest(name=name):
+                status, _, _ = await self.harness.request(
+                    "GET", f"/api/reports/scheduled/{name}"
+                )
+                self.assertEqual(status, 404)
+
+    async def test_the_routes_refuse_an_anonymous_request(self) -> None:
+        for path in ("/api/reports/scheduled", "/api/reports/scheduled/x.csv"):
+            with self.subTest(path=path):
+                status, _, _ = await self.harness.request("GET", path, cookie="")
+                self.assertEqual(status, 401)
+
+
 if __name__ == "__main__":
     unittest.main()

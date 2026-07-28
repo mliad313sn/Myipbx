@@ -967,6 +967,7 @@
                     payload.error || 'the report could not be produced'
                 );
                 hideReportPanels();
+                loadSnapshots();
                 return loadQueueReport();
             }
             if (!payload.available) {
@@ -974,6 +975,7 @@
                     payload.explanation || 'there is nothing to report on yet'
                 );
                 hideReportPanels();
+                loadSnapshots();
                 return loadQueueReport();
             }
 
@@ -1001,6 +1003,7 @@
             renderReportChart(payload.breakdowns.by_hour || []);
             renderReportBreakdowns(payload);
             loadQueueReport();
+            loadSnapshots();
         });
     }
 
@@ -1153,6 +1156,54 @@
                   'did not pick it up, which is not the same as a busy queue'
         }
     ];
+
+    /* The snapshots the appliance drew for itself.
+     *
+     * Kept whether or not they could be sent, so a mail server that was down
+     * on Monday costs the site a delivery rather than the report. */
+    function loadSnapshots() {
+        return request('/api/reports/scheduled').then(function (result) {
+            var payload = result.payload || {};
+            var holder = nodes.snapshotsTable;
+            clear(holder);
+
+            var snapshots = payload.snapshots || [];
+            nodes.snapshotsExplanation.textContent = numerals.sanitize(
+                snapshots.length
+                    ? 'holding ' + payload.snapshot_count + ' reports, newest first'
+                    : (payload.explanation || 'nothing has been drawn yet')
+            );
+            if (!snapshots.length) {
+                return;
+            }
+
+            var table = element('table', 'grid');
+            var head = element('thead');
+            var headRow = element('tr');
+            ['report', 'drawn', 'size', ''].forEach(function (heading) {
+                headRow.appendChild(element('th', null, heading));
+            });
+            head.appendChild(headRow);
+            table.appendChild(head);
+
+            var body = element('tbody');
+            snapshots.forEach(function (snapshot) {
+                var row = element('tr');
+                cell(row, snapshot.name);
+                cell(row, snapshot.at);
+                cell(row, snapshot.size);
+                var actions = element('td', 'actions-cell');
+                var link = element('a', 'download-link', 'download');
+                link.href = '/api/reports/scheduled/' + encodeURIComponent(snapshot.name);
+                link.download = snapshot.name;
+                actions.appendChild(link);
+                row.appendChild(actions);
+                body.appendChild(row);
+            });
+            table.appendChild(body);
+            holder.appendChild(makeScrollable(table, 'reports the appliance drew for itself'));
+        });
+    }
 
     function loadQueueReport() {
         return request('/api/reports/queues?' + reportQuery()).then(function (result) {
@@ -2412,6 +2463,8 @@
         conferences: function () { renderEntityView('conferences'); },
         time_conditions: function () { renderEntityView('time_conditions'); },
         tariffs: function () { renderEntityView('tariffs'); },
+        scheduled_reports: function () { renderEntityView('scheduled_reports'); },
+        mail_destinations: function () { renderEntityView('mail_destinations'); },
         hardware: function () { loadHardware(); renderWizard(); },
         system: function () { loadSystem(); },
         firewall: function () { loadFirewall(); },
@@ -2583,6 +2636,8 @@
             ['recordingsSearch', 'recordings-search'], ['recordingsFrom', 'recordings-from'],
             ['recordingsTo', 'recordings-to'], ['recordingsRefresh', 'recordings-refresh'],
             ['recordingsTable', 'recordings-table'], ['recordingsNote', 'recordings-note'],
+            ['snapshotsExplanation', 'snapshots-explanation'],
+            ['snapshotsTable', 'snapshots-table'],
             ['hardwareSummary', 'hardware-summary'], ['cardBody', 'card-body'],
             ['spanBody', 'span-body'], ['hardwareWizard', 'hardware-wizard'],
             ['systemReadings', 'system-readings'], ['interfaceBody', 'interface-body'],
